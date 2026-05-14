@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-14 22:11 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 代码仓库与分支收敛；将项目管理仓库切换为 `https://github.com/Laowang3366/recet_excel_project.git`，统一保留 `main` 作为唯一发布分支，并同步部署脚本示例与运维文档中的默认 `REPO_URL` 和 `BRANCH`。
+- 验证：变更前核实 GitHub `main` 与 `codex/admin-ai-assistant-management` 均指向 `3a7d20d`，本地 HEAD 与服务器部署仓也为 `3a7d20d`；服务器部署仓当前分支为 `codex/admin-ai-assistant-management` 且 `deploy.env` 仍指向该分支，后续已切换到 `main` 并更新远端地址；公网 `https://www.excelcc.cn/` 与 `/api/public/home-overview` 返回 200。
+- 部署：本地 `main` 分支作为唯一保留分支推送到新仓；服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 切换到 `main`，`/www/wwwroot/excelcc/kick-deploy/deploy.env` 的 `REPO_URL` 改为新仓、`BRANCH` 改为 `main`。
+- 服务器备份：不适用；本次只调整 Git 远端、发布分支和部署配置，不修改运行数据或构建产物。
+- 备注：旧仓 `https://github.com/Laowang3366/kick.git` 在本地保留为 `kick-legacy` 远端只作历史引用；`/www/wwwroot/quick-translate` 未处理且 `quick-translate.service` 保持 `active`。
+
 ## 2026-05-14 13:40 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 旧路径软链接最终清理；删除最后一个兼容符号链接 `/www/wwwroot/kick-deploy`，保留真实部署目录 `/www/wwwroot/excelcc/kick-deploy`，完成 `kick-web`、`kick-backend`、`kick-deploy` 三个旧入口的软链接清理。

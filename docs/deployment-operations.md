@@ -49,13 +49,13 @@
 部署环境文件 `/www/wwwroot/excelcc/kick-deploy/deploy.env` 需要包含 Git 拉取配置：
 
 ```bash
-REPO_URL="https://github.com/Laowang3366/kick.git"
-BRANCH="codex/admin-ai-assistant-management"
+REPO_URL="https://github.com/Laowang3366/recet_excel_project.git"
+BRANCH="main"
 GIT_REMOTE="origin"
 GIT_PULL_BEFORE_BUILD="1"
 ```
 
-当前线上更新分支沿用 `codex/admin-ai-assistant-management`。如果后续切换到新的 Codex 分支，需要先更新服务器 `/www/wwwroot/excelcc/kick-deploy/deploy.env` 的 `BRANCH`，再执行部署脚本。
+当前线上更新分支沿用 `main`。如果后续切换到新的发布分支，需要先更新服务器 `/www/wwwroot/excelcc/kick-deploy/deploy.env` 的 `BRANCH`，再执行部署脚本。
 
 仓库内提供了示例文件：
 
@@ -109,7 +109,7 @@ bash scripts/deploy/export-git-bundle.sh
 如需明确指定发布分支或输出路径：
 
 ```bash
-BRANCH=codex/admin-ai-assistant-management bash scripts/deploy/export-git-bundle.sh /tmp/kick-release.bundle
+BRANCH=main bash scripts/deploy/export-git-bundle.sh /tmp/kick-release.bundle
 ```
 
 导出脚本只打包已提交的 Git 历史，不包含未提交文件。执行前应确认本次发布变更已经提交到目标分支。如果使用默认输出路径，以上传脚本打印的 `bundle written` 路径为准。
