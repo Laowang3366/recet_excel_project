@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 10:29 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 小试牛刀默认解锁上线；后端闯关章节响应统一返回 `unlocked=true`，未完成题目统一返回 `available`，保留已通关、满星、练习记录和判题逻辑不变；新增服务层回归测试覆盖章节与题目默认解锁。
+- 验证：本地 `mvn -Dtest=PracticeCampaignServiceImplUnlockTest test` 通过；本地 `mvn test` 通过 85 个测试；本地 `npm run build` 通过；服务器标准部署脚本执行成功；服务器部署仓 `/www/wwwroot/excelcc/kick-deploy/repo` 为 `main` / `d82bf04` 且工作区 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service` 均为 `active`；服务器 `http://127.0.0.1:8081/api/public/home-overview` 返回 200；公网 `https://www.excelcc.cn/` 与 `/api/public/home-overview` 返回 200；公网 `/api/practice/campaign/chapters` 返回 7 个章节且锁定章节为 0，第一个章节详情返回 17 个关卡且锁定关卡为 0。
+- 部署：提交 `d82bf04` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 快进拉取后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-022710`。
+- 备注：首次部署日志读取因本地 PowerShell GBK 无法编码 Vite 输出中的对勾字符中断，随后使用字节输出重新执行标准部署成功；未处理 `/www/wwwroot/quick-translate`，未覆盖整个运行目录。
+
 ## 2026-05-14 22:11 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 代码仓库与分支收敛；将项目管理仓库切换为 `https://github.com/Laowang3366/recet_excel_project.git`，统一保留 `main` 作为唯一发布分支，并同步部署脚本示例与运维文档中的默认 `REPO_URL` 和 `BRANCH`。
