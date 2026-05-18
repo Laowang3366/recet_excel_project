@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 22:34 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 质量门禁与旧论坛数据库表归档上线；新增前端 Vitest 门禁并纳入本地质量脚本和 GitHub Actions；CI 增加前端依赖审计、类型检查、测试和后端源码门禁；新增 `V54__archive_legacy_forum_tables.sql`，创建 `legacy_table_archive` 归档登记表，标记旧论坛 15 张表为 `legacy_forum/archived`，不删除、不重命名、不迁移历史数据；同步 AI 助手公开导航预加载与移动抽屉可达性测试。
+- 验证：本地 `powershell -ExecutionPolicy Bypass -File scripts\quality\check.ps1` 通过，包含前端显式 `any` 扫描、`npm audit --audit-level=moderate` 0 漏洞、`npm run typecheck`、17 个前端测试文件 / 64 个用例、`npm run build`、后端源码门禁、后端编译和 `mvn test` 73 个测试；本地 `git diff --cached --check` 通过；服务器标准部署成功，部署仓为 `main` / `e83e576` 且 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`；服务器本机 `/api/public/home-overview` 与 `/api/practice/campaign/chapters` 返回 200；Flyway `54` 迁移成功，`legacy_table_archive` 中旧论坛归档记录数为 15；公网 `https://www.excelcc.cn/`、`/api/public/home-overview`、`/practice`、`/api/practice/campaign/chapters`、`/api/tutorials/home`、`/api/templates` 均返回 200；旧接口 `/api/posts`、`/api/categories`、`POST /api/chat/send`、`/api/messages/conversations`、`/api/admin/posts` 均返回 410。
+- 部署：提交 `e83e576` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 快进拉取后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-143154`。
+- 备注：未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`；本次旧论坛数据库处理仅新增归档登记，不 drop 表；部署后追加本文档记录会产生日志提交，运行时代码仍对应本次发布提交 `e83e576`。
+
 ## 2026-05-18 14:55 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 稳定性与代码结构优化上线；小试牛刀公开读取接口移除目录同步写入并保留后台变更触发同步，目录同步增加最小并发保护；后台用户新增/编辑改为 DTO 校验，删除用户改为安全停用并禁止停用当前管理员；通知 read/delete/batch delete 限制为当前业务通知类型；后台用户接口拆分到 `AdminUserController` 并移除 `AdminController` 中用户管理重复职责；前端清理旧论坛 `post/board` 缓存刷新残留、未使用导入，并新增 `npm run typecheck` 类型检查门禁。
