@@ -234,12 +234,24 @@ public class NotificationController {
         java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
         for (Object rawId : rawIds) {
             if (rawId instanceof Number number) {
-                ids.add(number.longValue());
+                if ((number instanceof Double || number instanceof Float)
+                        && (!Double.isFinite(number.doubleValue()) || number.doubleValue() % 1 != 0)) {
+                    return null;
+                }
+                long id = number.longValue();
+                if (id <= 0) {
+                    return null;
+                }
+                ids.add(id);
                 continue;
             }
             if (rawId instanceof String text && !text.isBlank()) {
                 try {
-                    ids.add(Long.parseLong(text.trim()));
+                    long id = Long.parseLong(text.trim());
+                    if (id <= 0) {
+                        return null;
+                    }
+                    ids.add(id);
                     continue;
                 } catch (NumberFormatException ignored) {
                     return null;

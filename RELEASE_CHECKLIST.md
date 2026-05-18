@@ -19,13 +19,15 @@
 - [ ] 默认管理员口令已修改
 - [ ] 已确认生产环境未错误启用管理员自动引导
 - [ ] 已确认生产部署仓 `kick-deploy/repo` 工作树状态符合预期
-- [ ] 已确认唯一发布入口为 `/www/wwwroot/kick-deploy/repo`
+- [ ] 已确认唯一发布入口为 `/www/wwwroot/excelcc/kick-deploy/repo`
 
 ## 质量门禁
 
+- [ ] `powershell -ExecutionPolicy Bypass -File scripts/quality/check.ps1` 通过
 - [ ] 后端 `mvn test` 通过
 - [ ] 后端 `mvn -q -DskipTests compile` 通过
 - [ ] 前端 `npm ci` 通过
+- [ ] 前端 `npm run typecheck` 通过
 - [ ] 前端 `npm run build` 通过
 - [ ] GitHub Actions 全绿
 - [ ] `docs/release-audit.md` 中 P0 为 0
@@ -36,9 +38,12 @@
 - [ ] 首页可访问
 - [ ] `http://127.0.0.1:8080/api/public/home-overview` 返回 `200`
 - [ ] 登录可用
-- [ ] 发帖 / 回复可用
-- [ ] 通知 / 私信可用
+- [ ] 小试牛刀章节 / 题目可用
+- [ ] 通知中心可用
 - [ ] 练习模块可用
 - [ ] 后台总览可访问
-- [ ] 商城兑换链路可用
+- [ ] 教程详情页可用
+- [ ] 模板中心下载可用
+- [ ] AI 助手可用
+- [ ] 旧论坛接口返回 `410 Gone`
 - [ ] 已生成当前发布备份并确认回滚路径
