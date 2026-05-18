@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 13:36 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 旧论坛运行面彻底收敛上线；删除旧帖子、回复、分类、收藏、点赞、私信、聊天、草稿、举报相关 Controller/Service/Mapper/Entity/DTO/WebSocket 支持和旧测试；保留 `LegacyForumFeatureShutdownFilter` 对旧接口返回 `410 Gone`；通知中心只统计当前可见通知类型；后台与文档收敛为当前学习平台口径；旧论坛数据库表作为历史数据继续保留，未做 drop table。
+- 验证：本地 `mvn clean test` 通过，`Tests run: 60, Failures: 0, Errors: 0, Skipped: 0`；本地 `npm run build` 通过；本地 `git diff --check` 通过；本地生产包扫描未出现 `BoardDetail`、`Chat`、`CreatePost`、`Messages`、`PostDetail`、`UserProfile` 等旧页面 chunk；服务器标准部署成功；服务器部署仓为 `main` / `dceda77` 且 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`；公网 `https://www.excelcc.cn/`、`/practice`、`/tutorials`、`/api/public/home-overview`、`/api/practice/categories`、`/api/practice/question-list`、`/api/practice/campaign/chapters`、`/api/tutorials/home`、`/api/templates` 均返回 200；旧接口 `/api/posts`、`/api/categories`、`POST /api/chat/send`、`/api/messages/conversations`、`/api/users/recent`、`/api/admin/replies` 均返回 410。
+- 部署：提交 `dceda77` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 确认最新代码后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-053144`。
+- 备注：未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`；npm 构建阶段仍提示既有依赖审计项，未影响构建和健康检查；首次部署日志读取因本地 PowerShell GBK 无法编码 Vite 输出中的 Unicode 字符中断，随后改用服务器日志文件重新执行标准部署成功。
+
 ## 2026-05-18 12:42 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 小试牛刀页面运行时错误热修；恢复 `Layout.tsx` 中仍在使用的 `ChevronDown` 图标 import，修复 `/practice` 进入后出现 `Unexpected Application Error: ChevronDown is not defined` 的问题。
