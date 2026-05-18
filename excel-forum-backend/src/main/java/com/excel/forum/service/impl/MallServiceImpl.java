@@ -32,6 +32,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+import static com.excel.forum.util.QueryPageUtils.limit;
+
 @Service
 @RequiredArgsConstructor
 public class MallServiceImpl implements MallService {
@@ -59,7 +62,7 @@ public class MallServiceImpl implements MallService {
         }
 
         QueryWrapper<MallRedemption> redemptionQuery = new QueryWrapper<>();
-        redemptionQuery.eq("user_id", userId).orderByDesc("create_time").last("LIMIT 5");
+        redemptionQuery.eq("user_id", userId).orderByDesc("create_time");
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", Map.of(
@@ -68,7 +71,7 @@ public class MallServiceImpl implements MallService {
                 "points", safeInt(user.getPoints())
         ));
         response.put("availableItems", countVisibleItems());
-        List<MallRedemption> recentRedemptions = mallRedemptionMapper.selectList(redemptionQuery);
+        List<MallRedemption> recentRedemptions = limit(mallRedemptionMapper, redemptionQuery, 5);
         Map<Long, UserEntitlement> entitlementMap = userEntitlementService.getByRedemptionIds(
                 recentRedemptions.stream().map(MallRedemption::getId).filter(Objects::nonNull).toList()
         );
@@ -612,9 +615,9 @@ public class MallServiceImpl implements MallService {
         if (!StringUtils.hasText(typeValue)) {
             return null;
         }
-        return mallItemTypeMapper.selectOne(new QueryWrapper<MallItemType>()
+        return first(mallItemTypeMapper, new QueryWrapper<MallItemType>()
                 .eq("type_value", typeValue.trim())
-                .last("LIMIT 1"));
+                .orderByAsc("id"));
     }
 
     private Map<String, MallItemType> buildTypeMap(Collection<MallItemType> types) {

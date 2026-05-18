@@ -30,6 +30,7 @@ import static com.excel.forum.controller.AdminControllerSupport.parseInteger;
 import static com.excel.forum.controller.AdminControllerSupport.parseLocalDate;
 import static com.excel.forum.controller.AdminControllerSupport.parseLong;
 import static com.excel.forum.controller.AdminControllerSupport.safeInt;
+import static com.excel.forum.util.QueryPageUtils.first;
 
 @RestController
 @RequestMapping("/api/admin/practice-campaign")
@@ -96,8 +97,8 @@ public class AdminPracticeCampaignController {
     @GetMapping("/daily-challenge")
     public ResponseEntity<?> getPracticeCampaignDailyChallengeConfig() {
         QueryWrapper<DailyChallenge> queryWrapper = new QueryWrapper<>();
-        queryWrapper.orderByDesc("challenge_date").orderByDesc("id").last("limit 1");
-        DailyChallenge challenge = dailyChallengeMapper.selectOne(queryWrapper);
+        queryWrapper.orderByDesc("challenge_date").orderByDesc("id");
+        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
         if (challenge == null) {
             return ResponseEntity.ok(Map.of("record", Map.of()));
         }
@@ -130,8 +131,8 @@ public class AdminPracticeCampaignController {
             return ResponseEntity.badRequest().body(Map.of("message", "所选关卡不存在或未启用"));
         }
         QueryWrapper<DailyChallenge> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("challenge_date", challengeDate).last("limit 1");
-        DailyChallenge challenge = dailyChallengeMapper.selectOne(queryWrapper);
+        queryWrapper.eq("challenge_date", challengeDate).orderByDesc("id");
+        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
         if (challenge == null) {
             challenge = new DailyChallenge();
             challenge.setChallengeDate(challengeDate);

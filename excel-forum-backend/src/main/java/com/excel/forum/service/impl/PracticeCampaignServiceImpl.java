@@ -49,6 +49,8 @@ import java.util.Set;
 import java.util.Comparator;
 import java.util.stream.Collectors;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 @RequiredArgsConstructor
 public class PracticeCampaignServiceImpl implements PracticeCampaignService {
@@ -530,8 +532,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             throw new IllegalArgumentException("关卡不存在");
         }
         QueryWrapper<UserLevelProgress> existingProgressQuery = new QueryWrapper<>();
-        existingProgressQuery.eq("user_id", userId).eq("level_id", levelId).last("limit 1");
-        UserLevelProgress existingProgress = userLevelProgressMapper.selectOne(existingProgressQuery);
+        existingProgressQuery.eq("user_id", userId).eq("level_id", levelId).orderByAsc("id");
+        UserLevelProgress existingProgress = first(userLevelProgressMapper, existingProgressQuery);
         PracticeAttempt attempt = practiceAttemptMapper.selectById(request.getAttemptId());
         if (attempt == null || !Objects.equals(attempt.getUserId(), userId) || !Objects.equals(attempt.getLevelId(), levelId)) {
             throw new IllegalArgumentException("挑战记录不存在");
@@ -657,8 +659,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private PracticeChapter findOrCreateChapterByName(Long worldId, String chapterName) {
         QueryWrapper<PracticeChapter> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("world_id", worldId).eq("name", chapterName).last("limit 1");
-        PracticeChapter chapter = practiceChapterMapper.selectOne(queryWrapper);
+        queryWrapper.eq("world_id", worldId).eq("name", chapterName).orderByAsc("id");
+        PracticeChapter chapter = first(practiceChapterMapper, queryWrapper);
         return chapter == null ? new PracticeChapter() : chapter;
     }
 
@@ -818,8 +820,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private Map<String, Object> buildDailyChallengePayload(Long userId) {
         QueryWrapper<DailyChallenge> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("challenge_date", LocalDate.now()).eq("enabled", true).last("limit 1");
-        DailyChallenge challenge = dailyChallengeMapper.selectOne(queryWrapper);
+        queryWrapper.eq("challenge_date", LocalDate.now()).eq("enabled", true).orderByDesc("id");
+        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
         if (challenge == null) {
             return null;
         }
@@ -906,8 +908,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private void syncUserLevelProgress(Long userId, PracticeLevel level, boolean passed, int stars, int score, int usedSeconds, boolean firstPass) {
         QueryWrapper<UserLevelProgress> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_id", userId).eq("level_id", level.getId()).last("limit 1");
-        UserLevelProgress progress = userLevelProgressMapper.selectOne(queryWrapper);
+        queryWrapper.eq("user_id", userId).eq("level_id", level.getId()).orderByAsc("id");
+        UserLevelProgress progress = first(userLevelProgressMapper, queryWrapper);
         if (progress == null) {
             progress = new UserLevelProgress();
             progress.setUserId(userId);
@@ -952,8 +954,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         for (Map<String, Object> summary : summaries) {
             Long chapterId = toLong(summary.get("id"));
             QueryWrapper<UserChapterProgress> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("user_id", userId).eq("chapter_id", chapterId).last("limit 1");
-            UserChapterProgress progress = userChapterProgressMapper.selectOne(queryWrapper);
+            queryWrapper.eq("user_id", userId).eq("chapter_id", chapterId).orderByAsc("id");
+            UserChapterProgress progress = first(userChapterProgressMapper, queryWrapper);
             if (progress == null) {
                 progress = new UserChapterProgress();
                 progress.setUserId(userId);
@@ -973,8 +975,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private void syncUserWrongQuestion(Long userId, PracticeLevel level, boolean passed) {
         QueryWrapper<UserWrongQuestion> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_id", userId).eq("question_id", level.getQuestionId()).last("limit 1");
-        UserWrongQuestion wrong = userWrongQuestionMapper.selectOne(queryWrapper);
+        queryWrapper.eq("user_id", userId).eq("question_id", level.getQuestionId()).orderByAsc("id");
+        UserWrongQuestion wrong = first(userWrongQuestionMapper, queryWrapper);
         if (passed) {
             if (wrong != null) {
                 wrong.setResolved(true);
@@ -1028,8 +1030,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         queryWrapper.eq("challenge_date", LocalDate.now())
                 .eq("enabled", true)
                 .eq("level_id", level.getId())
-                .last("limit 1");
-        DailyChallenge challenge = dailyChallengeMapper.selectOne(queryWrapper);
+                .orderByDesc("id");
+        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
         if (challenge == null) {
             return Map.of("applied", false);
         }

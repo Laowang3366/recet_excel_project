@@ -81,7 +81,6 @@ class PracticeCampaignServiceImplReadPathTest {
         when(practiceWorldMapper.selectOne(any())).thenReturn(world);
         when(practiceChapterMapper.selectList(any())).thenReturn(List.of());
         when(practiceLevelMapper.selectList(any())).thenReturn(List.of());
-        when(dailyChallengeMapper.selectOne(any())).thenReturn(null);
     }
 
     @Test
