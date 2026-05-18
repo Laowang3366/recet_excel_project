@@ -1,0 +1,95 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      change_scope:
+        description: "Deployment scope note shown in the GitHub run"
+        required: true
+        default: "Manual production deployment"
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: reace_web/package-lock.json
+
+      - name: Deployment Scope
+        run: echo "${{ inputs.change_scope }}"
+
+      - name: Backend Source Guardrails
+        working-directory: excel-forum-backend
+        run: |
+          if grep -R -nE '@RequestBody[[:space:]]+(java\.util\.)?Map\b' src/main/java/com/excel/forum/controller; then
+            echo "Controller @RequestBody Map usage is not allowed."
+            exit 1
+          fi
+          if grep -R -nE '\.last[[:space:]]*\(' src/main/java; then
+            echo "MyBatis-Plus .last SQL suffix usage is not allowed."
+            exit 1
+          fi
+          if grep -R -nE 'catch[[:space:]]*\([^)]*\bignored\b[^)]*\)' src/main/java; then
+            echo "ignored catch blocks are not allowed."
+            exit 1
+          fi
+
+      - name: Backend Compile
+        working-directory: excel-forum-backend
+        run: mvn -q -DskipTests compile
+
+      - name: Backend Test
+        working-directory: excel-forum-backend
+        run: mvn test
+
+      - name: Install Frontend Dependencies
+        working-directory: reace_web
+        run: npm ci
+
+      - name: Frontend Dependency Audit
+        working-directory: reace_web
+        run: npm audit --audit-level=moderate
+
+      - name: Frontend Typecheck
+        working-directory: reace_web
+        run: npm run typecheck
+
+      - name: Frontend Test
+        working-directory: reace_web
+        run: npm run test
+
+      - name: Frontend Build
+        working-directory: reace_web
+        run: npm run build
+
+      - name: Install SSH deploy dependency
+        run: python -m pip install --disable-pip-version-check paramiko
+
+      - name: Run Remote Production Deploy
+        env:
+          EXCELCC_DEPLOY_HOST: ${{ secrets.EXCELCC_DEPLOY_HOST }}
+          EXCELCC_DEPLOY_PORT: ${{ secrets.EXCELCC_DEPLOY_PORT || '22' }}
+          EXCELCC_DEPLOY_USER: ${{ secrets.EXCELCC_DEPLOY_USER || 'root' }}
+          EXCELCC_DEPLOY_PASSWORD: ${{ secrets.EXCELCC_DEPLOY_PASSWORD }}
+          EXCELCC_DEPLOY_REPO_DIR: /www/wwwroot/excelcc/kick-deploy/repo
+          EXCELCC_DEPLOY_BRANCH: main
+        run: python scripts/deploy/remote_deploy.py
+
+      - name: Public Smoke Checks
+        run: |
+          curl -kfsS https://www.excelcc.cn/ >/dev/null
+          curl -kfsS https://www.excelcc.cn/api/public/home-overview >/dev/null
+          curl -kfsS https://www.excelcc.cn/practice >/dev/null
+          curl -kfsS https://www.excelcc.cn/api/practice/campaign/chapters >/dev/null

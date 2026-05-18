@@ -91,6 +91,71 @@ GIT_PULL_BEFORE_BUILD=0 bash scripts/deploy/production-deploy.sh
 
 这个命令只适用于服务器部署仓已经处在目标提交的情况。GitHub 拉取失败时，不要临时手工执行 `git fetch <bundle>`、`git checkout`、`git merge` 等零散命令，改用仓库内的 bundle 脚本。
 
+## 一键部署通道
+
+仓库提供两条薄封装通道，底层仍执行服务器上的标准部署脚本 `scripts/deploy/production-deploy.sh`，不会整体覆盖 `/www/wwwroot/excelcc/kick-web` 或 `/www/wwwroot/excelcc/kick-backend`。
+
+### 本地 PowerShell 通道
+
+适合从本机完成“质量门禁 -> push -> 服务器标准部署 -> 公网烟测 -> 写入线上更新记录”的完整流程。
+
+前置要求：
+
+- 本地已安装 `python` 和 `paramiko`。
+- 当前分支为 `main`。
+- 工作区 clean，待发布代码已提交。
+- 服务器密码通过环境变量或交互输入提供，不写入仓库。
+
+推荐命令：
+
+```powershell
+$env:EXCELCC_DEPLOY_PASSWORD = "<server-password>"
+powershell -ExecutionPolicy Bypass -File scripts\deploy\push-and-deploy.ps1 -ChangeScope "本次发布说明"
+```
+
+可选环境变量：
+
+```powershell
+$env:EXCELCC_DEPLOY_HOST = "38.76.169.222"
+$env:EXCELCC_DEPLOY_PORT = "22"
+$env:EXCELCC_DEPLOY_USER = "root"
+$env:EXCELCC_DEPLOY_REPO_DIR = "/www/wwwroot/excelcc/kick-deploy/repo"
+```
+
+默认行为：
+
+1. 执行 `scripts\quality\check.ps1`。
+2. `git push origin main`。
+3. SSH 到生产服务器，在 `/www/wwwroot/excelcc/kick-deploy/repo` 执行标准部署脚本。
+4. 校验公网首页、公共接口、小试牛刀入口和章节接口。
+5. 在 `ONLINE_UPDATE_LOG.md` 顶部追加部署记录并提交推送。
+6. 服务器部署仓快进到日志提交，运行产物仍来自本次发布代码提交。
+
+如果只想部署且不自动追加线上日志：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy\push-and-deploy.ps1 -SkipOnlineLog
+```
+
+如果本地刚刚已完整验证，可临时跳过本地质量门禁：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy\push-and-deploy.ps1 -SkipQualityGate -ChangeScope "本次发布说明"
+```
+
+### GitHub 手动通道
+
+`.github/workflows/production-deploy.yml` 提供 `workflow_dispatch` 手动部署入口。该通道会在 GitHub Actions 中重新执行前后端质量门禁，然后通过 SSH 调用服务器标准部署脚本。
+
+需要在 GitHub 仓库配置 Secrets：
+
+- `EXCELCC_DEPLOY_HOST`
+- `EXCELCC_DEPLOY_PORT`
+- `EXCELCC_DEPLOY_USER`
+- `EXCELCC_DEPLOY_PASSWORD`
+
+GitHub 手动通道不自动提交 `ONLINE_UPDATE_LOG.md`，适合紧急或远程触发发布。完成后仍需补充线上更新记录，或改用本地 PowerShell 通道完成带日志的发布。
+
 ## Git Bundle 回退部署
 
 适用场景：

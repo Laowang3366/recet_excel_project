@@ -15,6 +15,7 @@
 ## 生产与运行
 
 - [部署与运维说明](./deployment-operations.md)
+- [一键部署通道](./deployment-operations.md#一键部署通道)
 - [LAN 服务器监控脚本](./lan-server-monitoring.md)
 - [LAN Nginx cache and rate-limit runbook](./nginx-lan-cache.md)
 
