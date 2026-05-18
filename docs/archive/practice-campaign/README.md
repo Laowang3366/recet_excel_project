@@ -18,7 +18,7 @@
 
 ### 2.1 总方案
 
-- [闯关模式方案总览](D:/project/recet_excel_project/docs/practice-campaign-plan.md)
+- [闯关模式方案总览](./practice-campaign-plan.md)
 
 适用：
 
@@ -28,7 +28,7 @@
 
 ### 2.2 页面原型
 
-- [前端页面原型说明](D:/project/recet_excel_project/docs/practice-campaign-ui-wireframe.md)
+- [前端页面原型说明](./practice-campaign-ui-wireframe.md)
 
 适用：
 
@@ -38,7 +38,7 @@
 
 ### 2.3 数据结构
 
-- [数据库 SQL 草案](D:/project/recet_excel_project/docs/practice-campaign-schema.md)
+- [数据库 SQL 草案](./practice-campaign-schema.md)
 
 适用：
 
@@ -48,7 +48,7 @@
 
 ### 2.4 接口设计
 
-- [接口设计说明](D:/project/recet_excel_project/docs/practice-campaign-api.md)
+- [接口设计说明](./practice-campaign-api.md)
 
 适用：
 
@@ -58,7 +58,7 @@
 
 ### 2.5 任务拆解
 
-- [开发任务拆解](D:/project/recet_excel_project/docs/practice-campaign-task-breakdown.md)
+- [开发任务拆解](./practice-campaign-task-breakdown.md)
 
 适用：
 
@@ -68,7 +68,7 @@
 
 ### 2.6 实施说明
 
-- [项目实施说明](D:/project/recet_excel_project/docs/practice-campaign-implementation-spec.md)
+- [项目实施说明](./practice-campaign-implementation-spec.md)
 
 适用：
 
@@ -78,7 +78,7 @@
 
 ### 2.7 后台配置设计
 
-- [后台配置与运营设计](D:/project/recet_excel_project/docs/practice-campaign-admin-ops.md)
+- [后台配置与运营设计](./practice-campaign-admin-ops.md)
 
 适用：
 
@@ -88,7 +88,7 @@
 
 ### 2.8 DTO 与枚举
 
-- [DTO 与枚举约定](D:/project/recet_excel_project/docs/practice-campaign-dto-spec.md)
+- [DTO 与枚举约定](./practice-campaign-dto-spec.md)
 
 适用：
 
@@ -98,7 +98,7 @@
 
 ### 2.9 测试清单
 
-- [测试与验收清单](D:/project/recet_excel_project/docs/practice-campaign-test-checklist.md)
+- [测试与验收清单](./practice-campaign-test-checklist.md)
 
 适用：
 
@@ -113,28 +113,28 @@
 
 ### 产品 / 需求确认
 
-1. [闯关模式方案总览](D:/project/recet_excel_project/docs/practice-campaign-plan.md)
-2. [前端页面原型说明](D:/project/recet_excel_project/docs/practice-campaign-ui-wireframe.md)
-3. [后台配置与运营设计](D:/project/recet_excel_project/docs/practice-campaign-admin-ops.md)
+1. [闯关模式方案总览](./practice-campaign-plan.md)
+2. [前端页面原型说明](./practice-campaign-ui-wireframe.md)
+3. [后台配置与运营设计](./practice-campaign-admin-ops.md)
 
 ### 前端开发
 
-1. [前端页面原型说明](D:/project/recet_excel_project/docs/practice-campaign-ui-wireframe.md)
-2. [接口设计说明](D:/project/recet_excel_project/docs/practice-campaign-api.md)
-3. [DTO 与枚举约定](D:/project/recet_excel_project/docs/practice-campaign-dto-spec.md)
-4. [项目实施说明](D:/project/recet_excel_project/docs/practice-campaign-implementation-spec.md)
+1. [前端页面原型说明](./practice-campaign-ui-wireframe.md)
+2. [接口设计说明](./practice-campaign-api.md)
+3. [DTO 与枚举约定](./practice-campaign-dto-spec.md)
+4. [项目实施说明](./practice-campaign-implementation-spec.md)
 
 ### 后端开发
 
-1. [数据库 SQL 草案](D:/project/recet_excel_project/docs/practice-campaign-schema.md)
-2. [接口设计说明](D:/project/recet_excel_project/docs/practice-campaign-api.md)
-3. [DTO 与枚举约定](D:/project/recet_excel_project/docs/practice-campaign-dto-spec.md)
-4. [项目实施说明](D:/project/recet_excel_project/docs/practice-campaign-implementation-spec.md)
+1. [数据库 SQL 草案](./practice-campaign-schema.md)
+2. [接口设计说明](./practice-campaign-api.md)
+3. [DTO 与枚举约定](./practice-campaign-dto-spec.md)
+4. [项目实施说明](./practice-campaign-implementation-spec.md)
 
 ### 测试
 
-1. [开发任务拆解](D:/project/recet_excel_project/docs/practice-campaign-task-breakdown.md)
-2. [测试与验收清单](D:/project/recet_excel_project/docs/practice-campaign-test-checklist.md)
+1. [开发任务拆解](./practice-campaign-task-breakdown.md)
+2. [测试与验收清单](./practice-campaign-test-checklist.md)
 
 ---
 

@@ -24,6 +24,9 @@ reace_web/frontend-run-*.err.log
 
 # Local temp
 tmp/
+.codex_tmp/
+chromedriver/
+tmp_browser_debug/
 *.tmp
 
 reace_web/dist-deploy.tar

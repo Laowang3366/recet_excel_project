@@ -33,8 +33,7 @@
 - [ ] 前端 `npm run build` 通过
 - [ ] 后端源码门禁通过：活跃 Controller 无 `@RequestBody Map`，主代码无 `.last(...)` 和 `catch (... ignored)`
 - [ ] GitHub Actions 全绿
-- [ ] `docs/release-audit.md` 中 P0 为 0
-- [ ] `docs/release-audit.md` 中阻断项已关闭
+- [ ] 当前代码审查无 P0 / 阻断项，历史审计可参考 `docs/archive/audits/release-audit-2026-05-18.md`
 
 ## 烟测
 
