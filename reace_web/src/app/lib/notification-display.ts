@@ -1,15 +1,12 @@
 export type NotificationTabId = "all" | "points" | "announcements";
 
-export type NotificationCountKey = NotificationTabId | "posts" | "follows";
+export type NotificationCountKey = NotificationTabId | "legacy";
 
 export type NotificationCounts = Partial<Record<NotificationCountKey, number>>;
 
-const hiddenNotificationTypes = new Set(["follow", "level_up"]);
-
-const visibleNotificationTypes = [
-  "system",
-  "site_notification",
-  "feedback_result",
+const legacyNotificationTypes = [
+  "follow",
+  "level_up",
   "reply",
   "like",
   "favorite",
@@ -20,6 +17,14 @@ const visibleNotificationTypes = [
   "report_delete",
   "post_review",
   "review_request",
+];
+
+const hiddenNotificationTypes = new Set(legacyNotificationTypes);
+
+const visibleNotificationTypes = [
+  "system",
+  "site_notification",
+  "feedback_result",
 ];
 
 export const notificationFilterTabs: Array<{
@@ -49,7 +54,7 @@ export function getNotificationTabCount(
 }
 
 export function getVisibleNotificationCount(counts?: NotificationCounts) {
-  return Math.max(0, (counts?.all ?? 0) - (counts?.follows ?? 0));
+  return Math.max(0, (counts?.all ?? 0) - (counts?.legacy ?? 0));
 }
 
 export function shouldRenderNotificationItem(type: string | null | undefined) {

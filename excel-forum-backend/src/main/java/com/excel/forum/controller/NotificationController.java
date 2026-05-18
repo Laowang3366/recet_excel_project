@@ -244,14 +244,7 @@ public class NotificationController {
             return null;
         }
         return switch (notification.getType()) {
-            case "follow" -> notification.getSenderId() == null ? null : "/user/" + notification.getSenderId();
-            case "message" -> "/messages";
-            case "MENTION" -> notification.getContent() != null && notification.getContent().contains("聊天中提到了你")
-                    ? "/chat"
-                    : notification.getRelatedId() == null ? null : "/post/" + notification.getRelatedId();
             case "site_notification" -> notification.getRelatedId() == null ? null : "/notification/" + notification.getRelatedId();
-            case "reply", "like", "favorite", "post_review", "post_deleted", "reply_deleted", "report_delete", "review_request" ->
-                    notification.getRelatedId() == null ? null : "/post/" + notification.getRelatedId();
             default -> null;
         };
     }

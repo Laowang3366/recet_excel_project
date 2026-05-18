@@ -210,20 +210,19 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     @Override
     public Map<String, Object> getCountsByType(Long userId) {
         long all = count(new QueryWrapper<Notification>().eq("user_id", userId));
-        long system = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", "system", "site_notification", "feedback_result"));
+        long current = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", "system", "site_notification", "feedback_result"));
         long points = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "system"));
         long announcements = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "site_notification"));
-        long posts = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type",
-                "reply", "like", "favorite", "MENTION", "post_deleted", "reply_deleted", "report_delete", "post_review", "review_request"));
-        long follows = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", "follow", "level_up"));
+        long legacy = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type",
+                "follow", "level_up", "reply", "like", "favorite", "MENTION", "message",
+                "post_deleted", "reply_deleted", "report_delete", "post_review", "review_request"));
 
         Map<String, Object> result = new HashMap<>();
         result.put("all", all);
-        result.put("system", system);
+        result.put("system", current);
         result.put("points", points);
         result.put("announcements", announcements);
-        result.put("posts", posts);
-        result.put("follows", follows);
+        result.put("legacy", legacy);
         return result;
     }
 }

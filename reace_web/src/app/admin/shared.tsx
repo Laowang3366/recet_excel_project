@@ -3,10 +3,6 @@ import { formatDateTime } from "../lib/format";
 
 export const POINTS_TASK_KEY_OPTIONS = [
   { value: "daily_checkin", label: "每日签到" },
-  { value: "daily_post", label: "今日发帖" },
-  { value: "daily_reply", label: "今日回复" },
-  { value: "first_post", label: "首次发帖" },
-  { value: "first_reply", label: "首次回复" },
   { value: "daily_practice", label: "今日练习" },
   { value: "first_practice", label: "首次练习" },
 ];
@@ -18,9 +14,6 @@ export const POINTS_RULE_TYPE_OPTIONS = [
 ];
 
 export const EXPERIENCE_BIZ_TYPE_OPTIONS = [
-  { value: "post_direct_publish", label: "直接发帖" },
-  { value: "post_approved", label: "帖子过审" },
-  { value: "reply_create", label: "发布回复" },
   { value: "daily_checkin", label: "每日签到" },
   { value: "practice_complete", label: "完成练习" },
 ];

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarCheck, MessageCircle, FileText, CheckCircle2, Gift, Zap, Star, ThumbsUp } from "lucide-react";
+import { ArrowLeft, CalendarCheck, CheckCircle2, Gift, Zap, Star, ThumbsUp } from "lucide-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
@@ -8,13 +8,11 @@ import { pointsKeys } from "../lib/query-keys";
 
 const iconMap: Record<string, any> = {
   daily_checkin: CalendarCheck,
-  daily_post: FileText,
-  daily_reply: MessageCircle,
-  first_post: FileText,
-  first_reply: MessageCircle,
   daily_practice: ThumbsUp,
   first_practice: Star,
 };
+
+const activeTaskKeys = new Set(["daily_checkin", "daily_practice", "first_practice"]);
 
 export function TaskCenter() {
   const navigate = useNavigate();
@@ -26,7 +24,7 @@ export function TaskCenter() {
     queryKey: pointsKeys.overview(),
     queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
   });
-  const tasks = tasksQuery.data?.tasks || [];
+  const tasks = (tasksQuery.data?.tasks || []).filter((item: any) => activeTaskKeys.has(item.taskKey));
   const overview = overviewQuery.data;
 
   const groupedTasks = useMemo(() => ({

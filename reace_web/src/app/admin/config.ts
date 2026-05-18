@@ -54,7 +54,7 @@ export function getAdminModulesForRole(role?: string | null) {
 }
 
 export function getDefaultAdminPath(role?: string | null) {
-  return role === "moderator" ? "/admin/review" : "/admin/overview";
+  return "/admin/overview";
 }
 
 export function getAdminModuleByPath(pathname: string) {

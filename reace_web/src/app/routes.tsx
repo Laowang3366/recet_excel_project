@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate, useParams, useSearchParams } from "react-router";
 import { Layout } from "./components/Layout";
-import { ONLINE_LITE_MODE } from "./lib/site-mode";
 import { getCampaignQuestionListPath } from "./lib/practice-campaign-ui";
 
 function lazyPage(importer: () => Promise<any>, exportName: string) {
@@ -8,10 +7,6 @@ function lazyPage(importer: () => Promise<any>, exportName: string) {
     const module = await importer();
     return { Component: module[exportName] };
   };
-}
-
-function LiteRedirect() {
-  return <Navigate to="/practice" replace />;
 }
 
 function AdminRedirect() {
@@ -28,18 +23,12 @@ function PracticeChaptersRedirect() {
   return <Navigate to={getCampaignQuestionListPath(searchParams.get("chapter"))} replace />;
 }
 
-function pageRoute(path: string, importer: () => Promise<any>, exportName: string, allowedInLite = false) {
-  if (ONLINE_LITE_MODE && !allowedInLite) {
-    return { path, Component: LiteRedirect };
-  }
+function pageRoute(path: string, importer: () => Promise<any>, exportName: string) {
   return { path, lazy: lazyPage(importer, exportName) };
 }
 
 export const router = createBrowserRouter([
   { path: "/auth", lazy: lazyPage(() => import("./pages/Auth"), "Auth") },
-  ONLINE_LITE_MODE
-    ? { path: "/create-post", Component: LiteRedirect }
-    : { path: "/create-post", lazy: lazyPage(() => import("./pages/CreatePost"), "CreatePost") },
   {
     path: "/admin",
     lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminLayout"),
@@ -47,20 +36,15 @@ export const router = createBrowserRouter([
       { index: true, lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminIndex") },
       { path: "overview", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminOverview") },
       { path: "home-content", lazy: lazyPage(() => import("./pages/AdminHomeContent"), "AdminHomeContent") },
-      { path: "review", Component: AdminRedirect },
-      { path: "reports", Component: AdminRedirect },
       { path: "users", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminUsers") },
-      { path: "posts", Component: AdminRedirect },
-      { path: "categories", Component: AdminRedirect },
-      { path: "drafts", Component: AdminRedirect },
       { path: "notifications", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminNotifications") },
       { path: "questions", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminQuestions") },
       { path: "question-categories", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminQuestionCategories") },
       { path: "templates", lazy: lazyPage(() => import("./pages/AdminTemplateCenter"), "AdminTemplateCenter") },
       { path: "points", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminPoints") },
-      { path: "mall", Component: AdminRedirect },
       { path: "levels", lazy: lazyPage(() => import("./pages/AdminConsole"), "AdminLevels") },
       { path: "assistant", lazy: lazyPage(() => import("./pages/AdminAssistant"), "AdminAssistant") },
+      { path: "*", Component: AdminRedirect },
     ],
   },
   {
@@ -68,38 +52,33 @@ export const router = createBrowserRouter([
     Component: Layout,
     children: [
       { index: true, lazy: lazyPage(() => import("./pages/Home"), "Home") },
-      { path: "chat", Component: LiteRedirect },
-      pageRoute("practice", () => import("./pages/PracticeCampaignHub"), "PracticeCampaignHub", true),
+      pageRoute("practice", () => import("./pages/PracticeCampaignHub"), "PracticeCampaignHub"),
       { path: "practice/chapters", Component: PracticeChaptersRedirect },
-      pageRoute("practice/classic", () => import("./pages/Practice"), "Practice", true),
+      pageRoute("practice/classic", () => import("./pages/Practice"), "Practice"),
       { path: "practice/chapter/:id", Component: PracticeChapterRedirect },
-      pageRoute("practice/result/:id", () => import("./pages/PracticeCampaignResult"), "PracticeCampaignResult", true),
-      pageRoute("practice/daily", () => import("./pages/PracticeCampaignDaily"), "PracticeCampaignDaily", true),
-      pageRoute("practice/wrongs", () => import("./pages/PracticeCampaignWrongs"), "PracticeCampaignWrongs", true),
-      pageRoute("practice/ranking", () => import("./pages/PracticeCampaignRanking"), "PracticeCampaignRanking", true),
-      pageRoute("practice/random", () => import("./pages/PracticeDetail"), "PracticeDetail", true),
-      pageRoute("practice/question/:id", () => import("./pages/PracticeDetail"), "PracticeDetail", true),
-      pageRoute("practice/history", () => import("./pages/PracticeHistory"), "PracticeHistory", true),
-      pageRoute("practice/history/:id", () => import("./pages/PracticeRecordDetail"), "PracticeRecordDetail", true),
-      pageRoute("templates", () => import("./pages/TemplateCenter"), "TemplateCenter", true),
-      pageRoute("templates/records", () => import("./pages/TemplatePurchaseRecords"), "TemplatePurchaseRecords", true),
-      pageRoute("tutorials", () => import("./pages/TutorialCenter"), "TutorialCenter", true),
-      pageRoute("mall", () => import("./pages/Mall"), "Mall", true),
-      pageRoute("mall/props", () => import("./pages/MallProps"), "MallProps", true),
-      pageRoute("mall/redemptions", () => import("./pages/MallRedemptions"), "MallRedemptions", true),
-      { path: "messages", Component: LiteRedirect },
-      pageRoute("tools", () => import("./pages/Tools"), "Tools", true),
-      pageRoute("assistant", () => import("./pages/Assistant"), "Assistant", true),
-      pageRoute("tools/history", () => import("./pages/ToolsHistory"), "ToolsHistory", true),
-      pageRoute("notifications", () => import("./pages/Notifications"), "Notifications", true),
-      pageRoute("profile", () => import("./pages/ProfileCenter"), "ProfileCenter", true),
-      { path: "user/:id", Component: LiteRedirect },
-      { path: "board/:id", Component: LiteRedirect },
-      { path: "post/:id", Component: LiteRedirect },
-      pageRoute("notification/:id", () => import("./pages/NotificationDetail"), "NotificationDetail", true),
-      pageRoute("settings", () => import("./pages/Settings"), "Settings", true),
-      pageRoute("points-history", () => import("./pages/PointHistory"), "PointHistory", true),
-      pageRoute("task-center", () => import("./pages/TaskCenter"), "TaskCenter", true),
+      pageRoute("practice/result/:id", () => import("./pages/PracticeCampaignResult"), "PracticeCampaignResult"),
+      pageRoute("practice/daily", () => import("./pages/PracticeCampaignDaily"), "PracticeCampaignDaily"),
+      pageRoute("practice/wrongs", () => import("./pages/PracticeCampaignWrongs"), "PracticeCampaignWrongs"),
+      pageRoute("practice/ranking", () => import("./pages/PracticeCampaignRanking"), "PracticeCampaignRanking"),
+      pageRoute("practice/random", () => import("./pages/PracticeDetail"), "PracticeDetail"),
+      pageRoute("practice/question/:id", () => import("./pages/PracticeDetail"), "PracticeDetail"),
+      pageRoute("practice/history", () => import("./pages/PracticeHistory"), "PracticeHistory"),
+      pageRoute("practice/history/:id", () => import("./pages/PracticeRecordDetail"), "PracticeRecordDetail"),
+      pageRoute("templates", () => import("./pages/TemplateCenter"), "TemplateCenter"),
+      pageRoute("templates/records", () => import("./pages/TemplatePurchaseRecords"), "TemplatePurchaseRecords"),
+      pageRoute("tutorials", () => import("./pages/TutorialCenter"), "TutorialCenter"),
+      pageRoute("mall", () => import("./pages/Mall"), "Mall"),
+      pageRoute("mall/props", () => import("./pages/MallProps"), "MallProps"),
+      pageRoute("mall/redemptions", () => import("./pages/MallRedemptions"), "MallRedemptions"),
+      pageRoute("tools", () => import("./pages/Tools"), "Tools"),
+      pageRoute("assistant", () => import("./pages/Assistant"), "Assistant"),
+      pageRoute("tools/history", () => import("./pages/ToolsHistory"), "ToolsHistory"),
+      pageRoute("notifications", () => import("./pages/Notifications"), "Notifications"),
+      pageRoute("profile", () => import("./pages/ProfileCenter"), "ProfileCenter"),
+      pageRoute("notification/:id", () => import("./pages/NotificationDetail"), "NotificationDetail"),
+      pageRoute("settings", () => import("./pages/Settings"), "Settings"),
+      pageRoute("points-history", () => import("./pages/PointHistory"), "PointHistory"),
+      pageRoute("task-center", () => import("./pages/TaskCenter"), "TaskCenter"),
     ],
   },
 ]);

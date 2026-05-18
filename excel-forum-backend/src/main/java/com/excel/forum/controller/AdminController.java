@@ -809,37 +809,10 @@ public class AdminController {
         long mutedUserCount = userService.count(new QueryWrapper<User>().eq("is_muted", true));
         long todayNewUsers = userService.count(new QueryWrapper<User>().ge("create_time", todayStart));
 
-        long activePostCount = postService.count(new QueryWrapper<Post>().eq("status", 0));
-        long pendingPostCount = postService.count(new QueryWrapper<Post>().eq("review_status", "pending"));
-        long deletedPostCount = postService.count(new QueryWrapper<Post>().in("status", 1, 2, 99));
-        long topPostCount = postService.count(new QueryWrapper<Post>().eq("status", 0).eq("is_top", true));
-        long essencePostCount = postService.count(new QueryWrapper<Post>().eq("status", 0).eq("is_essence", true));
-        long lockedPostCount = postService.count(new QueryWrapper<Post>().eq("status", 0).eq("is_locked", true));
-        long todayPosts = postService.count(new QueryWrapper<Post>().ge("create_time", todayStart));
-
-        long replyCount = replyService.count();
-        long activeReplyCount = replyService.count(new QueryWrapper<Reply>().eq("status", 0));
-        long todayReplies = replyService.count(new QueryWrapper<Reply>().ge("create_time", todayStart));
-
-        long categoryCount = categoryService.count();
-        long followedCategoryCount = categoryFollowService.count();
-        long draftCount = postDraftService.count();
         long notificationCount = notificationService.count();
         long siteNotificationCount = siteNotificationService.count();
         long unreadNotificationCount = notificationService.count(new QueryWrapper<Notification>().eq("is_read", 0));
-        long privateMessageCount = messageService.count();
-        long unreadPrivateMessageCount = messageService.count(new QueryWrapper<Message>().eq("is_read", 0));
-        long chatMessageCount = chatMessageService.count();
 
-        long likeCount = likeService.count();
-        long favoriteCount = favoriteService.count();
-        long postViewCount = postViewService.count();
-        long shareCount = postShareService.count();
-        long followCount = followService.count();
-
-        long pendingReports = reportService.count(new QueryWrapper<Report>().eq("status", 0));
-        long handledReports = reportService.count(new QueryWrapper<Report>().eq("status", 1));
-        long ignoredReports = reportService.count(new QueryWrapper<Report>().eq("status", 2));
         long pendingFeedback = feedbackService.count(new QueryWrapper<Feedback>().eq("status", 0));
         long handledFeedback = feedbackService.count(new QueryWrapper<Feedback>().eq("status", 1));
         long ignoredFeedback = feedbackService.count(new QueryWrapper<Feedback>().eq("status", 2));
@@ -868,22 +841,12 @@ public class AdminController {
         long entitlementCount = userEntitlementService.count();
         long todayCheckins = checkinRecordMapper.selectCount(new QueryWrapper<CheckinRecord>().ge("create_time", todayStart));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> mallOverview = (Map<String, Object>) mallService.getAdminOverview().get("stats");
-
         stats.put("userCount", userCount);
-        stats.put("postCount", activePostCount);
-        stats.put("replyCount", replyCount);
-        stats.put("categoryCount", categoryCount);
-        stats.put("pendingReports", pendingReports);
         stats.put("pendingFeedback", pendingFeedback);
-        stats.put("deletedPostCount", deletedPostCount);
 
         stats.put("overview", Map.of(
                 "onlineUsers", onlineUserCount,
                 "todayNewUsers", todayNewUsers,
-                "todayPosts", todayPosts,
-                "todayReplies", todayReplies,
                 "todayCheckins", todayCheckins
         ));
         stats.put("users", Map.of(
@@ -892,41 +855,19 @@ public class AdminController {
                 "admins", adminCount,
                 "moderators", moderatorCount,
                 "locked", lockedUserCount,
-                "muted", mutedUserCount,
-                "followers", followCount
+                "muted", mutedUserCount
         ));
-        stats.put("content", Map.of(
-                "categories", categoryCount,
-                "categoryFollowers", followedCategoryCount,
-                "activePosts", activePostCount,
-                "pendingPosts", pendingPostCount,
-                "deletedPosts", deletedPostCount,
-                "topPosts", topPostCount,
-                "essencePosts", essencePostCount,
-                "lockedPosts", lockedPostCount,
-                "activeReplies", activeReplyCount,
-                "drafts", draftCount
-        ));
-        stats.put("interaction", Map.of(
-                "likes", likeCount,
-                "favorites", favoriteCount,
-                "views", postViewCount,
-                "shares", shareCount,
-                "privateMessages", privateMessageCount,
-                "unreadPrivateMessages", unreadPrivateMessageCount,
-                "chatMessages", chatMessageCount,
+        stats.put("notifications", Map.of(
                 "notifications", notificationCount,
+                "total", notificationCount,
                 "siteNotifications", siteNotificationCount,
-                "unreadNotifications", unreadNotificationCount
+                "unreadNotifications", unreadNotificationCount,
+                "unread", unreadNotificationCount
         ));
         stats.put("moderation", Map.of(
-                "pendingReports", pendingReports,
-                "handledReports", handledReports,
-                "ignoredReports", ignoredReports,
                 "pendingFeedback", pendingFeedback,
                 "handledFeedback", handledFeedback,
                 "ignoredFeedback", ignoredFeedback,
-                "pendingPostReviews", pendingPostCount,
                 "pendingPracticeSubmissions", pendingPracticeSubmissionCount
         ));
         stats.put("practice", Map.of(
@@ -952,7 +893,6 @@ public class AdminController {
                 "expLogs", expLogCount,
                 "entitlements", entitlementCount
         ));
-        stats.put("mall", mallOverview == null ? Map.of() : mallOverview);
 
         return ResponseEntity.ok(Map.of("stats", stats));
     }

@@ -2,17 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
-  MessageSquare,
   Radio,
   CheckCircle2,
   CheckSquare,
   Square,
   Settings,
-  Heart,
-  Star,
   Trash2,
-  Shield,
-  AlertTriangle,
   ExternalLink,
   ChevronDown,
   ChevronLeft,
@@ -24,10 +19,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { formatRelativeTime, formatDateTime } from "../lib/format";
-import { normalizeAvatarUrl, normalizeImageUrl } from "../lib/mappers";
+import { normalizeImageUrl } from "../lib/mappers";
 import { notificationKeys } from "../lib/query-keys";
-import { openGlobalConfirm, openGlobalPrompt } from "../components/GlobalConfirmPromptDialog";
-import { useSession } from "../lib/session";
+import { openGlobalConfirm } from "../components/GlobalConfirmPromptDialog";
 import {
   getVisibleNotificationTypeFilter,
   getNotificationTabCount,
@@ -42,18 +36,8 @@ const PAGE_SIZE = 7;
 
 const typeConfig: Record<string, { icon: any; label: string; color: string; bg: string }> = {
   system: { icon: Gift, label: "积分通知", color: "text-amber-600", bg: "bg-amber-50 border-amber-100" },
-  reply: { icon: MessageSquare, label: "回复", color: "text-blue-600", bg: "bg-blue-50 border-blue-100" },
-  like: { icon: Heart, label: "点赞", color: "text-rose-500", bg: "bg-rose-50 border-rose-100" },
-  favorite: { icon: Star, label: "收藏", color: "text-amber-600", bg: "bg-amber-50 border-amber-100" },
-  MENTION: { icon: MessageSquare, label: "提及", color: "text-violet-600", bg: "bg-violet-50 border-violet-100" },
-  message: { icon: MessageSquare, label: "私信", color: "text-blue-600", bg: "bg-blue-50 border-blue-100" },
   site_notification: { icon: Radio, label: "系统公告", color: "text-slate-600", bg: "bg-slate-50 border-slate-100" },
-  feedback_result: { icon: MessageSquare, label: "反馈处理", color: "text-teal-600", bg: "bg-teal-50 border-teal-100" },
-  post_deleted: { icon: Trash2, label: "帖子删除", color: "text-red-600", bg: "bg-red-50 border-red-100" },
-  reply_deleted: { icon: Trash2, label: "回复删除", color: "text-red-600", bg: "bg-red-50 border-red-100" },
-  report_delete: { icon: AlertTriangle, label: "举报处理", color: "text-orange-600", bg: "bg-orange-50 border-orange-100" },
-  post_review: { icon: Shield, label: "审核结果", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-100" },
-  review_request: { icon: Shield, label: "审核请求", color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-100" },
+  feedback_result: { icon: Bell, label: "反馈处理", color: "text-teal-600", bg: "bg-teal-50 border-teal-100" },
 };
 
 function getTypeConfig(type: string) {
@@ -61,10 +45,7 @@ function getTypeConfig(type: string) {
 }
 
 function hasLink(notification: any): boolean {
-  if (notification.type === "message") return true;
   if (notification.type === "site_notification" && notification.relatedId) return true;
-  if (notification.type === "MENTION" && notification.content?.includes("聊天中提到了你")) return true;
-  if (["reply", "like", "favorite", "MENTION", "post_review", "review_request"].includes(notification.type) && notification.relatedId) return true;
   return false;
 }
 
@@ -74,11 +55,6 @@ function tabTypeFilter(tab: NotificationTabId): string | undefined {
     case "announcements": return "site_notification";
     default: return getVisibleNotificationTypeFilter();
   }
-}
-
-function extractNotificationPostTitle(content: string) {
-  const matched = String(content || "").match(/帖子[「\"](.+?)[」\"]/);
-  return matched?.[1] || "该帖子";
 }
 
 function useNotificationCounts() {
@@ -92,7 +68,6 @@ export function Notifications() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { user } = useSession();
   const initialTab = useMemo(() => {
     return normalizeNotificationTab(searchParams.get("tab"));
   }, [searchParams]);
@@ -183,35 +158,6 @@ export function Notifications() {
     },
   });
 
-  const reviewMutation = useMutation({
-    mutationFn: ({ id, status, reason }: { id: number; status: "approved" | "rejected"; reason?: string }) =>
-      api.put(`/api/admin/posts/${id}/review`, { status, reason }),
-    onSuccess: async (_result, variables) => {
-      toast.success(variables.status === "approved" ? "帖子已通过审核" : "帖子已驳回");
-      setExpandedId(null);
-      setSelectedIds(new Set());
-      queryClient.setQueriesData({ queryKey: notificationKeys.all }, (old: any) => {
-        if (!old?.notifications) return old;
-        return {
-          ...old,
-          notifications: old.notifications.map((item: any) =>
-            item.type === "review_request" && item.relatedId === variables.id
-              ? {
-                  ...item,
-                  type: "post_review",
-                  isRead: 1,
-                  content: variables.status === "approved"
-                    ? `帖子「${extractNotificationPostTitle(item.content)}」已审核通过`
-                    : `帖子「${extractNotificationPostTitle(item.content)}」已驳回${variables.reason ? `，原因：${variables.reason}` : ""}`,
-                }
-              : item
-          ),
-        };
-      });
-      await queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-    },
-  });
-
   // 单条删除
   const deleteMutation = useMutation({
     mutationFn: (notificationId: number) => api.delete(`/api/notifications/${notificationId}`),
@@ -271,17 +217,10 @@ export function Notifications() {
 
   const resolveNotificationLink = (notification: any) => {
     switch (notification.type) {
-      case "message":
-        return "/messages";
-      case "MENTION":
-        if (notification.content?.includes("聊天中提到了你")) {
-          return "/chat";
-        }
-        return notification.relatedId ? `/post/${notification.relatedId}` : null;
       case "site_notification":
         return notification.relatedId ? `/notification/${notification.relatedId}` : null;
       default:
-        return notification.relatedId ? `/post/${notification.relatedId}` : null;
+        return null;
     }
   };
 
@@ -302,23 +241,6 @@ export function Notifications() {
     const confirmed = await openGlobalConfirm({ message: "确认删除此通知？", destructive: true, confirmLabel: "删除" });
     if (!confirmed) return;
     await deleteMutation.mutateAsync(id);
-  };
-
-  const canReviewFromNotification = user?.role === "admin" || user?.role === "moderator";
-
-  const handleReviewFromNotification = async (notification: any, nextStatus: "approved" | "rejected") => {
-    if (!notification.relatedId || !canReviewFromNotification) return;
-    const reason = nextStatus === "rejected"
-      ? await openGlobalPrompt({
-          title: "驳回帖子",
-          label: "驳回原因",
-          placeholder: "请输入驳回原因",
-          confirmLabel: "确认驳回",
-          required: true,
-        })
-      : "";
-    if (nextStatus === "rejected" && !reason) return;
-    await reviewMutation.mutateAsync({ id: notification.relatedId, status: nextStatus, reason: reason || undefined });
   };
 
   // 分页按钮
@@ -435,7 +357,6 @@ export function Notifications() {
                   const config = getTypeConfig(notification.type);
                   const Icon = config.icon;
                   const linked = hasLink(notification);
-                  const isReviewRequest = notification.type === "review_request";
                   const expanded = expandedId === notification.id;
                   const selected = selectedIds.has(notification.id);
 
@@ -497,40 +418,6 @@ export function Notifications() {
                               </button>
                             )}
                           </div>
-                          {notification.sender && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <img src={normalizeAvatarUrl(notification.sender.avatar, notification.sender.username)} className="w-5 h-5 rounded-full object-cover border border-slate-100" alt="" />
-                              <span className="text-[12px] text-slate-500 font-medium">{notification.sender.username}</span>
-                            </div>
-                          )}
-                          {isReviewRequest && canReviewFromNotification && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={async (event) => {
-                                  event.stopPropagation();
-                                  await handleReviewFromNotification(notification, "approved");
-                                }}
-                                disabled={reviewMutation.isPending}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
-                              >
-                                <CheckCircle2 size={14} />
-                                直接通过
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async (event) => {
-                                  event.stopPropagation();
-                                  await handleReviewFromNotification(notification, "rejected");
-                                }}
-                                disabled={reviewMutation.isPending}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-60"
-                              >
-                                <AlertTriangle size={14} />
-                                直接驳回
-                              </button>
-                            </div>
-                          )}
                         </div>
 
                         {/* 操作按钮 */}
@@ -557,22 +444,10 @@ export function Notifications() {
                           >
                             <div className="px-5 pb-5 pt-0">
                               <div className="bg-slate-100/80 rounded-xl p-4 border border-slate-200/60">
-                                <div className="flex items-center gap-3 mb-3">
-                                  {notification.sender && (
-                                    <div className="flex items-center gap-2">
-                                      <img src={normalizeAvatarUrl(notification.sender.avatar, notification.sender.username)} className="w-6 h-6 rounded-full border border-slate-200" alt="" />
-                                      <span className="text-[13px] font-bold text-slate-700">{notification.sender.username}</span>
-                                    </div>
-                                  )}
-                                  <span className="text-[12px] text-slate-400 ml-auto">{formatDateTime(notification.createTime)}</span>
+                                <div className="mb-3 flex items-center justify-end">
+                                  <span className="text-[12px] text-slate-400">{formatDateTime(notification.createTime)}</span>
                                 </div>
                                 <p className="text-[14px] text-slate-600 leading-relaxed">{notification.content}</p>
-                                {(notification.type === "post_deleted" || notification.type === "reply_deleted" || notification.type === "report_delete") && (
-                                  <div className="mt-3 flex items-center gap-2 text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
-                                    <AlertTriangle size={16} />
-                                    <span className="text-[13px] font-bold">此操作由管理员执行，如有疑问请联系管理员</span>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </motion.div>

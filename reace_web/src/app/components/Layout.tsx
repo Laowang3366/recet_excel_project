@@ -2,7 +2,6 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Home, 
-  MessageSquare, 
   BookOpen, 
   ShoppingBag, 
   Menu,
@@ -13,13 +12,10 @@ import {
   Send,
   LoaderCircle,
   Paperclip,
-  PenSquare,
   MoreVertical,
   Activity,
-  Mail,
   Settings,
   LogOut,
-  ChevronDown,
   Lightbulb,
   Wrench,
   Package,
@@ -56,7 +52,7 @@ import {
   shouldRenderCompactHeaderNotificationAction,
 } from "../lib/layout-display";
 import { normalizeAvatarUrl, normalizeImageUrl } from "../lib/mappers";
-import { chatKeys, homeKeys, mallKeys, messageKeys, notificationKeys, pointsKeys, profileKeys } from "../lib/query-keys";
+import { homeKeys, mallKeys, notificationKeys, pointsKeys, profileKeys } from "../lib/query-keys";
 import { preloadPublicRoute } from "../lib/route-preload";
 import { useSession } from "../lib/session";
 import {
@@ -151,8 +147,6 @@ export function Layout() {
   const assistantEntryHadCustomPositionRef = useRef(false);
   const assistantPanelMovedRef = useRef(false);
   const assistantShouldScrollLatestRef = useRef(false);
-  const mentionToastIdsRef = useRef<Set<number>>(new Set());
-  const mentionBootstrappedRef = useRef(false);
   const popupDismissedIdsRef = useRef<Set<number>>(new Set());
 
   const clampAssistantPosition = (left: number, top: number, width: number, height: number) => {
@@ -304,14 +298,6 @@ export function Layout() {
     assistantShouldScrollLatestRef.current = false;
     requestAnimationFrame(() => scrollAssistantToLatestReply("smooth"));
   }, [assistantOpen, assistantHistory.length]);
-  const [searchType, setSearchType] = useState("all");
-  const [showSearchTypeDropdown, setShowSearchTypeDropdown] = useState(false);
-  const searchTypeDropdownRef = useRef<HTMLDivElement>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchSuggestions, setSearchSuggestions] = useState<{ posts: any[]; users: any[] }>({ posts: [], users: [] });
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [categorySearchOpen, setCategorySearchOpen] = useState(false);
   const [categorySearchScope, setCategorySearchScope] = useState<"tutorial" | "question">("tutorial");
   const [categorySearchKeyword, setCategorySearchKeyword] = useState("");
@@ -331,7 +317,6 @@ export function Layout() {
   });
   const { user, isAuthenticated, logout } = useSession();
   const canAccessAdmin = hasAdminConsoleAccess(user?.role);
-  const forumEnabled = !ONLINE_LITE_MODE;
   const visibleNotificationTypeFilter = getVisibleNotificationTypeFilter();
   const hiddenNotificationTypeFilter = getHiddenNotificationTypeFilter();
   const preloadNavigationTarget = (path: string) => {
@@ -356,12 +341,6 @@ export function Layout() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (searchTypeDropdownRef.current && !searchTypeDropdownRef.current.contains(event.target as Node)) {
-        setShowSearchTypeDropdown(false);
-      }
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
       if (categorySearchRef.current && !categorySearchRef.current.contains(event.target as Node)) {
         setCategorySearchOpen(false);
       }
@@ -370,73 +349,10 @@ export function Layout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const sendHeartbeat = async () => {
-      try {
-        await api.post("/api/users/heartbeat", undefined, { silent: true });
-        await queryClient.invalidateQueries({ queryKey: chatKeys.onlineUsers() });
-      } catch {
-        // ignore background heartbeat failures
-      }
-    };
-
-    void sendHeartbeat();
-    const intervalId = window.setInterval(() => {
-      void sendHeartbeat();
-    }, 60000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void sendHeartbeat();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [isAuthenticated, queryClient]);
-
-  useEffect(() => {
-    const keyword = searchQuery.trim();
-    if (!keyword) {
-      setSearchSuggestions({ posts: [], users: [] });
-      setShowSuggestions(false);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const [postsResult, usersResult] = await Promise.all([
-          (searchType === "all" || searchType === "post")
-            ? api.get<{ posts: any[] }>(`/api/posts/search?q=${encodeURIComponent(keyword)}&page=1&limit=5`, { auth: false, silent: true })
-            : { posts: [] },
-          (searchType === "all" || searchType === "user")
-            ? api.get<{ users: any[] }>(`/api/users/search?q=${encodeURIComponent(keyword)}&page=1&limit=3`, { auth: false, silent: true })
-            : { users: [] },
-        ]);
-        setSearchSuggestions({ posts: postsResult.posts || [], users: usersResult.users || [] });
-        setShowSuggestions(true);
-      } catch {
-        setShowSuggestions(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, searchType]);
-
   const notificationsPreviewQuery = useQuery({
     queryKey: notificationKeys.list({ page: 1, limit: 5, type: visibleNotificationTypeFilter, scope: "layout" }),
     enabled: isAuthenticated,
     queryFn: () => api.get<{ notifications: any[] }>(`/api/notifications?page=1&limit=5&type=${encodeURIComponent(visibleNotificationTypeFilter)}`, { silent: true }),
-  });
-  const mentionNotificationsQuery = useQuery({
-    queryKey: notificationKeys.list({ page: 1, limit: 10, type: "MENTION", scope: "mention-popup" }),
-    enabled: isAuthenticated && forumEnabled,
-    refetchInterval: 10000,
-    refetchOnWindowFocus: true,
-    queryFn: () => api.get<{ notifications: any[] }>("/api/notifications?page=1&limit=10&type=MENTION", { silent: true }),
   });
   const unreadNotificationsQuery = useQuery({
     queryKey: [...notificationKeys.all, "unread-count"] as const,
@@ -448,11 +364,6 @@ export function Layout() {
     enabled: isAuthenticated,
     queryFn: () => api.get<{ notifications: any[] }>(`/api/notifications?page=1&limit=100&type=${encodeURIComponent(hiddenNotificationTypeFilter)}`, { silent: true }),
   });
-  const unreadMessagesQuery = useQuery({
-    queryKey: messageKeys.unreadCount(),
-    enabled: isAuthenticated && forumEnabled,
-    queryFn: () => api.get<{ unreadCount: number }>("/api/messages/unread-count", { silent: true }),
-  });
   const popupNotificationsQuery = useQuery({
     queryKey: notificationKeys.list({ page: 1, limit: 20, type: "site_notification", scope: "popup-notification" }),
     enabled: isAuthenticated,
@@ -461,13 +372,11 @@ export function Layout() {
     queryFn: () => api.get<{ notifications: any[] }>("/api/notifications?page=1&limit=20&type=site_notification", { silent: true }),
   });
   const notificationItems = (notificationsPreviewQuery.data?.notifications || []).filter((item) => shouldRenderNotificationItem(item.type));
-  const mentionNotifications = mentionNotificationsQuery.data?.notifications || [];
   const popupNotifications = popupNotificationsQuery.data?.notifications || [];
   const hiddenUnreadNotificationCount = (hiddenNotificationsQuery.data?.notifications || []).filter((item) => !item.isRead).length;
   const unreadNotificationCount = hiddenNotificationsQuery.data
     ? Math.max(0, (unreadNotificationsQuery.data?.count || 0) - hiddenUnreadNotificationCount)
     : (unreadNotificationsQuery.data?.count || 0);
-  const unreadMessageCount = unreadMessagesQuery.data?.unreadCount || 0;
   const propsQuery = useQuery({
     queryKey: profileKeys.props(),
     enabled: isAuthenticated && propsOpen,
@@ -483,34 +392,10 @@ export function Layout() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      mentionToastIdsRef.current.clear();
-      mentionBootstrappedRef.current = false;
       popupDismissedIdsRef.current.clear();
       setPopupNotification(null);
-      return;
     }
-
-    const unreadMentions = mentionNotifications.filter((item) => !item.isRead);
-    if (!mentionBootstrappedRef.current) {
-      unreadMentions.forEach((item) => {
-        if (typeof item.id === "number") {
-          mentionToastIdsRef.current.add(item.id);
-        }
-      });
-      mentionBootstrappedRef.current = true;
-      return;
-    }
-
-    unreadMentions.forEach((item) => {
-      if (typeof item.id !== "number" || mentionToastIdsRef.current.has(item.id)) {
-        return;
-      }
-      mentionToastIdsRef.current.add(item.id);
-      toast.info(item.content || "有人提到了你", {
-        description: "可在当前页面继续操作，或稍后到通知中心查看详情",
-      });
-    });
-  }, [isAuthenticated, mentionNotifications]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -536,10 +421,7 @@ export function Layout() {
   const markAllNotificationsReadMutation = useMutation({
     mutationFn: () => api.put("/api/notifications/read-all", {}),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: notificationKeys.all }),
-        queryClient.invalidateQueries({ queryKey: messageKeys.unreadCount() }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: notificationKeys.all });
     },
   });
 
@@ -680,9 +562,6 @@ export function Layout() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: profileKeys.props() }),
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: ["post"] }),
-        queryClient.invalidateQueries({ queryKey: ["board"] }),
-        queryClient.invalidateQueries({ queryKey: ["user-profile"] }),
       ]);
     },
     onError: (error: any) => {
@@ -692,14 +571,14 @@ export function Layout() {
 
   const resolveNotificationLink = (notification: any) => {
     switch (notification.type) {
-      case "follow":
-        return notification.senderId ? `/user/${notification.senderId}` : "/notifications";
-      case "message":
-        return "/messages";
       case "site_notification":
         return notification.relatedId ? `/notification/${notification.relatedId}` : "/notifications";
+      case "system":
+        return "/points-history";
+      case "feedback_result":
+        return "/notifications";
       default:
-        return notification.relatedId ? `/post/${notification.relatedId}` : "/notifications";
+        return "/notifications";
     }
   };
 
@@ -715,46 +594,6 @@ export function Layout() {
       }
     } finally {
       setPopupNotification(null);
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      toast("请输入搜索内容");
-      return;
-    }
-
-    const keyword = searchQuery.trim();
-    try {
-      if (searchType === "user") {
-        const result = await api.get<{ users: any[] }>(`/api/users/search?q=${encodeURIComponent(keyword)}&page=1&limit=1`, { silent: true });
-        if (result.users?.[0]?.id) {
-          navigate(`/user/${result.users[0].id}`);
-        } else {
-          toast.info("未找到相关用户");
-        }
-      } else if (searchType === "post") {
-        const result = await api.get<{ posts: any[] }>(`/api/posts/search?q=${encodeURIComponent(keyword)}&page=1&limit=1`, { silent: true });
-        if (result.posts?.[0]?.id) {
-          navigate(`/post/${result.posts[0].id}`);
-        } else {
-          toast.info("未找到相关帖子");
-        }
-      } else {
-        const [posts, users] = await Promise.all([
-          api.get<{ posts: any[] }>(`/api/posts/search?q=${encodeURIComponent(keyword)}&page=1&limit=1`, { silent: true }),
-          api.get<{ users: any[] }>(`/api/users/search?q=${encodeURIComponent(keyword)}&page=1&limit=1`, { silent: true }),
-        ]);
-        if (posts.posts?.[0]?.id) {
-          navigate(`/post/${posts.posts[0].id}`);
-        } else if (users.users?.[0]?.id) {
-          navigate(`/user/${users.users[0].id}`);
-        } else {
-          toast.info("未找到相关内容");
-        }
-      }
-    } finally {
-      setSearchQuery("");
     }
   };
 
@@ -798,18 +637,9 @@ export function Layout() {
         icon: navIconMap[activePublicNav.key],
       }
     : null;
-  const mobileDrawerNavItems: Array<{ name: string; path: string; icon: React.ReactNode }> = ONLINE_LITE_MODE
-    ? liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }))
-    : [];
-  const mobileBottomNavItems = forumEnabled
-    ? [
-        { key: "home", name: "主页", path: "/", icon: <Home size={18} strokeWidth={1.6} /> },
-        { key: "chat", name: "聊天", path: "/chat", icon: <MessageSquare size={18} strokeWidth={1.6} /> },
-        { key: "post", name: "发帖", path: "/create-post", icon: <PenSquare size={18} strokeWidth={1.6} /> },
-        { key: "search", name: "搜索", path: "", icon: <Search size={18} strokeWidth={1.6} /> },
-        { key: "profile", name: "我的", path: isAuthenticated ? "/profile" : "/auth", icon: <User size={18} strokeWidth={1.6} /> },
-      ]
-    : liteMobileBottomNavItems.map((item) => ({
+  const mobileDrawerNavItems: Array<{ name: string; path: string; icon: React.ReactNode }> =
+    liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }));
+  const mobileBottomNavItems = liteMobileBottomNavItems.map((item) => ({
         key: item.key,
         name: item.shortName,
         path: item.key === "profile" && !isAuthenticated ? "/auth" : item.path,
@@ -1459,138 +1289,10 @@ export function Layout() {
                   </AnimatePresence>
                 </div>
               </div>
-            ) : forumEnabled ? (
-            <div className="relative flex-1 max-w-lg items-center xl:max-w-xl" ref={searchContainerRef}>
-              <div ref={searchTypeDropdownRef} className={`absolute left-1 z-10 ${isMobile ? "hidden" : ""}`}>
-                <button
-                  onClick={() => setShowSearchTypeDropdown(!showSearchTypeDropdown)}
-                  className="flex items-center gap-1 pl-3 pr-2 py-1.5 text-sm text-slate-500 hover:text-slate-700 bg-transparent rounded-l-full border-r border-gray-200"
-                >
-                  {searchType === "user" ? "用户" : searchType === "post" ? "帖子" : "全部"}
-                  <ChevronDown size={14} className={`transition-transform ${showSearchTypeDropdown ? "rotate-180" : ""}`} />
-                </button>
-                
-                <AnimatePresence>
-                  {showSearchTypeDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -5, scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      className="absolute top-full left-0 mt-2 w-28 bg-white border border-gray-100 rounded-xl shadow-lg overflow-hidden py-1 z-50"
-                    >
-                      {[
-                        { id: "all", label: "全部" },
-                        { id: "user", label: "用户" },
-                        { id: "post", label: "帖子" },
-                      ].map((type) => (
-                        <button
-                          key={type.id}
-                          onClick={() => {
-                            setSearchType(type.id);
-                            setShowSearchTypeDropdown(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                            searchType === type.id 
-                              ? "bg-teal-50 text-teal-700 font-medium" 
-                              : "text-slate-600 hover:bg-gray-50 hover:text-slate-900"
-                          }`}
-                        >
-                          {type.label}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <input
-                type="text"
-                placeholder="搜索用户、帖子、题目..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => { if (searchQuery.trim() && (searchSuggestions.posts.length || searchSuggestions.users.length)) setShowSuggestions(true); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full bg-gray-100/80 border-transparent focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-200 rounded-full text-sm transition-all outline-none pl-[90px] pr-4 py-2"
-              />
-
-              <AnimatePresence>
-                {showSuggestions && (searchSuggestions.posts.length > 0 || searchSuggestions.users.length > 0) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-50 max-h-[360px] overflow-y-auto"
-                  >
-                    {searchSuggestions.posts.length > 0 && (
-                      <div>
-                        <div className="px-4 py-2 text-[11px] font-bold text-slate-400 tracking-wider uppercase bg-slate-50/50">帖子</div>
-                        {searchSuggestions.posts.map((post: any) => (
-                          <div
-                            key={`post-${post.id}`}
-                            onClick={() => { setShowSuggestions(false); setSearchQuery(""); navigate(`/post/${post.id}`); }}
-                            className="px-4 py-3 hover:bg-teal-50 cursor-pointer flex items-start gap-3 transition-colors"
-                          >
-                            <MessageSquare size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0">
-                              <div className="text-sm font-bold text-slate-800 truncate">{post.title}</div>
-                              <div className="text-xs text-slate-400 mt-0.5 truncate">{post.author?.username} · {post.replyCount || 0} 评论</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {searchSuggestions.users.length > 0 && (
-                      <div>
-                        <div className="px-4 py-2 text-[11px] font-bold text-slate-400 tracking-wider uppercase bg-slate-50/50 border-t border-gray-100">用户</div>
-                        {searchSuggestions.users.map((u: any) => (
-                          <div
-                            key={`user-${u.id}`}
-                            onClick={() => { setShowSuggestions(false); setSearchQuery(""); navigate(`/user/${u.id}`); }}
-                            className="px-4 py-3 hover:bg-teal-50 cursor-pointer flex items-center gap-3 transition-colors"
-                          >
-                            <img src={normalizeAvatarUrl(u.avatar, u.username)} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="" />
-                            <div className="min-w-0">
-                              <div className="text-sm font-bold text-slate-800 truncate">{u.username}</div>
-                              <div className="text-xs text-slate-400">{u.role || "用户"}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            ) : (
-              <div className="text-sm font-bold text-slate-400">当前线上保留首页、小试牛刀、积分经验中心、实用功能、个人中心</div>
-            )}
-
-            {!isMobile && forumEnabled ? (
-              <button 
-                onClick={handleSearch}
-                className="flex shrink-0 items-center justify-center rounded-full bg-teal-50 p-2 text-teal-600 transition-colors hover:bg-teal-100"
-                title="搜索"
-              >
-                <Search size={18} />
-              </button>
             ) : null}
           </div>
 
           <div className={`flex items-center ${isMobile ? "gap-1.5 ml-2" : "gap-2 ml-2 xl:gap-4 xl:ml-6"}`}>
-            
-            {!isMobile && forumEnabled ? (
-              <Link 
-                to="/create-post"
-                className="flex items-center gap-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-medium transition-colors shadow-sm px-3 sm:px-4 py-2 sm:gap-2"
-              >
-                <PenSquare size={16} />
-                <span className="hidden sm:inline">发布帖子</span>
-                <span className="sm:hidden">发布</span>
-              </Link>
-            ) : null}
-
             {!ONLINE_LITE_MODE ? (
               <button
                 type="button"
@@ -1683,7 +1385,7 @@ export function Layout() {
                             className="flex cursor-pointer gap-3 border-b border-gray-50/50 p-4 hover:bg-gray-50"
                           >
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-600">
-                              <MessageSquare size={18} />
+                              <Bell size={18} />
                             </div>
                             <div>
                               <p className="text-sm text-slate-700">{item.content}</p>
@@ -1710,17 +1412,6 @@ export function Layout() {
               </div>
             ) : isAuthenticated ? (
               <>
-                {forumEnabled ? (
-                <Link 
-                  to="/messages"
-                  className="p-2 text-slate-500 hover:bg-gray-100 rounded-full transition-colors relative"
-                  title="我的私信"
-                >
-                  <Mail size={20} />
-                  {renderCountBadge(unreadMessageCount, "teal")}
-                </Link>
-                ) : null}
-
                 <div className="relative" ref={notificationRef}>
                   <button 
                     onClick={() => setShowNotifications(!showNotifications)}
@@ -1788,7 +1479,7 @@ export function Layout() {
                           className="p-4 border-b border-gray-50/50 hover:bg-gray-50 flex gap-3 cursor-pointer"
                         >
                           <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center shrink-0">
-                            <MessageSquare size={18} />
+                            <Bell size={18} />
                           </div>
                           <div>
                             <p className="text-sm text-slate-700">{item.content}</p>
@@ -2010,192 +1701,15 @@ export function Layout() {
 
         {isMobile ? (
           <>
-            <AnimatePresence>
-              {mobileSearchOpen ? (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[2px] md:hidden"
-                    onClick={() => {
-                      setMobileSearchOpen(false);
-                      setShowSuggestions(false);
-                    }}
-                  />
-                  <motion.div
-                    initial={{ opacity: 0, y: 28 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 28 }}
-                    transition={{ duration: 0.2 }}
-                    className="fixed inset-x-0 bottom-[84px] z-50 px-3 md:hidden"
-                  >
-                    <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
-                      <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#f8fffe_0%,#eefbf8_100%)] px-4 py-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-base font-black text-slate-900">站内搜索</div>
-                            <div className="mt-1 text-xs font-medium text-slate-500">搜索用户、帖子与题目内容</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMobileSearchOpen(false);
-                              setShowSuggestions(false);
-                            }}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200"
-                          >
-                            <X size={17} />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[
-                            { key: "all", label: "全部" },
-                            { key: "user", label: "用户" },
-                            { key: "post", label: "帖子" },
-                          ].map((option) => (
-                            <button
-                              key={option.key}
-                              type="button"
-                              onClick={() => setSearchType(option.key)}
-                              className={`rounded-2xl px-3 py-2 text-xs font-bold transition ${
-                                searchType === option.key
-                                  ? "bg-slate-900 text-white shadow-sm"
-                                  : "bg-white text-slate-500 ring-1 ring-slate-200"
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <div className="flex items-center gap-2">
-                          <input
-                            autoFocus
-                            type="text"
-                            placeholder="输入关键字后直接搜索"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onFocus={() => {
-                              if (searchQuery.trim() && (searchSuggestions.posts.length || searchSuggestions.users.length)) {
-                                setShowSuggestions(true);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                void handleSearch();
-                                setMobileSearchOpen(false);
-                                setShowSuggestions(false);
-                              }
-                            }}
-                            className="h-12 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleSearch();
-                              setMobileSearchOpen(false);
-                              setShowSuggestions(false);
-                            }}
-                            className="inline-flex h-12 items-center justify-center rounded-2xl bg-teal-500 px-5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(20,184,166,0.24)]"
-                          >
-                            搜索
-                          </button>
-                        </div>
-                        <div className="mt-4 max-h-[42vh] overflow-y-auto">
-                          {showSuggestions && (searchSuggestions.posts.length > 0 || searchSuggestions.users.length > 0) ? (
-                            <div className="space-y-4">
-                              {searchSuggestions.posts.length > 0 ? (
-                                <div className="space-y-2">
-                                  <div className="px-1 text-[11px] font-black tracking-[0.18em] text-slate-400">帖子</div>
-                                  {searchSuggestions.posts.map((post) => (
-                                    <button
-                                      key={`mobile-search-post-${post.id}`}
-                                      type="button"
-                                      onClick={() => {
-                                        setMobileSearchOpen(false);
-                                        setShowSuggestions(false);
-                                        setSearchQuery("");
-                                        navigate(`/post/${post.id}`);
-                                      }}
-                                      className="flex w-full items-start gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3 text-left transition hover:border-teal-200 hover:bg-teal-50/60"
-                                    >
-                                      <div className="mt-0.5 rounded-full bg-white p-2 text-slate-500 shadow-sm ring-1 ring-slate-100">
-                                        <Search size={14} />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm font-bold text-slate-800">{post.title || "未命名帖子"}</div>
-                                        <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{post.content || "点击查看帖子详情"}</div>
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : null}
-                              {searchSuggestions.users.length > 0 ? (
-                                <div className="space-y-2">
-                                  <div className="px-1 text-[11px] font-black tracking-[0.18em] text-slate-400">用户</div>
-                                  {searchSuggestions.users.map((account) => (
-                                    <button
-                                      key={`mobile-search-user-${account.id}`}
-                                      type="button"
-                                      onClick={() => {
-                                        setMobileSearchOpen(false);
-                                        setShowSuggestions(false);
-                                        setSearchQuery("");
-                                        navigate(`/user/${account.id}`);
-                                      }}
-                                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-3 text-left transition hover:border-teal-200 hover:bg-teal-50/60"
-                                    >
-                                      <img
-                                        src={normalizeAvatarUrl(account.avatar, account.username)}
-                                        alt={account.username || "用户"}
-                                        className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
-                                      />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm font-bold text-slate-800">{account.username || "未命名用户"}</div>
-                                        <div className="mt-1 truncate text-xs text-slate-500">{account.bio || "点击查看个人主页"}</div>
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-100">
-                                <Search size={18} />
-                              </div>
-                              <div className="text-sm font-bold text-slate-700">输入关键词开始搜索</div>
-                              <div className="mt-1 text-xs leading-5 text-slate-500">支持按用户、帖子和题目进行站内检索</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                </>
-              ) : null}
-            </AnimatePresence>
             <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
-            <div className={`grid gap-1 ${forumEnabled ? "grid-cols-5" : "grid-cols-4"}`}>
+            <div className="grid grid-cols-4 gap-1">
               {mobileBottomNavItems.map((item) => {
-                const isSearch = item.key === "search";
-                const isActive = isSearch
-                  ? mobileSearchOpen
-                  : location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path));
+                const isActive = location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path));
                 return (
                   <button
                     key={`mobile-nav-${item.key}`}
                     type="button"
-                    onClick={() => {
-                      if (isSearch) {
-                        setMobileSearchOpen((prev) => !prev);
-                        return;
-                      }
-                      navigateToPrefetchedRoute(item.path);
-                    }}
+                    onClick={() => navigateToPrefetchedRoute(item.path)}
                     className={`relative flex min-h-[58px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold transition ${
                       isActive
                         ? "bg-teal-50 text-teal-700"

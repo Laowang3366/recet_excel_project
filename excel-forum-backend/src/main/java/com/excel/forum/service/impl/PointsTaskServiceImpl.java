@@ -13,12 +13,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class PointsTaskServiceImpl implements PointsTaskService {
+    private static final Set<String> ACTIVE_TASK_KEYS = Set.of(
+            TASK_DAILY_CHECKIN,
+            TASK_DAILY_PRACTICE,
+            TASK_FIRST_PRACTICE
+    );
+
     private final PointsRuleService pointsRuleService;
     private final PointsRecordService pointsRecordService;
 
@@ -98,6 +105,9 @@ public class PointsTaskServiceImpl implements PointsTaskService {
         LocalDate today = LocalDate.now();
         List<Map<String, Object>> tasks = new ArrayList<>();
         for (PointsRule rule : rules) {
+            if (!ACTIVE_TASK_KEYS.contains(rule.getTaskKey())) {
+                continue;
+            }
             boolean completed = isCompleted(userId, rule, today);
             long completedCount = countCompleted(userId, rule);
             Map<String, Object> task = new HashMap<>();
@@ -157,8 +167,6 @@ public class PointsTaskServiceImpl implements PointsTaskService {
     private String resolveActionText(String taskKey) {
         return switch (taskKey) {
             case TASK_DAILY_CHECKIN -> "去签到";
-            case TASK_DAILY_POST, TASK_FIRST_POST -> "去发帖";
-            case TASK_DAILY_REPLY, TASK_FIRST_REPLY -> "去互动";
             case TASK_DAILY_PRACTICE, TASK_FIRST_PRACTICE -> "去练习";
             default -> "去完成";
         };
@@ -167,8 +175,6 @@ public class PointsTaskServiceImpl implements PointsTaskService {
     private String resolveActionPath(String taskKey) {
         return switch (taskKey) {
             case TASK_DAILY_CHECKIN -> "/";
-            case TASK_DAILY_POST, TASK_FIRST_POST -> "/create-post";
-            case TASK_DAILY_REPLY, TASK_FIRST_REPLY -> "/";
             case TASK_DAILY_PRACTICE, TASK_FIRST_PRACTICE -> "/practice";
             default -> "/points-history";
         };
