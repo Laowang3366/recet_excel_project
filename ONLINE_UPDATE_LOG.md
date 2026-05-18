@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 22:59 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 小试牛刀题目页编辑器长时间加载问题修复；在完整 Univer 编辑器懒加载期间新增轻量表格兜底编辑器，用户可立即在答题区域输入或粘贴内容，完整编辑器加载完成后继续接管同一份工作簿状态；本次未修改后端接口、数据库和判题逻辑。
+- 验证：本地 `npm run test -- src/app/lib/fast-workbook-editor.test.ts` 通过 2 个用例；本地 `npm run typecheck` 通过；本地 `powershell -ExecutionPolicy Bypass -File scripts\quality\check.ps1 -SkipBackend` 通过，包含前端显式 `any` 扫描、`npm audit --audit-level=moderate` 0 漏洞、18 个前端测试文件 / 66 个用例、`npm run build`；服务器标准部署成功，部署仓为 `main` / `44e7f05` 且 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`；服务器本机 `/api/public/home-overview` 与 `/api/practice/campaign/chapters` 返回 200；公网 `https://www.excelcc.cn/`、`/api/public/home-overview`、`/practice`、`/api/practice/campaign/chapters`、`/practice/question/121` 均返回 200；Headless Chrome 慢网复测 `/practice/question/121`，3.64 秒出现 `快速编辑模式`，E2 输入框存在且可写入 `=COUNTA(A2:D2)-COUNTBLANK(A2:D2)`。
+- 部署：提交 `44e7f05` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 快进拉取后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-145455`。
+- 备注：未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`；部署后追加本文档记录会产生日志提交，运行时代码仍对应本次发布提交 `44e7f05`。
+
 ## 2026-05-18 22:34 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 质量门禁与旧论坛数据库表归档上线；新增前端 Vitest 门禁并纳入本地质量脚本和 GitHub Actions；CI 增加前端依赖审计、类型检查、测试和后端源码门禁；新增 `V54__archive_legacy_forum_tables.sql`，创建 `legacy_table_archive` 归档登记表，标记旧论坛 15 张表为 `legacy_forum/archived`，不删除、不重命名、不迁移历史数据；同步 AI 助手公开导航预加载与移动抽屉可达性测试。
