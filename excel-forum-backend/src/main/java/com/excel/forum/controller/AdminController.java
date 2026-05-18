@@ -1,6 +1,5 @@
 package com.excel.forum.controller;
 
-import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.config.ExperienceProperties;
@@ -9,14 +8,11 @@ import com.excel.forum.entity.dto.AdminQuestionRequest;
 import com.excel.forum.mapper.AdminLogMapper;
 import com.excel.forum.mapper.CheckinRecordMapper;
 import com.excel.forum.mapper.DailyChallengeMapper;
-import com.excel.forum.mapper.PostEditHistoryMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
 import com.excel.forum.mapper.PracticeLevelMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
-import com.excel.forum.entity.dto.PostDTO;
 import com.excel.forum.service.*;
-import com.excel.forum.util.DtoConverter;
 import com.excel.forum.util.HtmlSanitizer;
 import com.excel.forum.util.PasswordPolicy;
 import com.excel.forum.util.UsernamePolicy;
@@ -53,21 +49,8 @@ public class AdminController {
 
 
     private final UserService userService;
-    private final PostService postService;
-    private final CategoryService categoryService;
-    private final ReplyService replyService;
-    private final ReportService reportService;
     private final FeedbackService feedbackService;
-    private final LikeService likeService;
-    private final FavoriteService favoriteService;
-    private final PostViewService postViewService;
-    private final PostShareService postShareService;
-    private final FollowService followService;
-    private final CategoryFollowService categoryFollowService;
-    private final MessageService messageService;
-    private final ChatMessageService chatMessageService;
     private final PasswordEncoder passwordEncoder;
-    private final ForumEventService eventService;
     private final NotificationService notificationService;
     private final PointsRuleService pointsRuleService;
     private final PointsRuleOptionService pointsRuleOptionService;
@@ -78,7 +61,6 @@ public class AdminController {
     private final QuestionExcelTemplateService questionExcelTemplateService;
     private final PracticeQuestionSubmissionService practiceQuestionSubmissionService;
     private final SiteNotificationService siteNotificationService;
-    private final PostDraftService postDraftService;
     private final MallService mallService;
     private final ExperienceService experienceService;
     private final ExperienceProperties experienceProperties;
@@ -93,7 +75,6 @@ public class AdminController {
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final CheckinRecordMapper checkinRecordMapper;
     private final AdminLogMapper adminLogMapper;
-    private final PostEditHistoryMapper postEditHistoryMapper;
     private final HtmlSanitizer htmlSanitizer;
     private final PracticeCampaignService practiceCampaignService;
 
@@ -146,8 +127,6 @@ public class AdminController {
         String password = (String) body.get("password");
         String role = (String) body.get("role");
         Integer status = body.get("status") != null ? (Integer) body.get("status") : 0;
-        @SuppressWarnings("unchecked")
-        List<Integer> managedCategories = (List<Integer>) body.get("managedCategories");
         
         if (username == null || username.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户名不能为空"));
@@ -197,15 +176,7 @@ public class AdminController {
         user.setLevel(1);
         user.setPoints(0);
         user.setExp(0);
-        
-        if ("moderator".equals(role) && managedCategories != null && !managedCategories.isEmpty()) {
-            try {
-                user.setManagedCategories(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(managedCategories));
-            } catch (Exception e) {
-                user.setManagedCategories("[]");
-            }
-        }
-        
+
         userService.save(user);
         user.setPassword(null);
         
@@ -223,8 +194,6 @@ public class AdminController {
         String role = (String) body.get("role");
         Integer status = body.get("status") != null ? (Integer) body.get("status") : existingUser.getStatus();
         Boolean isMuted = body.get("isMuted") instanceof Boolean ? (Boolean) body.get("isMuted") : existingUser.getIsMuted();
-        @SuppressWarnings("unchecked")
-        List<Integer> managedCategories = (List<Integer>) body.get("managedCategories");
         
         if (email != null) {
             if (!email.matches("^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\\.[A-Za-z]{2,63}$")) {
@@ -237,19 +206,7 @@ public class AdminController {
         }
         existingUser.setStatus(status);
         existingUser.setIsMuted(Boolean.TRUE.equals(isMuted));
-        
-        String effectiveRole = role != null ? role : existingUser.getRole();
-        
-        if ("moderator".equals(effectiveRole) && managedCategories != null) {
-            try {
-                existingUser.setManagedCategories(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(managedCategories));
-            } catch (Exception e) {
-                existingUser.setManagedCategories("[]");
-            }
-        } else if (!"moderator".equals(effectiveRole)) {
-            existingUser.setManagedCategories(null);
-        }
-        
+
         userService.updateById(existingUser);
         
         existingUser = userService.getById(id);
@@ -333,402 +290,13 @@ public class AdminController {
             return ResponseEntity.notFound().build();
         }
 
-        Set<Long> userPostIds = postService.list(new QueryWrapper<Post>()
-                        .eq("user_id", id)
-                        .select("id"))
-                .stream()
-                .map(Post::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Long> replyIds = collectReplyIdsForUserDeletion(id, userPostIds);
-
-        cleanupPostAndReplyReferences(userPostIds, replyIds);
         notificationService.remove(new QueryWrapper<Notification>().eq("sender_id", id));
         pointsRecordService.remove(new QueryWrapper<PointsRecord>().eq("user_id", id));
-        postEditHistoryMapper.delete(new QueryWrapper<PostEditHistory>().eq("user_id", id));
         adminLogMapper.delete(new QueryWrapper<AdminLog>().eq("admin_user_id", id));
 
         userService.removeById(id);
         log.info("管理员删除用户: userId={}, username={}", id, user.getUsername());
         return ResponseEntity.ok(Map.of("message", "用户已删除"));
-    }
-
-    @GetMapping("/posts")
-    public ResponseEntity<?> getPosts(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String username,
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-        
-        Page<Post> pageRequest = new Page<>(page, size);
-        QueryWrapper<Post> queryWrapper = new QueryWrapper<>();
-        
-        if (categoryId != null) {
-            queryWrapper.eq("category_id", categoryId);
-        }
-        
-        if (status != null && !status.isEmpty()) {
-            if ("active".equalsIgnoreCase(status)) {
-                queryWrapper.eq("status", 0);
-            } else if ("deleted".equalsIgnoreCase(status)) {
-                queryWrapper.in("status", 1, 2);
-            } else if ("locked".equalsIgnoreCase(status)) {
-                queryWrapper.eq("is_locked", true);
-            } else if ("top".equalsIgnoreCase(status)) {
-                queryWrapper.eq("is_top", true);
-            } else if ("essence".equalsIgnoreCase(status)) {
-                queryWrapper.eq("is_essence", true);
-            } else {
-                try {
-                    Integer statusValue = Integer.parseInt(status);
-                    queryWrapper.eq("status", statusValue);
-                } catch (NumberFormatException e) {
-                    // 忽略无效的状态值
-                }
-            }
-        }
-        
-        if (keyword != null && !keyword.isBlank()) {
-            String normalizedKeyword = keyword.trim();
-            queryWrapper.and(wrapper -> wrapper
-                    .like("title", normalizedKeyword)
-                    .or()
-                    .like("content", normalizedKeyword));
-        }
-
-        if (username != null && !username.isBlank()) {
-            List<Long> userIds = userService.list(new QueryWrapper<User>()
-                            .select("id")
-                            .like("username", username.trim()))
-                    .stream()
-                    .map(User::getId)
-                    .filter(Objects::nonNull)
-                    .toList();
-            if (userIds.isEmpty()) {
-                queryWrapper.apply("1 = 0");
-            } else {
-                queryWrapper.in("user_id", userIds);
-            }
-        }
-
-        if (startDate != null && !startDate.isBlank()) {
-            try {
-                LocalDate normalizedStartDate = LocalDate.parse(startDate.trim());
-                queryWrapper.ge("create_time", normalizedStartDate.atStartOfDay());
-            } catch (Exception ignored) {
-            }
-        }
-
-        if (endDate != null && !endDate.isBlank()) {
-            try {
-                LocalDate normalizedEndDate = LocalDate.parse(endDate.trim());
-                queryWrapper.lt("create_time", normalizedEndDate.plusDays(1).atStartOfDay());
-            } catch (Exception ignored) {
-            }
-        }
-        
-        queryWrapper.orderByDesc("create_time");
-        
-        Page<Post> result = postService.page(pageRequest, queryWrapper);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("records", DtoConverter.convertPosts(result.getRecords(), userService, userEntitlementService, categoryService, replyService));
-        response.put("total", result.getTotal());
-        response.put("current", result.getCurrent());
-        response.put("size", result.getSize());
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/posts/{id}/status")
-    public ResponseEntity<?> updatePostStatus(@PathVariable Long id, @RequestBody Map<String, Integer> body) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        Integer status = body.get("status");
-        if (status == null) {
-            return ResponseEntity.badRequest().body(Map.of("message", "状态不能为空"));
-        }
-        
-        post.setStatus(status);
-        postService.updateById(post);
-        log.info("管理员更新帖子状态: postId={}, status={}", id, status);
-        
-        return ResponseEntity.ok(post);
-    }
-
-    @PutMapping("/posts/{id}/lock")
-    public ResponseEntity<?> togglePostLock(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        post.setIsLocked(post.getIsLocked() == null ? true : !post.getIsLocked());
-        postService.updateById(post);
-        
-        eventService.publishEvent(ForumEvent.postUpdated(id, Map.of(
-            "isLocked", post.getIsLocked(),
-            "isTop", post.getIsTop(),
-            "isEssence", post.getIsEssence()
-        )));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("isTop", post.getIsTop());
-        response.put("isEssence", post.getIsEssence());
-        response.put("isLocked", post.getIsLocked());
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/posts/{id}/top")
-    public ResponseEntity<?> togglePostTop(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        post.setIsTop(post.getIsTop() == null ? true : !post.getIsTop());
-        postService.updateById(post);
-        
-        eventService.publishEvent(ForumEvent.postUpdated(id, Map.of(
-            "isTop", post.getIsTop(),
-            "isEssence", post.getIsEssence(),
-            "isLocked", post.getIsLocked()
-        )));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("isTop", post.getIsTop());
-        response.put("isEssence", post.getIsEssence());
-        response.put("isLocked", post.getIsLocked());
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/posts/{id}/essence")
-    public ResponseEntity<?> togglePostEssence(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        post.setIsEssence(post.getIsEssence() == null ? true : !post.getIsEssence());
-        postService.updateById(post);
-        
-        eventService.publishEvent(ForumEvent.postUpdated(id, Map.of(
-            "isEssence", post.getIsEssence(),
-            "isTop", post.getIsTop(),
-            "isLocked", post.getIsLocked()
-        )));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("isTop", post.getIsTop());
-        response.put("isEssence", post.getIsEssence());
-        response.put("isLocked", post.getIsLocked());
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/posts/batch-lock")
-    public ResponseEntity<?> batchLockPosts(@RequestBody Map<String, List<Long>> body) {
-        List<Long> ids = body.get("ids");
-        if (ids == null || ids.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "请选择要锁定的帖子"));
-        }
-        
-        for (Long id : ids) {
-            Post post = postService.getById(id);
-            if (post != null) {
-                post.setIsLocked(true);
-                postService.updateById(post);
-            }
-        }
-        log.info("管理员批量锁定帖子: ids={}", ids);
-        
-        return ResponseEntity.ok(Map.of("message", "批量锁定成功"));
-    }
-
-    @PostMapping("/posts/batch-unlock")
-    public ResponseEntity<?> batchUnlockPosts(@RequestBody Map<String, List<Long>> body) {
-        List<Long> ids = body.get("ids");
-        if (ids == null || ids.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "请选择要解锁的帖子"));
-        }
-        
-        for (Long id : ids) {
-            Post post = postService.getById(id);
-            if (post != null) {
-                post.setIsLocked(false);
-                postService.updateById(post);
-            }
-        }
-        log.info("管理员批量解锁帖子: ids={}", ids);
-        
-        return ResponseEntity.ok(Map.of("message", "批量解锁成功"));
-    }
-
-    @DeleteMapping("/posts/{id}")
-    public ResponseEntity<?> deletePost(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body, @RequestAttribute("userId") Long userId) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        String reason = body != null ? body.get("reason") : null;
-        
-        post.setStatus(99);
-        postService.updateById(post);
-        
-        String notificationContent = "您的帖子「" + post.getTitle() + "」已被管理员删除";
-        if (reason != null && !reason.isEmpty()) {
-            notificationContent += "，原因：" + reason;
-        }
-        
-        try {
-            notificationService.createNotification(
-                post.getUserId(),
-                "post_deleted",
-                notificationContent,
-                id
-            );
-        } catch (Exception e) {
-            // ignore notification delivery failure here to avoid blocking deletion
-        }
-        AdminLog adminLog = new AdminLog();
-        adminLog.setAdminUserId(userId);
-        adminLog.setAction("delete_post");
-        adminLog.setTargetType("post");
-        adminLog.setTargetId(id);
-        adminLog.setDetail(reason);
-        adminLogMapper.insert(adminLog);
-        log.info("管理员删除帖子: postId={}, adminUserId={}, reason={}", id, userId, reason);
-        
-        eventService.publishEvent(ForumEvent.postDeleted(id));
-        
-        return ResponseEntity.ok(Map.of("message", "删除成功"));
-    }
-    
-    @PutMapping("/posts/{id}/restore")
-    public ResponseEntity<?> restorePost(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        post.setStatus(0);
-        postService.updateById(post);
-        
-        eventService.publishEvent(ForumEvent.postUpdated(id, Map.of("status", 0)));
-        
-        return ResponseEntity.ok(Map.of("message", "恢复成功"));
-    }
-    
-    @PostMapping("/posts")
-    public ResponseEntity<?> createPost(@RequestBody Post post, @RequestAttribute("userId") Long userId) {
-        if (post.getTitle() == null || post.getTitle().isEmpty()) {
-            return ResponseEntity.badRequest().body("标题不能为空");
-        }
-        
-        if (post.getContent() == null || post.getContent().isEmpty()) {
-            return ResponseEntity.badRequest().body("内容不能为空");
-        }
-        
-        if (post.getCategoryId() == null) {
-            return ResponseEntity.badRequest().body("版块不能为空");
-        }
-        
-        post.setUserId(userId);
-        post.setViewCount(0);
-        post.setLikeCount(0);
-        post.setReplyCount(0);
-        
-        if (post.getStatus() == null) {
-            post.setStatus(0);
-        }
-        
-        if (post.getType() == null) {
-            post.setType(0);
-        }
-        
-        postService.save(post);
-        
-        return ResponseEntity.ok(post);
-    }
-
-    @GetMapping("/categories")
-    public ResponseEntity<?> getCategories() {
-        QueryWrapper<Category> categoryQuery = new QueryWrapper<>();
-        categoryQuery.orderByAsc("sort_order").orderByAsc("id");
-        List<Category> categories = categoryService.list(categoryQuery);
-        Map<Long, Long> postCountMap = categoryService.countActivePostsByCategoryIds(
-                categories.stream()
-                        .map(Category::getId)
-                        .filter(Objects::nonNull)
-                        .toList()
-        );
-        
-        List<Map<String, Object>> result = categories.stream().map(category -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", category.getId());
-            map.put("name", category.getName());
-            map.put("description", category.getDescription());
-            map.put("groupName", category.getGroupName());
-            map.put("sortOrder", category.getSortOrder());
-            map.put("createTime", category.getCreateTime());
-            map.put("updateTime", category.getUpdateTime());
-            map.put("postCount", postCountMap.getOrDefault(category.getId(), 0L));
-            
-            return map;
-        }).collect(Collectors.toList());
-        
-        return ResponseEntity.ok(result);
-    }
-
-    @PostMapping("/categories")
-    public ResponseEntity<?> createCategory(@RequestBody Category category) {
-        categoryService.save(category);
-        
-        eventService.publishEvent(ForumEvent.categoryUpdated(category.getId()));
-        
-        return ResponseEntity.ok(category);
-    }
-
-    @PutMapping("/categories/{id}")
-    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody Category category) {
-        Category existingCategory = categoryService.getById(id);
-        if (existingCategory == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        category.setId(id);
-        categoryService.updateById(category);
-        
-        eventService.publishEvent(ForumEvent.categoryUpdated(id));
-        
-        return ResponseEntity.ok(category);
-    }
-
-    @DeleteMapping("/categories/{id}")
-    public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
-        Category category = categoryService.getById(id);
-        if (category == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        long count = categoryService.countActivePostsByCategoryIds(List.of(id)).getOrDefault(id, 0L);
-        
-        if (count > 0) {
-            return ResponseEntity.badRequest().body("该版块下还有帖子，无法删除");
-        }
-        
-        categoryService.removeById(id);
-        
-        eventService.publishEvent(ForumEvent.categoryUpdated(id));
-
-        return ResponseEntity.ok(Map.of("message", "分类已删除"));
     }
 
     @GetMapping("/question-categories")
@@ -804,7 +372,7 @@ public class AdminController {
         long userCount = userService.count();
         long onlineUserCount = userService.count(new QueryWrapper<User>().eq("is_online", true));
         long adminCount = userService.count(new QueryWrapper<User>().eq("role", "admin"));
-        long moderatorCount = userService.count(new QueryWrapper<User>().eq("role", "moderator"));
+        long operatorCount = userService.count(new QueryWrapper<User>().eq("role", "moderator"));
         long lockedUserCount = userService.count(new QueryWrapper<User>().eq("status", 1));
         long mutedUserCount = userService.count(new QueryWrapper<User>().eq("is_muted", true));
         long todayNewUsers = userService.count(new QueryWrapper<User>().ge("create_time", todayStart));
@@ -853,7 +421,7 @@ public class AdminController {
                 "total", userCount,
                 "online", onlineUserCount,
                 "admins", adminCount,
-                "moderators", moderatorCount,
+                "operators", operatorCount,
                 "locked", lockedUserCount,
                 "muted", mutedUserCount
         ));
@@ -897,208 +465,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("stats", stats));
     }
     
-    @GetMapping("/replies")
-    public ResponseEntity<?> getReplies(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) Long postId) {
-        
-        Page<Reply> pageRequest = new Page<>(page, size);
-        QueryWrapper<Reply> queryWrapper = new QueryWrapper<>();
-        
-        if (postId != null) {
-            queryWrapper.eq("post_id", postId);
-        }
-        
-        queryWrapper.orderByDesc("create_time");
-        
-        Page<Reply> result = replyService.page(pageRequest, queryWrapper);
-        
-        List<Map<String, Object>> replies = result.getRecords().stream().map(reply -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", reply.getId());
-            map.put("content", reply.getContent());
-            map.put("likeCount", reply.getLikeCount());
-            map.put("createdAt", reply.getCreateTime());
-            map.put("status", reply.getStatus());
-            
-            User author = userService.getById(reply.getUserId());
-            if (author != null) {
-                Map<String, Object> authorMap = new HashMap<>();
-                authorMap.put("id", author.getId());
-                authorMap.put("username", author.getUsername());
-                authorMap.put("avatar", author.getAvatar());
-                map.put("author", authorMap);
-            }
-            
-            Post post = postService.getById(reply.getPostId());
-            if (post != null) {
-                Map<String, Object> postMap = new HashMap<>();
-                postMap.put("id", post.getId());
-                postMap.put("title", post.getTitle());
-                map.put("post", postMap);
-            }
-            
-            return map;
-        }).collect(Collectors.toList());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("replies", replies);
-        response.put("total", result.getTotal());
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    @DeleteMapping("/replies/{id}")
-    @Transactional
-    public ResponseEntity<?> deleteReply(@PathVariable Long id) {
-        Reply reply = replyService.getById(id);
-        if (reply == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        // 删除回复及其所有后代回复
-        List<Long> allDescendantIds = replyService.findAllDescendantIds(reply.getId());
-        int deletedCount = 1 + allDescendantIds.size();
-        if (!allDescendantIds.isEmpty()) {
-            replyService.removeByIds(allDescendantIds);
-        }
-        replyService.removeById(id);
-
-        if (reply.getPostId() != null) {
-            postService.recalculateReplyCount(reply.getPostId());
-        }
-        log.info("管理员删除回复: replyId={}, postId={}, descendantCount={}", id, reply.getPostId(), deletedCount - 1);
-
-        return ResponseEntity.ok(Map.of("message", "删除成功"));
-    }
-    
-    @GetMapping("/reports")
-    public ResponseEntity<?> getReports(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) String status) {
-        
-        Page<Report> pageRequest = new Page<>(page, size);
-        QueryWrapper<Report> queryWrapper = new QueryWrapper<>();
-        
-        if (status != null && !status.isEmpty()) {
-            if ("pending".equalsIgnoreCase(status)) {
-                queryWrapper.eq("status", 0);
-            } else if ("handled".equalsIgnoreCase(status)) {
-                queryWrapper.eq("status", 1);
-            } else if ("ignored".equalsIgnoreCase(status)) {
-                queryWrapper.eq("status", 2);
-            }
-        }
-        
-        queryWrapper.orderByDesc("create_time");
-        
-        Page<Report> result = reportService.page(pageRequest, queryWrapper);
-        
-        List<Map<String, Object>> reports = result.getRecords().stream().map(report -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", report.getId());
-            map.put("targetType", report.getTargetType());
-            map.put("reason", report.getReason());
-            map.put("description", report.getDescription());
-            map.put("status", report.getStatus() == 0 ? "pending" : report.getStatus() == 1 ? "handled" : "ignored");
-            map.put("createdAt", report.getCreateTime());
-            
-            User reporter = userService.getById(report.getReporterId());
-            if (reporter != null) {
-                Map<String, Object> reporterMap = new HashMap<>();
-                reporterMap.put("id", reporter.getId());
-                reporterMap.put("username", reporter.getUsername());
-                reporterMap.put("avatar", reporter.getAvatar());
-                map.put("reporter", reporterMap);
-            }
-            
-            if ("post".equals(report.getTargetType())) {
-                Post post = postService.getById(report.getTargetId());
-                if (post != null) {
-                    Map<String, Object> targetMap = new HashMap<>();
-                    targetMap.put("id", post.getId());
-                    targetMap.put("title", post.getTitle());
-                    targetMap.put("content", post.getContent());
-                    map.put("target", targetMap);
-                }
-            } else if ("reply".equals(report.getTargetType())) {
-                Reply reply = replyService.getById(report.getTargetId());
-                if (reply != null) {
-                    Map<String, Object> targetMap = new HashMap<>();
-                    targetMap.put("id", reply.getId());
-                    targetMap.put("content", reply.getContent());
-                    map.put("target", targetMap);
-                }
-            }
-            
-            return map;
-        }).collect(Collectors.toList());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("reports", reports);
-        response.put("total", result.getTotal());
-        
-        return ResponseEntity.ok(response);
-    }
-    
-    @PutMapping("/reports/{id}/handle")
-    @Transactional
-    public ResponseEntity<?> handleReport(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        Report report = reportService.getById(id);
-        if (report == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        String action = body.get("action");
-
-        if ("delete".equals(action)) {
-            if ("post".equals(report.getTargetType())) {
-                Post post = postService.getById(report.getTargetId());
-                if (post != null) {
-                    // 发送通知给帖子作者
-                    notificationService.createNotification(
-                        post.getUserId(),
-                        "report_delete",
-                        "您的帖子《" + post.getTitle() + "》因违规被管理员删除",
-                        null
-                    );
-                    post.setStatus(99);
-                    postService.updateById(post);
-                }
-            } else if ("reply".equals(report.getTargetType())) {
-                Reply targetReply = replyService.getById(report.getTargetId());
-                if (targetReply != null) {
-                    // 发送通知给回复作者
-                    notificationService.createNotification(
-                        targetReply.getUserId(),
-                        "report_delete",
-                        "您的回复因违规被管理员删除",
-                        targetReply.getPostId()
-                    );
-                    // 删除回复及其所有后代回复
-                    List<Long> allDescendantIds = replyService.findAllDescendantIds(targetReply.getId());
-                    int deletedCount = 1 + allDescendantIds.size();
-                    if (!allDescendantIds.isEmpty()) {
-                        replyService.removeByIds(allDescendantIds);
-                    }
-                    replyService.removeById(targetReply.getId());
-                    postService.recalculateReplyCount(targetReply.getPostId());
-                }
-            }
-            report.setStatus(1);
-        } else if ("ignore".equals(action)) {
-            report.setStatus(2);
-        }
-
-        reportService.updateById(report);
-
-        eventService.publishEvent(ForumEvent.reportUpdated(id));
-
-        return ResponseEntity.ok(Map.of("message", "处理成功"));
-    }
-
     @GetMapping("/feedback")
     public ResponseEntity<?> getFeedback(
             @RequestParam(defaultValue = "1") Integer page,
@@ -1215,168 +581,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", "反馈已处理"));
     }
     
-    @DeleteMapping("/posts/{id}/permanent")
-    @Transactional
-    public ResponseEntity<?> permanentDeletePost(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Set<Long> replyIds = replyService.list(new QueryWrapper<Reply>()
-                        .eq("post_id", id)
-                        .select("id"))
-                .stream()
-                .map(Reply::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        cleanupPostAndReplyReferences(Set.of(id), replyIds);
-        replyService.remove(new QueryWrapper<Reply>().eq("post_id", id));
-        postService.removeById(id);
-        log.info("管理员永久删除帖子: postId={}, replyCount={}", id, replyIds.size());
-
-        eventService.publishEvent(ForumEvent.postDeleted(id));
-
-        return ResponseEntity.ok(Map.of("message", "永久删除成功"));
-    }
-
-    @GetMapping("/posts/review")
-    public ResponseEntity<?> getPostsForReview(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) String reviewStatus) {
-        
-        Page<Post> pageRequest = new Page<>(page, size);
-        QueryWrapper<Post> queryWrapper = new QueryWrapper<>();
-        
-        if (reviewStatus != null && !reviewStatus.isEmpty()) {
-            queryWrapper.eq("review_status", reviewStatus);
-        } else {
-            queryWrapper.eq("review_status", "pending");
-        }
-        
-        queryWrapper.orderByDesc("create_time");
-        
-        Page<Post> result = postService.page(pageRequest, queryWrapper);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("records", DtoConverter.convertPosts(result.getRecords(), userService, userEntitlementService, categoryService, replyService));
-        response.put("total", result.getTotal());
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/posts/{id}/review")
-    @Transactional
-    public ResponseEntity<?> reviewPost(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        Post post = postService.getById(id);
-        if (post == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        String status = body.get("status");
-        String reason = body.get("reason");
-
-        if (status == null || (!status.equals("approved") && !status.equals("rejected"))) {
-            return ResponseEntity.badRequest().body(Map.of("message", "无效的审核状态"));
-        }
-
-        UpdateWrapper<Post> reviewUpdate = new UpdateWrapper<>();
-        reviewUpdate.eq("id", id)
-                .eq("review_status", "pending")
-                .set("review_status", status)
-                .set("review_reason", "approved".equals(status) ? null : reason)
-                .set("status", "approved".equals(status) ? 0 : -1);
-        if (!postService.update(reviewUpdate)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "帖子已被其他管理员处理"));
-        }
-
-        post = postService.getById(id);
-
-        if ("approved".equals(status)) {
-            experienceService.awardPostApproved(post.getUserId(), post.getId(), post.getTitle());
-            pointsTaskService.awardTask(post.getUserId(), PointsTaskService.TASK_DAILY_POST, post.getId(), "完成今日发帖");
-            pointsTaskService.awardTask(post.getUserId(), PointsTaskService.TASK_FIRST_POST, null, "完成首次发帖");
-        }
-        log.info("管理员审核帖子: postId={}, reviewStatus={}, reason={}", id, status, reason);
-
-        String notificationContent = "approved".equals(status)
-            ? "您的帖子「" + post.getTitle() + "」已通过审核"
-            : "您的帖子「" + post.getTitle() + "」未通过审核" + (reason != null ? "，原因：" + reason : "");
-
-        String reviewerNotificationContent = "approved".equals(status)
-                ? "帖子「" + post.getTitle() + "」已审核通过"
-                : "帖子「" + post.getTitle() + "」已驳回" + (reason != null ? "，原因：" + reason : "");
-
-        UpdateWrapper<Notification> reviewerNotificationUpdate = new UpdateWrapper<>();
-        reviewerNotificationUpdate.eq("type", "review_request")
-                .eq("related_id", id)
-                .set("type", "post_review")
-                .set("content", reviewerNotificationContent)
-                .set("is_read", 1);
-        notificationService.update(reviewerNotificationUpdate);
-
-        notificationService.createNotification(
-            post.getUserId(),
-            "post_review",
-            notificationContent,
-            id
-        );
-
-        return ResponseEntity.ok(Map.of("message", "审核完成"));
-    }
-
-    @GetMapping("/drafts")
-    public ResponseEntity<?> getDrafts(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) String username,
-            @RequestParam(required = false) Boolean expired,
-            @RequestParam(defaultValue = "latest") String sort) {
-        Page<PostDraft> result = postDraftService.listAdminDrafts(page, size, keyword, status, categoryId, username, expired, sort);
-
-        List<Map<String, Object>> records = result.getRecords().stream()
-                .map(this::buildAdminDraftResponse)
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(Map.of(
-                "records", records,
-                "total", result.getTotal(),
-                "current", result.getCurrent(),
-                "size", result.getSize(),
-                "pages", result.getPages(),
-                "maxExpireDays", PostDraftService.DRAFT_EXPIRE_DAYS
-        ));
-    }
-
-    @DeleteMapping("/drafts/{id}")
-    public ResponseEntity<?> deleteDraftByAdmin(@PathVariable Long id) {
-        try {
-            postDraftService.deleteDraftByAdmin(id);
-            return ResponseEntity.ok(Map.of("message", "草稿已删除"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
-        }
-    }
-
-    @DeleteMapping("/drafts/by-user/{userId}")
-    public ResponseEntity<?> deleteDraftsByUser(@PathVariable Long userId) {
-        User user = userService.getById(userId);
-        if (user == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
-        }
-
-        long count = postDraftService.deleteDraftsByAdminUser(userId);
-        return ResponseEntity.ok(Map.of(
-                "message", count > 0 ? "已清理该用户的 " + count + " 条草稿" : "该用户当前没有草稿",
-                "count", count
-        ));
-    }
-
     @GetMapping("/levels/overview")
     public ResponseEntity<?> getLevelOverview() {
         List<ExperienceProperties.LevelRule> sortedLevels = getSortedLevelRules();
@@ -2446,56 +1650,6 @@ public class AdminController {
         return value != null ? value : fallback;
     }
 
-    private Map<String, Object> buildAdminDraftResponse(PostDraft draft) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", draft.getId());
-        response.put("userId", draft.getUserId());
-        response.put("title", draft.getTitle());
-        response.put("content", draft.getContent());
-        response.put("categoryId", draft.getCategoryId());
-        response.put("status", draft.getStatus());
-        response.put("rewardPoints", draft.getRewardPoints());
-        response.put("attachments", draft.getAttachments());
-        response.put("tags", draft.getTags());
-        response.put("createTime", draft.getCreateTime());
-        response.put("updateTime", draft.getUpdateTime());
-        response.put("expireTime", resolveDraftExpireTime(draft));
-        response.put("expired", isDraftExpired(draft));
-
-        User author = userService.getById(draft.getUserId());
-        if (author != null) {
-            Map<String, Object> authorMap = new HashMap<>();
-            authorMap.put("id", author.getId());
-            authorMap.put("username", author.getUsername());
-            authorMap.put("avatar", author.getAvatar());
-            authorMap.put("role", author.getRole());
-            response.put("author", authorMap);
-        }
-
-        Category category = draft.getCategoryId() != null ? categoryService.getById(draft.getCategoryId()) : null;
-        if (category != null) {
-            Map<String, Object> categoryMap = new HashMap<>();
-            categoryMap.put("id", category.getId());
-            categoryMap.put("name", category.getName());
-            response.put("category", categoryMap);
-        }
-
-        return response;
-    }
-
-    private java.time.LocalDateTime resolveDraftExpireTime(PostDraft draft) {
-        java.time.LocalDateTime baseTime = draft.getUpdateTime() != null ? draft.getUpdateTime() : draft.getCreateTime();
-        if (baseTime == null) {
-            return null;
-        }
-        return baseTime.plusDays(PostDraftService.DRAFT_EXPIRE_DAYS);
-    }
-
-    private boolean isDraftExpired(PostDraft draft) {
-        java.time.LocalDateTime expireTime = resolveDraftExpireTime(draft);
-        return expireTime != null && !expireTime.isAfter(java.time.LocalDateTime.now());
-    }
-
     private List<ExperienceProperties.LevelRule> getSortedLevelRules() {
         List<ExperienceLevelRule> configuredRules = experienceLevelRuleService.listEnabledRules();
         if (!configuredRules.isEmpty()) {
@@ -2644,9 +1798,6 @@ public class AdminController {
             return "未知来源";
         }
         return switch (ruleKey) {
-            case ExperienceService.BIZ_POST_DIRECT_PUBLISH -> "直接发帖";
-            case ExperienceService.BIZ_POST_APPROVED -> "帖子过审";
-            case ExperienceService.BIZ_REPLY_CREATE -> "发布回复";
             case ExperienceService.BIZ_DAILY_CHECKIN -> "每日签到";
             case ExperienceService.BIZ_PRACTICE_COMPLETE -> "完成练习";
             default -> ruleKey;
@@ -2855,67 +2006,4 @@ public class AdminController {
         return defaultValue;
     }
 
-    private Set<Long> collectReplyIdsForUserDeletion(Long userId, Set<Long> userPostIds) {
-        Set<Long> replyIds = replyService.list(new QueryWrapper<Reply>()
-                        .eq("user_id", userId)
-                        .select("id"))
-                .stream()
-                .map(Reply::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (!userPostIds.isEmpty()) {
-            replyIds.addAll(replyService.list(new QueryWrapper<Reply>()
-                            .in("post_id", userPostIds)
-                            .select("id"))
-                    .stream()
-                    .map(Reply::getId)
-                    .filter(Objects::nonNull)
-                    .toList());
-        }
-        return replyIds;
-    }
-
-    private void cleanupPostAndReplyReferences(Collection<Long> postIds, Collection<Long> replyIds) {
-        if (postIds != null && !postIds.isEmpty()) {
-            likeService.remove(new QueryWrapper<Like>().eq("target_type", "post").in("target_id", postIds));
-            favoriteService.remove(new QueryWrapper<Favorite>().in("post_id", postIds));
-            postViewService.remove(new QueryWrapper<PostView>().in("post_id", postIds));
-            reportService.remove(new QueryWrapper<Report>().eq("target_type", "post").in("target_id", postIds));
-            postEditHistoryMapper.delete(new QueryWrapper<PostEditHistory>().in("post_id", postIds));
-        }
-
-        if (replyIds != null && !replyIds.isEmpty()) {
-            likeService.remove(new QueryWrapper<Like>().eq("target_type", "reply").in("target_id", replyIds));
-            reportService.remove(new QueryWrapper<Report>().eq("target_type", "reply").in("target_id", replyIds));
-        }
-
-        QueryWrapper<Notification> notificationCleanup = buildNotificationCleanupWrapper(postIds, replyIds);
-        if (notificationCleanup != null) {
-            notificationService.remove(notificationCleanup);
-        }
-    }
-
-    private QueryWrapper<Notification> buildNotificationCleanupWrapper(Collection<Long> postIds, Collection<Long> replyIds) {
-        boolean hasPosts = postIds != null && !postIds.isEmpty();
-        boolean hasReplies = replyIds != null && !replyIds.isEmpty();
-        if (!hasPosts && !hasReplies) {
-            return null;
-        }
-
-        QueryWrapper<Notification> wrapper = new QueryWrapper<>();
-        wrapper.and(notification -> {
-            if (hasPosts) {
-                notification.and(postRelated -> postRelated
-                        .in("type", List.of("reply", "like", "favorite", "MENTION", "review_request", "post_deleted", "post_review"))
-                        .in("related_id", postIds));
-            }
-            if (hasReplies) {
-                if (hasPosts) {
-                    notification.or();
-                }
-                notification.in("reply_id", replyIds);
-            }
-        });
-        return wrapper;
-    }
 }

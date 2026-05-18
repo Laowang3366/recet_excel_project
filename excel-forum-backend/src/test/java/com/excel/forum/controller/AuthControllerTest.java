@@ -2,8 +2,6 @@ package com.excel.forum.controller;
 
 import com.excel.forum.config.GlobalExceptionHandler;
 import com.excel.forum.entity.User;
-import com.excel.forum.entity.dto.RegisterRequest;
-import com.excel.forum.service.ForumEventService;
 import com.excel.forum.service.UserService;
 import com.excel.forum.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,9 +45,6 @@ class AuthControllerTest {
     private JwtUtil jwtUtil;
 
     @Mock
-    private ForumEventService forumEventService;
-
-    @Mock
     private StringRedisTemplate redisTemplate;
 
     @Captor
@@ -59,7 +54,7 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        AuthController controller = new AuthController(userService, passwordEncoder, jwtUtil, forumEventService, redisTemplate);
+        AuthController controller = new AuthController(userService, passwordEncoder, jwtUtil, redisTemplate);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setMessageConverters(
                         new MappingJackson2HttpMessageConverter(),

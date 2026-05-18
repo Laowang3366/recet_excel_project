@@ -8,35 +8,23 @@ import com.excel.forum.entity.Notification;
 import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.mapper.NotificationMapper;
 import com.excel.forum.mapper.SiteNotificationMapper;
-import com.excel.forum.service.ForumEventService;
 import com.excel.forum.service.NotificationService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Notification> implements NotificationService {
-    private static final Set<String> SENDER_RATE_LIMIT_TYPES = new HashSet<>(Arrays.asList("MENTION", "reply", "like", "favorite", "follow", "message"));
-    private static final int SAME_EVENT_TTL_SECONDS = 90;
-    private static final int SENDER_RATE_TTL_SECONDS = 60;
-    private static final int SENDER_RATE_LIMIT = 20;
-    private static final int MENTION_RATE_LIMIT = 5;
+    private static final Set<String> CURRENT_NOTIFICATION_TYPES = Set.of("system", "site_notification", "feedback_result");
 
-    private final ForumEventService forumEventService;
-    private final StringRedisTemplate redisTemplate;
     private final SiteNotificationMapper siteNotificationMapper;
     
     @Override
@@ -45,12 +33,19 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         queryWrapper.eq("user_id", userId);
         
         if (type != null && !type.isEmpty()) {
-            String[] types = type.split(",");
-            if (types.length == 1) {
-                queryWrapper.eq("type", types[0]);
+            List<String> types = Arrays.stream(type.split(","))
+                    .map(String::trim)
+                    .filter(CURRENT_NOTIFICATION_TYPES::contains)
+                    .toList();
+            if (types.isEmpty()) {
+                queryWrapper.eq("type", "__offline_legacy_notification__");
+            } else if (types.size() == 1) {
+                queryWrapper.eq("type", types.get(0));
             } else {
-                queryWrapper.in("type", Arrays.asList(types));
+                queryWrapper.in("type", types);
             }
+        } else {
+            queryWrapper.in("type", CURRENT_NOTIFICATION_TYPES);
         }
         
         queryWrapper.orderByDesc("create_time");
@@ -91,17 +86,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public void createNotification(Long userId, String type, String content, Long relatedId) {
-        createNotification(userId, type, content, relatedId, null, null);
-    }
-
-    @Override
-    public void createNotification(Long userId, String type, String content, Long relatedId, Long senderId) {
-        createNotification(userId, type, content, relatedId, null, senderId);
-    }
-
-    @Override
-    public void createNotification(Long userId, String type, String content, Long relatedId, Long replyId, Long senderId) {
-        if (shouldSuppressNotification(userId, type, relatedId, replyId, senderId)) {
+        if (userId == null || type == null || type.isBlank()) {
             return;
         }
 
@@ -110,48 +95,8 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         notification.setType(type);
         notification.setContent(content);
         notification.setRelatedId(relatedId);
-        notification.setReplyId(replyId);
-        notification.setSenderId(senderId);
         notification.setIsRead(0);
         save(notification);
-
-        // 通过 WebSocket 推送通知事件给目标用户
-        try {
-            forumEventService.publishNotificationEvent(userId, notification);
-        } catch (Exception e) {
-            log.warn("WebSocket推送通知失败: {}", e.getMessage());
-        }
-    }
-
-    private boolean shouldSuppressNotification(Long userId, String type, Long relatedId, Long replyId, Long senderId) {
-        if (userId == null || type == null || type.isBlank()) {
-            return true;
-        }
-        if (senderId == null || !SENDER_RATE_LIMIT_TYPES.contains(type)) {
-            return false;
-        }
-        try {
-            String dedupeKey = "notify:dedupe:" + type + ":" + userId + ":" + senderId + ":" + normalizeKeyPart(relatedId) + ":" + normalizeKeyPart(replyId);
-            Boolean firstSeen = redisTemplate.opsForValue().setIfAbsent(dedupeKey, "1", SAME_EVENT_TTL_SECONDS, TimeUnit.SECONDS);
-            if (Boolean.FALSE.equals(firstSeen)) {
-                return true;
-            }
-
-            String rateKey = "notify:rate:" + type + ":" + userId + ":" + senderId;
-            Long sentCount = redisTemplate.opsForValue().increment(rateKey);
-            if (sentCount != null && sentCount == 1L) {
-                redisTemplate.expire(rateKey, SENDER_RATE_TTL_SECONDS, TimeUnit.SECONDS);
-            }
-            int limit = "MENTION".equals(type) ? MENTION_RATE_LIMIT : SENDER_RATE_LIMIT;
-            return sentCount != null && sentCount > limit;
-        } catch (Exception e) {
-            log.warn("通知频率限制检查失败: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    private String normalizeKeyPart(Long value) {
-        return value == null ? "none" : value.toString();
     }
 
     private Map<Long, SiteNotification> loadSiteNotificationMap(List<Notification> notifications) {
@@ -209,20 +154,15 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
 
     @Override
     public Map<String, Object> getCountsByType(Long userId) {
-        long all = count(new QueryWrapper<Notification>().eq("user_id", userId));
-        long current = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", "system", "site_notification", "feedback_result"));
+        long all = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", CURRENT_NOTIFICATION_TYPES));
         long points = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "system"));
         long announcements = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "site_notification"));
-        long legacy = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type",
-                "follow", "level_up", "reply", "like", "favorite", "MENTION", "message",
-                "post_deleted", "reply_deleted", "report_delete", "post_review", "review_request"));
 
         Map<String, Object> result = new HashMap<>();
         result.put("all", all);
-        result.put("system", current);
+        result.put("system", all);
         result.put("points", points);
         result.put("announcements", announcements);
-        result.put("legacy", legacy);
         return result;
     }
 }

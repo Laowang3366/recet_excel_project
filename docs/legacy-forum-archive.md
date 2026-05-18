@@ -6,7 +6,9 @@ ExcelCC has moved from the original forum product shape to the current learning 
 
 - Legacy forum frontend pages are removed from the active app bundle.
 - Legacy forum public/admin routes are no longer exposed through the frontend router.
+- Legacy forum controllers, services, mappers, DTOs, WebSocket chat support, and tests are removed from active backend source.
 - Legacy forum HTTP APIs are blocked by `LegacyForumFeatureShutdownFilter` and return `410 Gone`.
+- Legacy notification types are no longer counted or listed in current notification surfaces.
 - Legacy database tables are retained as historical data. Do not drop them during routine feature deploys.
 
 ## Legacy API Groups

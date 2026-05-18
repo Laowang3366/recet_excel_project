@@ -12,7 +12,6 @@ import com.excel.forum.mapper.UserExpLogMapper;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.ExperienceService;
-import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -31,7 +30,6 @@ import java.util.Map;
 public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExpLog> implements ExperienceService {
     private final ExperienceProperties experienceProperties;
     private final UserService userService;
-    private final NotificationService notificationService;
     private final ExperienceRuleService experienceRuleService;
     private final ExperienceLevelRuleService experienceLevelRuleService;
 
@@ -90,33 +88,7 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
         updatedUser.setLevel(afterLevel);
         userService.updateById(updatedUser);
 
-        if (afterLevel > beforeLevel) {
-            notificationService.createNotification(
-                    userId,
-                    "level_up",
-                    "恭喜你已升级为“" + resolveLevelName(afterLevel) + "”",
-                    null
-            );
-        }
         return true;
-    }
-
-    @Override
-    public void awardPostDirectPublish(Long userId, Long postId, String postTitle) {
-        int amount = resolveRuleAmount(BIZ_POST_DIRECT_PUBLISH, 10);
-        addExp(userId, BIZ_POST_DIRECT_PUBLISH, postId, amount, "发布帖子《" + safeTitle(postTitle) + "》");
-    }
-
-    @Override
-    public void awardPostApproved(Long userId, Long postId, String postTitle) {
-        int amount = resolveRuleAmount(BIZ_POST_APPROVED, 10);
-        addExp(userId, BIZ_POST_APPROVED, postId, amount, "帖子《" + safeTitle(postTitle) + "》通过审核");
-    }
-
-    @Override
-    public void awardReplyCreate(Long userId, Long replyId) {
-        int amount = resolveRuleAmount(BIZ_REPLY_CREATE, 5);
-        addExp(userId, BIZ_REPLY_CREATE, replyId, amount, "发布回复");
     }
 
     @Override
@@ -261,18 +233,11 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
         return rule == null || rule.getThreshold() == null ? 0 : rule.getThreshold();
     }
 
-    private String safeTitle(String title) {
-        return (title == null || title.isBlank()) ? "未命名内容" : title;
-    }
-
     private String mapExpRuleLabel(String ruleKey) {
         if (ruleKey == null || ruleKey.isBlank()) {
             return "未知来源";
         }
         return switch (ruleKey) {
-            case BIZ_POST_DIRECT_PUBLISH -> "直接发帖";
-            case BIZ_POST_APPROVED -> "帖子过审";
-            case BIZ_REPLY_CREATE -> "发布回复";
             case BIZ_DAILY_CHECKIN -> "每日签到";
             case BIZ_PRACTICE_COMPLETE -> "完成练习";
             default -> ruleKey;

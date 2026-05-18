@@ -11,8 +11,6 @@ public interface NotificationService extends IService<Notification> {
     void markAsRead(Long userId, Long notificationId);
     void markAllAsRead(Long userId);
     void createNotification(Long userId, String type, String content, Long relatedId);
-    void createNotification(Long userId, String type, String content, Long relatedId, Long senderId);
-    void createNotification(Long userId, String type, String content, Long relatedId, Long replyId, Long senderId);
     void deleteNotification(Long userId, Long notificationId);
     void deleteBatch(Long userId, List<Long> ids);
     Map<String, Object> getCountsByType(Long userId);

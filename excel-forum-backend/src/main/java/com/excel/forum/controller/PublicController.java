@@ -5,16 +5,13 @@ import com.excel.forum.config.ExperienceProperties;
 import com.excel.forum.config.PublicCacheHeaders;
 import com.excel.forum.config.PublicJsonCache;
 import com.excel.forum.entity.ExperienceLevelRule;
-import com.excel.forum.entity.Post;
 import com.excel.forum.entity.PracticeAnswer;
 import com.excel.forum.entity.PracticeRecord;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.User;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
-import com.excel.forum.service.CategoryService;
 import com.excel.forum.service.ExperienceLevelRuleService;
-import com.excel.forum.service.PostService;
 import com.excel.forum.service.QuestionService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -36,8 +33,6 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class PublicController {
 
-    private final CategoryService categoryService;
-    private final PostService postService;
     private final UserService userService;
     private final QuestionService questionService;
     private final PracticeRecordMapper practiceRecordMapper;
@@ -60,9 +55,6 @@ public class PublicController {
     }
 
     private Map<String, Object> buildHomeOverviewPayload() {
-        QueryWrapper<Post> postQuery = new QueryWrapper<>();
-        postQuery.eq("status", 0);
-
         QueryWrapper<User> userQuery = new QueryWrapper<>();
         userQuery.eq("status", 0);
 
@@ -100,8 +92,7 @@ public class PublicController {
         List<User> topUsers = userService.list(topUserQuery);
         return Map.of(
                 "stats", Map.of(
-                        "categoryCount", categoryService.count(),
-                        "postCount", postService.count(postQuery),
+                        "questionCount", questionCount,
                         "userCount", userService.count(userQuery),
                         "onlineCount", userService.count(onlineQuery)
                 ),

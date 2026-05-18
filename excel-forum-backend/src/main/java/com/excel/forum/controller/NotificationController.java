@@ -13,12 +13,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
+    private static final List<String> CURRENT_NOTIFICATION_TYPES = List.of("system", "site_notification", "feedback_result");
+
     private final NotificationService notificationService;
     private final SiteNotificationService siteNotificationService;
     private final UserService userService;
@@ -92,7 +95,9 @@ public class NotificationController {
     @GetMapping("/{id}")
     public ResponseEntity<?> getNotificationDetail(@RequestAttribute Long userId, @PathVariable Long id) {
         Notification notification = notificationService.getById(id);
-        if (notification == null || !notification.getUserId().equals(userId)) {
+        if (notification == null
+                || !notification.getUserId().equals(userId)
+                || !CURRENT_NOTIFICATION_TYPES.contains(notification.getType())) {
             return ResponseEntity.notFound().build();
         }
 
@@ -169,7 +174,9 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadCount(@RequestAttribute Long userId) {
         QueryWrapper<Notification> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_id", userId).eq("is_read", 0);
+        queryWrapper.eq("user_id", userId)
+                .eq("is_read", 0)
+                .in("type", CURRENT_NOTIFICATION_TYPES);
         long count = notificationService.count(queryWrapper);
         return ResponseEntity.ok(Map.of("count", count));
     }
@@ -219,22 +226,8 @@ public class NotificationController {
         String type = notification.getType() == null ? "" : notification.getType();
         return switch (type) {
             case "system" -> "积分发放通知";
-            case "reply" -> "有人回复了你";
-            case "like" -> "有人点赞了你";
-            case "favorite" -> "有人收藏了你的内容";
-            case "follow" -> "你有新的关注者";
-            case "message" -> "你收到一条私信";
-            case "MENTION" -> notification.getContent() != null && notification.getContent().contains("聊天中提到了你")
-                    ? "你在公共聊天室被提及"
-                    : "有人提到了你";
             case "feedback_result" -> "反馈处理结果";
             case "site_notification" -> "站内通知";
-            case "post_deleted" -> "帖子处理通知";
-            case "reply_deleted" -> "回复处理通知";
-            case "report_delete" -> "举报处理结果";
-            case "level_up" -> "等级提升";
-            case "post_review" -> "帖子审核结果";
-            case "review_request" -> "有帖子待审核";
             default -> "通知详情";
         };
     }

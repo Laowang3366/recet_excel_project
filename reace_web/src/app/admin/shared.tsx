@@ -32,7 +32,7 @@ export const NOTIFICATION_TARGET_OPTIONS = [
 
 export const ROLE_OPTIONS = [
   { value: "admin", label: "管理员" },
-  { value: "moderator", label: "版主" },
+  { value: "moderator", label: "运营" },
   { value: "user", label: "普通用户" },
 ];
 
@@ -264,7 +264,7 @@ export function formatAdminRole(value: unknown) {
   const normalized = String(value ?? "").toLowerCase();
   const map: Record<string, string> = {
     admin: "管理员",
-    moderator: "版主",
+    moderator: "运营",
     user: "用户",
   };
   return map[normalized] || String(value ?? "-");
@@ -353,15 +353,6 @@ export function formatExperienceBizType(value: unknown) {
     EXPERIENCE_BIZ_TYPE_OPTIONS.map((item) => [item.value, item.label]),
   );
   return map[normalized] || String(value);
-}
-
-export function formatReportTargetType(value: unknown) {
-  const normalized = String(value ?? "").toLowerCase();
-  const map: Record<string, string> = {
-    post: "帖子",
-    reply: "回复",
-  };
-  return map[normalized] || String(value ?? "-");
 }
 
 export function formatMaybeDate(value: unknown) {

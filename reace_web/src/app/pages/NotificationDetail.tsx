@@ -25,7 +25,7 @@ function formatRoleList(value?: string | null) {
   if (!value || !value.trim()) return "指定角色";
   const map: Record<string, string> = {
     admin: "管理员",
-    moderator: "版主",
+    moderator: "运营",
     user: "普通用户",
   };
   return value

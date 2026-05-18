@@ -14,14 +14,12 @@ describe("notification display helpers", () => {
     expect(shouldRenderNotificationCategoryOverview()).toBe(false);
   });
 
-  it("removes hidden categories from notification filters", () => {
+  it("keeps only current notification tabs", () => {
     expect(notificationFilterTabs.map((tab) => tab.id)).toEqual([
       "all",
       "points",
       "announcements",
     ]);
-    expect(notificationFilterTabs.map((tab) => tab.label)).not.toContain("帖子互动");
-    expect(notificationFilterTabs.map((tab) => tab.label)).not.toContain("关注/等级");
   });
 
   it("falls back to all notifications for removed or unknown tabs", () => {
@@ -31,17 +29,15 @@ describe("notification display helpers", () => {
     expect(normalizeNotificationTab("points")).toBe("points");
   });
 
-  it("hides follow and level notifications from visible notification surfaces", () => {
-    expect(shouldRenderNotificationItem("follow")).toBe(false);
-    expect(shouldRenderNotificationItem("level_up")).toBe(false);
+  it("renders only current notification types", () => {
+    expect(shouldRenderNotificationItem("retired_activity")).toBe(false);
     expect(shouldRenderNotificationItem("site_notification")).toBe(true);
-    expect(getVisibleNotificationTypeFilter()).not.toContain("follow");
-    expect(getVisibleNotificationTypeFilter()).not.toContain("level_up");
+    expect(getVisibleNotificationTypeFilter()).toBe("system,site_notification,feedback_result");
   });
 
-  it("subtracts hidden follow and level counts from the all tab count", () => {
-    expect(getVisibleNotificationCount({ all: 5, follows: 2 })).toBe(3);
-    expect(getNotificationTabCount({ countKey: "all" }, { all: 2, follows: 2 })).toBe(0);
+  it("uses the backend visible count directly for the all tab", () => {
+    expect(getVisibleNotificationCount({ all: 5 })).toBe(5);
+    expect(getNotificationTabCount({ countKey: "all" }, { all: 2 })).toBe(2);
     expect(getNotificationTabCount({ countKey: "points" }, { points: 4 })).toBe(4);
   });
 });

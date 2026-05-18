@@ -1,11 +1,9 @@
 package com.excel.forum.controller;
 
-import com.excel.forum.entity.ForumEvent;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.AuthResponse;
 import com.excel.forum.entity.dto.LoginRequest;
 import com.excel.forum.entity.dto.RegisterRequest;
-import com.excel.forum.service.ForumEventService;
 import com.excel.forum.service.UserService;
 import com.excel.forum.util.JwtUtil;
 import com.excel.forum.util.PasswordPolicy;
@@ -40,7 +38,6 @@ public class AuthController {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-    private final ForumEventService eventService;
     private final StringRedisTemplate redisTemplate;
 
     @PostMapping("/login")
@@ -143,8 +140,6 @@ public class AuthController {
         user.setRole("user");
 
         userService.save(user);
-        
-        eventService.publishEvent(ForumEvent.userUpdated(user.getId()));
 
         return ResponseEntity.ok("注册成功");
     }
@@ -183,7 +178,6 @@ public class AuthController {
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setTokenVersion(nextTokenVersion(user.getTokenVersion()));
         userService.updateById(user);
-        eventService.publishEvent(ForumEvent.userUpdated(user.getId()));
 
         return ResponseEntity.ok(Map.of("message", "密码已重置，请使用新密码登录"));
     }
@@ -303,7 +297,6 @@ public class AuthController {
         
         user.setEmail(newEmail);
         userService.updateById(user);
-        eventService.publishEvent(ForumEvent.userUpdated(userId));
         
         return ResponseEntity.ok(java.util.Map.of("message", "邮箱修改成功"));
     }

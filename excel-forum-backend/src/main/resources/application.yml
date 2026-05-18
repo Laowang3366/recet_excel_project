@@ -81,24 +81,10 @@ file:
       secret-key: minioadmin
       bucket-name: excel-forum
 
-# 积分配置
-points:
-  post: 5
-  reply: 2
-  best-answer: 20
-  like: 1
-
-# 等级配置
-level:
-  thresholds: [0, 100, 500, 1000, 5000, 10000]
-  names: ["新手", "入门", "熟练", "专家", "大师", "传说"]
-
 experience:
   rules:
-    post_direct_publish: 10
-    post_approved: 10
-    reply_create: 5
     daily_checkin: 1
+    practice_complete: 2
   levels:
     - level: 1
       name: 新手

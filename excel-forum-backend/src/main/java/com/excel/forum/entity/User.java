@@ -33,12 +33,8 @@ public class User {
     private String themePreference;
     private Boolean isOnline;
     private LocalDateTime lastActiveTime;
-    private String managedCategories;
     private Boolean publicProfile;
     private Boolean showOnlineStatus;
-    private Boolean allowMessages;
-    private Boolean showFollowing;
-    private Boolean showFollowers;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

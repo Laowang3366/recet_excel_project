@@ -9,9 +9,7 @@ import com.excel.forum.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
-import com.excel.forum.service.CategoryService;
 import com.excel.forum.service.ExperienceLevelRuleService;
-import com.excel.forum.service.PostService;
 import com.excel.forum.service.QuestionService;
 import com.excel.forum.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,12 +40,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PublicControllerTest {
 
     @Mock
-    private CategoryService categoryService;
-
-    @Mock
-    private PostService postService;
-
-    @Mock
     private UserService userService;
 
     @Mock
@@ -70,8 +62,6 @@ class PublicControllerTest {
     @BeforeEach
     void setUp() {
         PublicController controller = new PublicController(
-                categoryService,
-                postService,
                 userService,
                 questionService,
                 practiceRecordMapper,
@@ -87,24 +77,20 @@ class PublicControllerTest {
 
     @Test
     void publicRootReturnsOverviewPayload() throws Exception {
-        when(categoryService.count()).thenReturn(8L);
-        when(postService.count(any())).thenReturn(2L);
         when(userService.count(any())).thenReturn(1L);
+        when(questionService.count(any())).thenReturn(5L);
         when(userService.list(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.excel.forum.entity.User>>any()))
                 .thenReturn(List.of());
 
         mockMvc.perform(get("/api/public"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.stats.categoryCount").value(8))
-                .andExpect(jsonPath("$.stats.postCount").value(2))
+                .andExpect(jsonPath("$.stats.questionCount").value(5))
                 .andExpect(jsonPath("$.stats.userCount").value(1))
                 .andExpect(jsonPath("$.topUsers").isArray());
     }
 
     @Test
     void homeOverviewCountsPracticeStatsWithoutLoadingWholeTables() throws Exception {
-        when(categoryService.count()).thenReturn(8L);
-        when(postService.count(any())).thenReturn(2L);
         when(userService.count(any())).thenReturn(1L);
         when(questionService.count(any())).thenReturn(5L);
         when(practiceAnswerMapper.selectCount(any())).thenReturn(10L, 7L);
@@ -130,8 +116,6 @@ class PublicControllerTest {
 
     @Test
     void homeOverviewReusesShortLivedServerCache() throws Exception {
-        when(categoryService.count()).thenReturn(8L);
-        when(postService.count(any())).thenReturn(2L);
         when(userService.count(any())).thenReturn(1L);
         when(questionService.count(any())).thenReturn(5L);
         when(practiceAnswerMapper.selectCount(any())).thenReturn(10L, 7L);
@@ -148,8 +132,6 @@ class PublicControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.practiceStats.passRate").value(70));
 
-        verify(categoryService, times(1)).count();
-        verify(postService, times(1)).count(any());
         verify(userService, times(2)).count(any());
         verify(questionService, times(1)).count(any());
         verify(practiceAnswerMapper, times(2)).selectCount(any());

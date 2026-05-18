@@ -57,7 +57,6 @@ import { homeKeys, mallKeys, notificationKeys, pointsKeys, profileKeys } from ".
 import { preloadPublicRoute } from "../lib/route-preload";
 import { useSession } from "../lib/session";
 import {
-  getHiddenNotificationTypeFilter,
   getVisibleNotificationTypeFilter,
   shouldRenderNotificationItem,
 } from "../lib/notification-display";
@@ -319,7 +318,6 @@ export function Layout() {
   const { user, isAuthenticated, logout } = useSession();
   const canAccessAdmin = hasAdminConsoleAccess(user?.role);
   const visibleNotificationTypeFilter = getVisibleNotificationTypeFilter();
-  const hiddenNotificationTypeFilter = getHiddenNotificationTypeFilter();
   const preloadNavigationTarget = (path: string) => {
     if (!path) return;
     void preloadPublicRoute(path);
@@ -360,11 +358,6 @@ export function Layout() {
     enabled: isAuthenticated,
     queryFn: () => api.get<{ count: number }>("/api/notifications/unread-count", { silent: true }),
   });
-  const hiddenNotificationsQuery = useQuery({
-    queryKey: notificationKeys.list({ page: 1, limit: 100, type: hiddenNotificationTypeFilter, scope: "layout-hidden" }),
-    enabled: isAuthenticated,
-    queryFn: () => api.get<{ notifications: any[] }>(`/api/notifications?page=1&limit=100&type=${encodeURIComponent(hiddenNotificationTypeFilter)}`, { silent: true }),
-  });
   const popupNotificationsQuery = useQuery({
     queryKey: notificationKeys.list({ page: 1, limit: 20, type: "site_notification", scope: "popup-notification" }),
     enabled: isAuthenticated,
@@ -374,10 +367,7 @@ export function Layout() {
   });
   const notificationItems = (notificationsPreviewQuery.data?.notifications || []).filter((item) => shouldRenderNotificationItem(item.type));
   const popupNotifications = popupNotificationsQuery.data?.notifications || [];
-  const hiddenUnreadNotificationCount = (hiddenNotificationsQuery.data?.notifications || []).filter((item) => !item.isRead).length;
-  const unreadNotificationCount = hiddenNotificationsQuery.data
-    ? Math.max(0, (unreadNotificationsQuery.data?.count || 0) - hiddenUnreadNotificationCount)
-    : (unreadNotificationsQuery.data?.count || 0);
+  const unreadNotificationCount = unreadNotificationsQuery.data?.count || 0;
   const propsQuery = useQuery({
     queryKey: profileKeys.props(),
     enabled: isAuthenticated && propsOpen,

@@ -6,10 +6,6 @@ import java.time.LocalDate;
 
 public interface PointsTaskService {
     String TASK_DAILY_CHECKIN = "daily_checkin";
-    String TASK_DAILY_POST = "daily_post";
-    String TASK_DAILY_REPLY = "daily_reply";
-    String TASK_FIRST_POST = "first_post";
-    String TASK_FIRST_REPLY = "first_reply";
     String TASK_DAILY_PRACTICE = "daily_practice";
     String TASK_FIRST_PRACTICE = "first_practice";
 

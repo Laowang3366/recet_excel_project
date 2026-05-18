@@ -1,25 +1,8 @@
 export type NotificationTabId = "all" | "points" | "announcements";
 
-export type NotificationCountKey = NotificationTabId | "legacy";
+export type NotificationCountKey = NotificationTabId;
 
 export type NotificationCounts = Partial<Record<NotificationCountKey, number>>;
-
-const legacyNotificationTypes = [
-  "follow",
-  "level_up",
-  "reply",
-  "like",
-  "favorite",
-  "MENTION",
-  "message",
-  "post_deleted",
-  "reply_deleted",
-  "report_delete",
-  "post_review",
-  "review_request",
-];
-
-const hiddenNotificationTypes = new Set(legacyNotificationTypes);
 
 const visibleNotificationTypes = [
   "system",
@@ -54,19 +37,15 @@ export function getNotificationTabCount(
 }
 
 export function getVisibleNotificationCount(counts?: NotificationCounts) {
-  return Math.max(0, (counts?.all ?? 0) - (counts?.legacy ?? 0));
+  return Math.max(0, counts?.all ?? 0);
 }
 
 export function shouldRenderNotificationItem(type: string | null | undefined) {
-  return !hiddenNotificationTypes.has(String(type || ""));
+  return visibleNotificationTypes.includes(String(type || ""));
 }
 
 export function getVisibleNotificationTypeFilter() {
   return visibleNotificationTypes.join(",");
-}
-
-export function getHiddenNotificationTypeFilter() {
-  return Array.from(hiddenNotificationTypes).join(",");
 }
 
 export function shouldRenderNotificationCategoryOverview() {

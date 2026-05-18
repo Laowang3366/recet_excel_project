@@ -1,57 +1,38 @@
 package com.excel.forum.controller;
 
-import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.excel.forum.config.ExperienceProperties;
 import com.excel.forum.config.GlobalExceptionHandler;
-import com.excel.forum.entity.Post;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
-import com.excel.forum.entity.Reply;
 import com.excel.forum.mapper.AdminLogMapper;
 import com.excel.forum.mapper.CheckinRecordMapper;
 import com.excel.forum.mapper.DailyChallengeMapper;
-import com.excel.forum.mapper.PostEditHistoryMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
 import com.excel.forum.mapper.PracticeLevelMapper;
 import com.excel.forum.entity.SiteNotification;
-import com.excel.forum.entity.PostDraft;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.UserExpLog;
 import com.excel.forum.entity.ExperienceRule;
 import com.excel.forum.util.HtmlSanitizer;
-import com.excel.forum.service.CategoryService;
-import com.excel.forum.service.CategoryFollowService;
-import com.excel.forum.service.ChatMessageService;
 import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.FeedbackService;
-import com.excel.forum.service.FavoriteService;
-import com.excel.forum.service.FollowService;
-import com.excel.forum.service.ForumEventService;
-import com.excel.forum.service.LikeService;
 import com.excel.forum.service.MallService;
-import com.excel.forum.service.MessageService;
 import com.excel.forum.service.NotificationService;
-import com.excel.forum.service.PostDraftService;
 import com.excel.forum.service.PointsTaskService;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.PointsRuleOptionService;
 import com.excel.forum.service.PointsRuleService;
-import com.excel.forum.service.PostService;
-import com.excel.forum.service.PostShareService;
-import com.excel.forum.service.PostViewService;
 import com.excel.forum.service.PracticeCampaignService;
 import com.excel.forum.service.PracticeQuestionSubmissionService;
 import com.excel.forum.service.QuestionCategoryService;
 import com.excel.forum.service.QuestionExcelTemplateService;
 import com.excel.forum.service.QuestionService;
-import com.excel.forum.service.ReplyService;
-import com.excel.forum.service.ReportService;
 import com.excel.forum.service.SiteNotificationService;
 import com.excel.forum.service.UserEntitlementService;
 import com.excel.forum.service.UserService;
@@ -69,7 +50,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,49 +75,10 @@ class AdminControllerTest {
     private UserService userService;
 
     @Mock
-    private PostService postService;
-
-    @Mock
-    private CategoryService categoryService;
-
-    @Mock
-    private ReplyService replyService;
-
-    @Mock
-    private ReportService reportService;
-
-    @Mock
     private FeedbackService feedbackService;
 
     @Mock
-    private LikeService likeService;
-
-    @Mock
-    private FavoriteService favoriteService;
-
-    @Mock
-    private PostViewService postViewService;
-
-    @Mock
-    private PostShareService postShareService;
-
-    @Mock
-    private FollowService followService;
-
-    @Mock
-    private CategoryFollowService categoryFollowService;
-
-    @Mock
-    private MessageService messageService;
-
-    @Mock
-    private ChatMessageService chatMessageService;
-
-    @Mock
     private PasswordEncoder passwordEncoder;
-
-    @Mock
-    private ForumEventService forumEventService;
 
     @Mock
     private NotificationService notificationService;
@@ -171,9 +112,6 @@ class AdminControllerTest {
 
     @Mock
     private SiteNotificationService siteNotificationService;
-
-    @Mock
-    private PostDraftService postDraftService;
 
     @Mock
     private MallService mallService;
@@ -218,9 +156,6 @@ class AdminControllerTest {
     private AdminLogMapper adminLogMapper;
 
     @Mock
-    private PostEditHistoryMapper postEditHistoryMapper;
-
-    @Mock
     private HtmlSanitizer htmlSanitizer;
 
     @Captor
@@ -233,21 +168,8 @@ class AdminControllerTest {
         lenient().when(htmlSanitizer.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
         AdminController controller = new AdminController(
                 userService,
-                postService,
-                categoryService,
-                replyService,
-                reportService,
                 feedbackService,
-                likeService,
-                favoriteService,
-                postViewService,
-                postShareService,
-                followService,
-                categoryFollowService,
-                messageService,
-                chatMessageService,
                 passwordEncoder,
-                forumEventService,
                 notificationService,
                 pointsRuleService,
                 pointsRuleOptionService,
@@ -258,7 +180,6 @@ class AdminControllerTest {
                 questionExcelTemplateService,
                 practiceQuestionSubmissionService,
                 siteNotificationService,
-                postDraftService,
                 mallService,
                 experienceService,
                 experienceProperties,
@@ -273,7 +194,6 @@ class AdminControllerTest {
                 practiceAnswerMapper,
                 checkinRecordMapper,
                 adminLogMapper,
-                postEditHistoryMapper,
                 htmlSanitizer,
                 practiceCampaignService
         );
@@ -306,64 +226,6 @@ class AdminControllerTest {
         assertThat(savedNotification.getTargetRoles()).isEqualTo("user,admin");
         assertThat(savedNotification.getCreatedBy()).isEqualTo(3L);
         assertThat(savedNotification.getStatus()).isEqualTo("draft");
-    }
-
-    @Test
-    void getDraftsReturnsAdminDraftPayload() throws Exception {
-        PostDraft draft = new PostDraft();
-        draft.setId(12L);
-        draft.setUserId(5L);
-        draft.setTitle("治理草稿");
-        draft.setContent("草稿内容");
-        draft.setCategoryId(2L);
-        draft.setStatus("editing");
-        draft.setUpdateTime(LocalDateTime.of(2026, 4, 4, 10, 0));
-
-        Page<PostDraft> page = new Page<>(1, 10, 1);
-        page.setRecords(List.of(draft));
-        page.setPages(1);
-
-        com.excel.forum.entity.User user = new com.excel.forum.entity.User();
-        user.setId(5L);
-        user.setUsername("tester");
-        user.setRole("user");
-
-        com.excel.forum.entity.Category category = new com.excel.forum.entity.Category();
-        category.setId(2L);
-        category.setName("Excel");
-
-        when(postDraftService.listAdminDrafts(1, 10, "治理", "editing", 2L, "tester", false, "latest")).thenReturn(page);
-        when(userService.getById(5L)).thenReturn(user);
-        when(categoryService.getById(2L)).thenReturn(category);
-
-        mockMvc.perform(get("/api/admin/drafts")
-                        .param("page", "1")
-                        .param("size", "10")
-                        .param("keyword", "治理")
-                        .param("status", "editing")
-                        .param("categoryId", "2")
-                        .param("username", "tester")
-                        .param("expired", "false")
-                        .param("sort", "latest"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.records[0].id").value(12L))
-                .andExpect(jsonPath("$.records[0].author.username").value("tester"))
-                .andExpect(jsonPath("$.records[0].category.name").value("Excel"))
-                .andExpect(jsonPath("$.maxExpireDays").value(10));
-    }
-
-    @Test
-    void deleteDraftsByUserReturnsCount() throws Exception {
-        com.excel.forum.entity.User user = new com.excel.forum.entity.User();
-        user.setId(6L);
-        user.setUsername("cleaner");
-        when(userService.getById(6L)).thenReturn(user);
-        when(postDraftService.deleteDraftsByAdminUser(6L)).thenReturn(4L);
-
-        mockMvc.perform(delete("/api/admin/drafts/by-user/6"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(4))
-                .andExpect(jsonPath("$.message").value("已清理该用户的 4 条草稿"));
     }
 
     @Test
@@ -482,45 +344,6 @@ class AdminControllerTest {
                 .andExpect(jsonPath("$.message").value("密码必须至少8位，且只能包含字母和数字"));
 
         verify(userService, never()).save(any(User.class));
-    }
-
-    @Test
-    void deleteReplyRecalculatesReplyCount() throws Exception {
-        Reply reply = new Reply();
-        reply.setId(8L);
-        reply.setPostId(12L);
-        when(replyService.getById(8L)).thenReturn(reply);
-        when(replyService.findAllDescendantIds(8L)).thenReturn(List.of(9L, 10L));
-
-        mockMvc.perform(delete("/api/admin/replies/8"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("删除成功"));
-
-        verify(replyService).removeByIds(List.of(9L, 10L));
-        verify(replyService).removeById(8L);
-        verify(postService).recalculateReplyCount(12L);
-    }
-
-    @Test
-    void reviewPostRejectsAlreadyHandledPendingRace() throws Exception {
-        Post post = new Post();
-        post.setId(15L);
-        post.setUserId(7L);
-        post.setTitle("审核帖子");
-        post.setReviewStatus("pending");
-        when(postService.getById(15L)).thenReturn(post);
-        when(postService.update(any(UpdateWrapper.class))).thenReturn(false);
-
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/posts/15/review")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"status":"approved"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("帖子已被其他管理员处理"));
-
-        verify(experienceService, never()).awardPostApproved(any(), any(), any());
-        verify(pointsTaskService, never()).awardTask(any(), any(), any(), any());
     }
 
     @Test

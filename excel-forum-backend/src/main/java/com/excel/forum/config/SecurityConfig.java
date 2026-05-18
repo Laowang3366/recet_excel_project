@@ -66,12 +66,6 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/notifications/announcements")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/notifications/announcements/*")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/public/**")).permitAll()
-                .requestMatchers(AntPathRequestMatcher.antMatcher("/api/users/online")).permitAll()
-                .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/users/*")).permitAll()
-                .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/users/*/center-overview")).permitAll()
-                .requestMatchers(AntPathRequestMatcher.antMatcher("/api/users/heartbeat")).authenticated()
-                .requestMatchers(AntPathRequestMatcher.antMatcher("/api/users/search")).permitAll()
-                .requestMatchers(AntPathRequestMatcher.antMatcher("/api/users/recent")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/categories")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/question-list")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/leaderboard")).permitAll()
@@ -92,7 +86,7 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/mall/**")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/**")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/ws/**")).authenticated()
-                // moderator 可访问的统计与反馈接口
+                // 运营角色可访问的统计与反馈接口
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/admin/stats")).hasAnyRole("ADMIN", "MODERATOR")
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/admin/feedback")).hasAnyRole("ADMIN", "MODERATOR")
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/admin/feedback/*/handle")).hasAnyRole("ADMIN", "MODERATOR")

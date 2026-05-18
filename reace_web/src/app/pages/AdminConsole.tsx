@@ -91,7 +91,6 @@ import {
   formatPointsTaskKey,
   formatPointsRuleType,
   formatQuestionType,
-  formatReportTargetType,
   POINTS_RULE_TYPE_OPTIONS,
   POINTS_TASK_KEY_OPTIONS,
   ROLE_OPTIONS,
@@ -275,7 +274,7 @@ export function AdminLayout() {
                 />
                 <div className="hidden leading-tight sm:block">
                   <div className="text-sm font-medium text-[#262626]">{user?.username}</div>
-                  <div className="text-xs text-[#8c8c8c]">{role === "admin" ? "管理员" : "版主"}</div>
+                  <div className="text-xs text-[#8c8c8c]">{role === "admin" ? "管理员" : "运营"}</div>
                 </div>
               </div>
               <Link to="/" className={secondaryButtonClassName()}>
@@ -327,7 +326,7 @@ export function AdminOverview() {
   const pointsStats = stats?.pointsAndLevels || {};
 
   const focusMetrics = [
-    { label: "在线用户", value: overviewStats.onlineUsers ?? 0, hint: `管理员 ${userStats.admins ?? 0} / 版主 ${userStats.moderators ?? 0}`, icon: Users, tone: "teal" },
+    { label: "在线用户", value: overviewStats.onlineUsers ?? 0, hint: `管理员 ${userStats.admins ?? 0} / 运营 ${userStats.operators ?? userStats.moderators ?? 0}`, icon: Users, tone: "teal" },
     { label: "今日新增用户", value: overviewStats.todayNewUsers ?? 0, hint: `锁定 ${userStats.locked ?? 0} · 禁言 ${userStats.muted ?? 0}`, icon: UserCog, tone: "blue" },
     { label: "今日签到", value: overviewStats.todayCheckins ?? 0, hint: `练习记录 ${practiceStats.practiceRecords ?? 0}`, icon: CalendarCheck, tone: "amber" },
     { label: "待处理事项", value: (moderationStats.pendingFeedback ?? 0) + (moderationStats.pendingPracticeSubmissions ?? 0), hint: `反馈 ${moderationStats.pendingFeedback ?? 0} · 试题投稿 ${moderationStats.pendingPracticeSubmissions ?? 0}`, icon: ShieldAlert, tone: "rose" },
@@ -358,7 +357,7 @@ export function AdminOverview() {
       <AdminSection title="用户与通知概览">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <OverviewDataCard label="注册用户" value={userStats.total ?? stats?.userCount ?? 0} hint={`在线 ${userStats.online ?? 0}`} />
-          <OverviewDataCard label="管理账号" value={`${userStats.admins ?? 0} / ${userStats.moderators ?? 0}`} hint="管理员 / 版主" />
+          <OverviewDataCard label="管理账号" value={`${userStats.admins ?? 0} / ${userStats.operators ?? userStats.moderators ?? 0}`} hint="管理员 / 运营" />
           <OverviewDataCard label="账号状态" value={`${userStats.locked ?? 0} / ${userStats.muted ?? 0}`} hint="锁定 / 禁言" />
           <OverviewDataCard label="站内通知" value={stats?.notifications?.total ?? 0} hint={`未读 ${stats?.notifications?.unread ?? 0} · 公告 ${stats?.notifications?.siteNotifications ?? 0}`} />
         </div>
@@ -615,7 +614,7 @@ export function AdminUsers() {
             <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }} className={inputClassName()}>
               <option value="">全部</option>
               <option value="user">用户</option>
-              <option value="moderator">版主</option>
+              <option value="moderator">运营</option>
               <option value="admin">管理员</option>
             </select>
           </FilterField>
@@ -706,7 +705,7 @@ export function AdminUsers() {
           <Field label="角色">
             <select value={form.role} onChange={(e) => setForm((prev: any) => ({ ...prev, role: e.target.value }))} className={inputClassName()}>
               <option value="user">用户</option>
-              <option value="moderator">版主</option>
+              <option value="moderator">运营</option>
               <option value="admin">管理员</option>
             </select>
           </Field>
