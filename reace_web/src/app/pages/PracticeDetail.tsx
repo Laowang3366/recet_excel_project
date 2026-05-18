@@ -9,6 +9,7 @@ import { ExcelWorkbookSnapshot, normalizeSelection, parseRangeRef } from "../lib
 import { formatDuration } from "../lib/format";
 import { getPracticeDetailEditorKey } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
+import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
 
 const ExcelWorkbookEditor = lazy(() =>
   import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
@@ -300,7 +301,15 @@ export function PracticeDetail() {
                 请在 <span className="text-emerald-600">{question.answerSheet} / {question.answerRange}</span> 内作答，系统仅按该区域进行判题。
               </div>
               {currentWorkbook.sheets.length > 0 ? (
-                <Suspense fallback={<div className="flex h-[640px] items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">正在加载编辑器...</div>}>
+                <Suspense fallback={(
+                  <FastWorkbookFallbackEditor
+                    workbook={currentWorkbook}
+                    onWorkbookChange={setWorkbook}
+                    selectedSheetName={currentSheetName}
+                    onSelectedSheetNameChange={setSelectedSheetName}
+                    editableRange={editableRange}
+                  />
+                )}>
                   <ExcelWorkbookEditor
                     key={editorKey}
                     workbook={currentWorkbook}
