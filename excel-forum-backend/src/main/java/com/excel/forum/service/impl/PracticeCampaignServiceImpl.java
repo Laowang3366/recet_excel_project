@@ -747,7 +747,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             Map<Long, List<PracticeLevel>> levelsByChapterId,
             Map<Long, UserLevelProgress> progressMap) {
         List<Map<String, Object>> result = new ArrayList<>();
-        boolean unlockNextChapter = true;
 
         for (PracticeChapter chapter : chapters) {
             List<PracticeLevel> levels = levelsByChapterId.getOrDefault(chapter.getId(), List.of());
@@ -767,8 +766,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
                     .mapToInt(Integer::intValue)
                     .sum();
             boolean completed = totalLevels > 0 && clearedLevels >= totalLevels;
-            boolean unlocked = unlockNextChapter;
-            unlockNextChapter = completed;
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", chapter.getId());
@@ -777,7 +774,7 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             item.put("description", chapter.getDescription());
             item.put("unlockStar", chapter.getUnlockStar());
             item.put("requiredLevel", chapter.getRequiredLevel());
-            item.put("unlocked", unlocked);
+            item.put("unlocked", true);
             item.put("completed", completed);
             item.put("totalLevels", totalLevels);
             item.put("clearedLevels", clearedLevels);
@@ -792,7 +789,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private List<Map<String, Object>> buildLevelNodes(List<PracticeLevel> levels, Map<Long, UserLevelProgress> progressMap, boolean chapterUnlocked) {
         List<Map<String, Object>> result = new ArrayList<>();
-        boolean unlockNextLevel = chapterUnlocked;
 
         for (PracticeLevel level : levels) {
             UserLevelProgress progress = progressMap.get(level.getId());
@@ -800,15 +796,10 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             String status;
             if (progress != null && progress.getStars() != null && progress.getStars() >= 3) {
                 status = "perfect";
-                unlockNextLevel = true;
             } else if (cleared) {
                 status = "cleared";
-                unlockNextLevel = true;
-            } else if (unlockNextLevel) {
-                status = "available";
-                unlockNextLevel = false;
             } else {
-                status = "locked";
+                status = "available";
             }
 
             Map<String, Object> item = new LinkedHashMap<>();
