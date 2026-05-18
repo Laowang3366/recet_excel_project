@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.entity.Feedback;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AdminFeedbackHandleRequest;
 import com.excel.forum.service.FeedbackService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.UserService;
@@ -119,14 +120,14 @@ public class AdminFeedbackController {
     public ResponseEntity<?> handleFeedback(
             @PathVariable Long id,
             @RequestAttribute Long userId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody AdminFeedbackHandleRequest body) {
         Feedback feedback = feedbackService.getById(id);
         if (feedback == null) {
             return ResponseEntity.notFound().build();
         }
 
-        String action = body.getOrDefault("action", "").trim();
-        String note = body.getOrDefault("note", "").trim();
+        String action = body == null || body.getAction() == null ? "" : body.getAction().trim();
+        String note = body == null || body.getNote() == null ? "" : body.getNote().trim();
         if (!"handle".equals(action) && !"ignore".equals(action)) {
             return ResponseEntity.badRequest().body(Map.of("message", "处理动作无效"));
         }

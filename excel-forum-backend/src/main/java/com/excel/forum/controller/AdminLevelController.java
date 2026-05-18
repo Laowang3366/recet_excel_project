@@ -7,6 +7,8 @@ import com.excel.forum.entity.ExperienceLevelRule;
 import com.excel.forum.entity.ExperienceRule;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.UserExpLog;
+import com.excel.forum.entity.dto.AdminLevelRuleRequest;
+import com.excel.forum.entity.dto.AdminLevelUserUpdateRequest;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.ExperienceService;
@@ -110,12 +112,12 @@ public class AdminLevelController {
     }
 
     @PostMapping("/rules")
-    public ResponseEntity<?> createLevelRule(@RequestBody Map<String, Object> body) {
-        Integer level = parseInteger(body.get("level"));
-        String name = body.get("name") == null ? null : String.valueOf(body.get("name")).trim();
-        Integer threshold = parseInteger(body.get("threshold"));
-        Boolean enabled = body.get("enabled") instanceof Boolean value ? value : Boolean.TRUE;
-        Integer sortOrder = body.get("sortOrder") == null ? null : parseInteger(body.get("sortOrder"));
+    public ResponseEntity<?> createLevelRule(@RequestBody AdminLevelRuleRequest body) {
+        Integer level = parseInteger(body == null ? null : body.getLevel());
+        String name = body == null || body.getName() == null ? null : body.getName().trim();
+        Integer threshold = parseInteger(body == null ? null : body.getThreshold());
+        Boolean enabled = body == null || body.getEnabled() == null ? Boolean.TRUE : body.getEnabled();
+        Integer sortOrder = body == null || body.getSortOrder() == null ? null : parseInteger(body.getSortOrder());
 
         if (level == null || level < 1) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级值必须大于 0"));
@@ -150,15 +152,15 @@ public class AdminLevelController {
     }
 
     @PutMapping("/rules/{level}")
-    public ResponseEntity<?> updateLevelRule(@PathVariable Integer level, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updateLevelRule(@PathVariable Integer level, @RequestBody AdminLevelRuleRequest body) {
         ExperienceLevelRule existing = experienceLevelRuleService.getByLevel(level);
         if (existing == null) {
             return ResponseEntity.status(404).body(Map.of("message", "等级规则不存在"));
         }
 
-        String nextName = body.get("name") == null ? existing.getName() : String.valueOf(body.get("name")).trim();
-        Integer nextThreshold = body.get("threshold") == null ? existing.getThreshold() : parseInteger(body.get("threshold"));
-        Boolean nextEnabled = body.get("enabled") instanceof Boolean value ? value : existing.getEnabled();
+        String nextName = body == null || body.getName() == null ? existing.getName() : body.getName().trim();
+        Integer nextThreshold = body == null || body.getThreshold() == null ? existing.getThreshold() : parseInteger(body.getThreshold());
+        Boolean nextEnabled = body == null || body.getEnabled() == null ? existing.getEnabled() : body.getEnabled();
 
         if (nextName == null || nextName.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级名称不能为空"));
@@ -326,14 +328,14 @@ public class AdminLevelController {
     }
 
     @PutMapping("/users/{id}")
-    public ResponseEntity<?> updateLevelUser(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updateLevelUser(@PathVariable Long id, @RequestBody AdminLevelUserUpdateRequest body) {
         User existing = userService.getById(id);
         if (existing == null) {
             return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
         }
 
-        Integer targetLevel = parseInteger(body.get("level"));
-        Integer targetExp = parseInteger(body.get("exp"));
+        Integer targetLevel = parseInteger(body == null ? null : body.getLevel());
+        Integer targetExp = parseInteger(body == null ? null : body.getExp());
         if (targetLevel == null || targetLevel < 1) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级不能为空"));
         }

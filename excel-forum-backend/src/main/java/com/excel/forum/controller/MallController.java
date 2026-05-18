@@ -1,5 +1,6 @@
 package com.excel.forum.controller;
 
+import com.excel.forum.entity.dto.MallRedeemRequest;
 import com.excel.forum.service.MallService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -42,13 +43,12 @@ public class MallController {
     }
 
     @PostMapping("/redeem")
-    public ResponseEntity<?> redeem(@RequestAttribute Long userId, @RequestBody Map<String, Object> body) {
-        Object itemIdValue = body.get("itemId");
-        if (itemIdValue == null) {
+    public ResponseEntity<?> redeem(@RequestAttribute Long userId, @RequestBody MallRedeemRequest body) {
+        if (body == null || body.getItemId() == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "商品ID不能为空"));
         }
         try {
-            return ResponseEntity.ok(mallService.redeem(userId, Long.valueOf(itemIdValue.toString())));
+            return ResponseEntity.ok(mallService.redeem(userId, body.getItemId()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (IllegalStateException e) {

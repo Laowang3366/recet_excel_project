@@ -3,6 +3,7 @@ package com.excel.forum.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AdminResetPasswordRequest;
 import com.excel.forum.entity.dto.AdminUserRequest;
 import com.excel.forum.service.UserService;
 import com.excel.forum.util.PasswordPolicy;
@@ -175,13 +176,13 @@ public class AdminUserController {
     }
 
     @PutMapping("/{id}/password")
-    public ResponseEntity<?> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public ResponseEntity<?> resetPassword(@PathVariable Long id, @RequestBody AdminResetPasswordRequest body) {
         User user = userService.getById(id);
         if (user == null) {
             return ResponseEntity.notFound().build();
         }
 
-        String password = body.get("password");
+        String password = body == null ? null : body.getPassword();
         if (password == null || password.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
         }

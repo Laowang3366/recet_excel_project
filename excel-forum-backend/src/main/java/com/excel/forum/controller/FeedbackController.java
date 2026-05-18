@@ -1,6 +1,7 @@
 package com.excel.forum.controller;
 
 import com.excel.forum.entity.Feedback;
+import com.excel.forum.entity.dto.FeedbackSubmitRequest;
 import com.excel.forum.service.FeedbackService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,13 +28,13 @@ public class FeedbackController {
     private final FeedbackService feedbackService;
 
     @PostMapping
-    public ResponseEntity<?> submitFeedback(@RequestAttribute Long userId, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> submitFeedback(@RequestAttribute Long userId, @RequestBody FeedbackSubmitRequest body) {
         if (userId == null) {
             return ResponseEntity.status(401).body(Map.of("message", "未登录"));
         }
 
-        String type = body.get("type") == null ? "" : body.get("type").toString().trim();
-        String content = body.get("content") == null ? "" : body.get("content").toString().trim();
+        String type = body == null || body.getType() == null ? "" : body.getType().trim();
+        String content = body == null || body.getContent() == null ? "" : body.getContent().trim();
 
         if (!ALLOWED_TYPES.contains(type)) {
             return ResponseEntity.badRequest().body(Map.of("message", "反馈类型无效"));

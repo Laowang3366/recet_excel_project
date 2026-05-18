@@ -5,6 +5,8 @@ import com.excel.forum.entity.DailyChallenge;
 import com.excel.forum.entity.PracticeChapter;
 import com.excel.forum.entity.PracticeLevel;
 import com.excel.forum.entity.Question;
+import com.excel.forum.entity.dto.AdminPracticeCampaignLevelRequest;
+import com.excel.forum.entity.dto.AdminPracticeDailyChallengeRequest;
 import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
 import com.excel.forum.mapper.PracticeLevelMapper;
@@ -70,18 +72,18 @@ public class AdminPracticeCampaignController {
     }
 
     @PutMapping("/levels/{id}")
-    public ResponseEntity<?> updatePracticeCampaignLevel(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updatePracticeCampaignLevel(@PathVariable Long id, @RequestBody AdminPracticeCampaignLevelRequest body) {
         PracticeLevel level = practiceLevelMapper.selectById(id);
         if (level == null) {
             return ResponseEntity.notFound().build();
         }
-        String levelType = body.get("levelType") == null ? level.getLevelType() : String.valueOf(body.get("levelType")).trim();
-        String difficulty = body.get("difficulty") == null ? level.getDifficulty() : String.valueOf(body.get("difficulty")).trim();
-        Integer targetTimeSeconds = body.get("targetTimeSeconds") == null ? level.getTargetTimeSeconds() : parseInteger(body.get("targetTimeSeconds"));
-        Integer rewardExp = body.get("rewardExp") == null ? level.getRewardExp() : parseInteger(body.get("rewardExp"));
-        Integer rewardPoints = body.get("rewardPoints") == null ? level.getRewardPoints() : parseInteger(body.get("rewardPoints"));
-        Integer firstPassBonus = body.get("firstPassBonus") == null ? level.getFirstPassBonus() : parseInteger(body.get("firstPassBonus"));
-        Boolean enabled = body.get("enabled") == null ? level.getEnabled() : parseBoolean(body.get("enabled"), true);
+        String levelType = body == null || body.getLevelType() == null ? level.getLevelType() : body.getLevelType().trim();
+        String difficulty = body == null || body.getDifficulty() == null ? level.getDifficulty() : body.getDifficulty().trim();
+        Integer targetTimeSeconds = body == null || body.getTargetTimeSeconds() == null ? level.getTargetTimeSeconds() : parseInteger(body.getTargetTimeSeconds());
+        Integer rewardExp = body == null || body.getRewardExp() == null ? level.getRewardExp() : parseInteger(body.getRewardExp());
+        Integer rewardPoints = body == null || body.getRewardPoints() == null ? level.getRewardPoints() : parseInteger(body.getRewardPoints());
+        Integer firstPassBonus = body == null || body.getFirstPassBonus() == null ? level.getFirstPassBonus() : parseInteger(body.getFirstPassBonus());
+        Boolean enabled = body == null || body.getEnabled() == null ? level.getEnabled() : parseBoolean(body.getEnabled(), true);
 
         level.setLevelType(defaultText(levelType, "normal"));
         level.setDifficulty(defaultText(difficulty, "easy"));
@@ -117,9 +119,9 @@ public class AdminPracticeCampaignController {
     }
 
     @PutMapping("/daily-challenge")
-    public ResponseEntity<?> savePracticeCampaignDailyChallenge(@RequestBody Map<String, Object> body) {
-        Long levelId = parseLong(body.get("levelId"));
-        LocalDate challengeDate = parseLocalDate(body.get("challengeDate"));
+    public ResponseEntity<?> savePracticeCampaignDailyChallenge(@RequestBody AdminPracticeDailyChallengeRequest body) {
+        Long levelId = parseLong(body == null ? null : body.getLevelId());
+        LocalDate challengeDate = parseLocalDate(body == null ? null : body.getChallengeDate());
         if (levelId == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "请选择每日挑战关卡"));
         }
@@ -138,9 +140,9 @@ public class AdminPracticeCampaignController {
             challenge.setChallengeDate(challengeDate);
         }
         challenge.setLevelId(levelId);
-        challenge.setRewardExp(parseInteger(body.get("rewardExp"), safeInt(level.getRewardExp())));
-        challenge.setRewardPoints(parseInteger(body.get("rewardPoints"), safeInt(level.getRewardPoints())));
-        challenge.setEnabled(parseBoolean(body.get("enabled"), true));
+        challenge.setRewardExp(parseInteger(body == null ? null : body.getRewardExp(), safeInt(level.getRewardExp())));
+        challenge.setRewardPoints(parseInteger(body == null ? null : body.getRewardPoints(), safeInt(level.getRewardPoints())));
+        challenge.setEnabled(parseBoolean(body == null ? null : body.getEnabled(), true));
         if (challenge.getId() == null) {
             dailyChallengeMapper.insert(challenge);
         } else {

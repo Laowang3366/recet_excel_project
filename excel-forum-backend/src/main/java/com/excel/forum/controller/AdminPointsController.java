@@ -5,6 +5,7 @@ import com.excel.forum.entity.PointsRecord;
 import com.excel.forum.entity.PointsRule;
 import com.excel.forum.entity.PointsRuleOption;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AdminPointsGrantRequest;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.PointsRuleOptionService;
@@ -48,10 +49,10 @@ public class AdminPointsController {
 
     @PostMapping("/grant")
     @Transactional
-    public ResponseEntity<?> grantPoints(@RequestBody Map<String, Object> body) {
-        String username = body.get("username") == null ? "" : body.get("username").toString().trim();
-        Integer points = parseInteger(body.get("points"));
-        String reason = body.get("reason") == null ? "" : body.get("reason").toString().trim();
+    public ResponseEntity<?> grantPoints(@RequestBody AdminPointsGrantRequest body) {
+        String username = body == null || body.getUsername() == null ? "" : body.getUsername().trim();
+        Integer points = parseInteger(body == null ? null : body.getPoints());
+        String reason = body == null || body.getReason() == null ? "" : body.getReason().trim();
 
         if (!StringUtils.hasText(username)) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户名不能为空"));

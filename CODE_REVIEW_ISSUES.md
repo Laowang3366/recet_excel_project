@@ -11,6 +11,9 @@
 - 本轮 P2：将 `AdminConsoleShared.tsx` 从 897 行拆成 5 个小模块，当前 barrel 文件只保留 5 行导出。
 - 2026-05-18 P1 收口：后端主代码 `.last(...)` 已清零，`catch (... ignored)` 已清零。
 - 2026-05-18 P1 收口：`PracticeCampaignServiceImpl` 拆出 `PracticeCampaignCatalogSyncService` 和 `PracticeCampaignRewardService`，`MallServiceImpl` 拆出 `MallResponseAssembler`。
+- 2026-05-18 P2 收口：`Layout.tsx` 从 1016 行收敛到 532 行，签到、道具、反馈、弹窗通知和导航图标构造已拆出独立 layout 模块。
+- 2026-05-18 P2 收口：Univer 编辑器依赖按渲染核心、文字数据、UI、公式、Sheets 分块，生产构建不再出现大 chunk 警告。
+- 2026-05-18 P2 收口：活跃 Controller 的 `@RequestBody Map` 已清零，管理、商城、反馈、账号、隐私、闯关配置等入口改用 DTO。
 
 ## 剩余 P1
 
@@ -23,33 +26,11 @@
 
 ## 剩余 P2
 
-### 1. `Layout.tsx` 仍然偏大
+无。当前 P2 清单已执行完：
 
-全局布局仍承载导航、通知、AI 助手、账号菜单、移动导航等职责。建议继续拆为：
-
-- `AssistantWidget`
-- `NotificationDropdown`
-- `AccountMenu`
-- `CategorySearch`
-- `MobileBottomNav`
-
-### 2. 前端构建体积仍主要受编辑器依赖影响
-
-本轮后台共享模块已拆分，构建结果已出现独立小 chunk：
-
-- `AdminConsoleDialogs`
-- `AdminConsoleForms`
-- `AdminPointsUtils`
-
-剩余大块主要来自 Univer/公式编辑器和多语言包，后续应按页面入口继续做懒加载与语言包裁剪。
-
-### 3. DTO 和类型边界还可继续收紧
-
-后台管理主要入口已经完成一批强类型化，但仍应继续减少：
-
-- 后端 `Map<String, Object>` 请求/响应。
-- 前端 API 响应的宽泛类型。
-- service 内部跨层直接返回弱结构 `Map` 的场景。
+- `Layout.tsx` 主壳只保留路由壳、导航协调和通知下拉查询，签到/道具/反馈/弹窗通知已拆出。
+- Univer 相关 chunk 已拆为 `univer-render-text-data`、`univer-render-core`、`univer-ui`、`univer-sheets`、`univer-engine-formula`，构建无大 chunk 警告。
+- 活跃 Controller 请求体不再直接使用 `@RequestBody Map`，保留的 `Map` 主要用于响应组装、动态 Excel 数据和兼容性 DTO 内部字段记录。
 
 ## 本轮验证
 
@@ -58,3 +39,4 @@
 - `cd reace_web; npm run build`
 - `Get-ChildItem ... | Select-String -Pattern '\.last\('`：0 处
 - `Get-ChildItem ... | Select-String -Pattern 'catch \([^)]* ignored\)'`：0 处
+- `Get-ChildItem excel-forum-backend\src\main\java\com\excel\forum\controller -Filter *.java | Select-String -Pattern '@RequestBody (java\.util\.)?Map'`：0 处

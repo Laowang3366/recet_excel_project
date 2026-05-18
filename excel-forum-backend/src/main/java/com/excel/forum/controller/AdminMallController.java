@@ -2,6 +2,8 @@ package com.excel.forum.controller;
 
 import com.excel.forum.entity.MallItem;
 import com.excel.forum.entity.MallItemType;
+import com.excel.forum.entity.dto.AdminMallEnabledRequest;
+import com.excel.forum.entity.dto.AdminMallRedemptionStatusRequest;
 import com.excel.forum.service.MallService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -50,10 +52,9 @@ public class AdminMallController {
     }
 
     @PutMapping("/items/{id}/enabled")
-    public ResponseEntity<?> updateItemEnabled(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updateItemEnabled(@PathVariable Long id, @RequestBody AdminMallEnabledRequest body) {
         try {
-            Object enabledValue = body.get("enabled");
-            Boolean enabled = enabledValue instanceof Boolean value ? value : null;
+            Boolean enabled = body == null ? null : body.getEnabled();
             return ResponseEntity.ok(mallService.updateAdminItemEnabled(id, enabled));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
@@ -124,12 +125,12 @@ public class AdminMallController {
     public ResponseEntity<?> updateRedemptionStatus(
             @PathVariable Long id,
             @RequestAttribute Long userId,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody AdminMallRedemptionStatusRequest body) {
         try {
             return ResponseEntity.ok(mallService.updateAdminRedemptionStatus(
                     id,
-                    body.get("status") == null ? null : body.get("status").toString(),
-                    body.get("remark") == null ? null : body.get("remark").toString(),
+                    body == null ? null : body.getStatus(),
+                    body == null ? null : body.getRemark(),
                     userId
             ));
         } catch (IllegalArgumentException e) {

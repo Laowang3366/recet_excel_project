@@ -56,6 +56,46 @@ export default defineConfig({
           if (packageName === '@univerjs/presets') {
             return 'univer-presets';
           }
+          if (
+            packageName === '@univerjs/engine-render' &&
+            normalized.includes('/lib/es/') &&
+            normalized.endsWith('.js') &&
+            !normalized.endsWith('/index.js')
+          ) {
+            return 'univer-render-text-data';
+          }
+          if (packageName === '@univerjs/engine-formula') {
+            return 'univer-engine-formula';
+          }
+          if (
+            packageName === '@univerjs/design' ||
+            packageName === '@univerjs/ui' ||
+            packageName === '@univerjs/docs-ui' ||
+            packageName === '@univerjs/sheets-ui' ||
+            packageName === '@univerjs/sheets-formula-ui' ||
+            packageName === '@univerjs/sheets-numfmt-ui'
+          ) {
+            return 'univer-ui';
+          }
+          if (
+            packageName === '@univerjs/sheets' ||
+            packageName === '@univerjs/sheets-formula' ||
+            packageName === '@univerjs/sheets-numfmt'
+          ) {
+            return 'univer-sheets';
+          }
+          if (
+            packageName === '@univerjs/core' ||
+            packageName === '@univerjs/engine-render' ||
+            packageName === '@univerjs/docs' ||
+            packageName === '@univerjs/network' ||
+            packageName === '@univerjs/rpc'
+          ) {
+            return 'univer-render-core';
+          }
+          if (packageName === 'rxjs') {
+            return 'rxjs-vendor';
+          }
           if (packageName === 'react-router' || packageName === 'react-dom' || packageName === 'react') {
             return 'react-vendor';
           }

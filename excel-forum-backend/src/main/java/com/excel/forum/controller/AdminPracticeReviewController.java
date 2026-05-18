@@ -5,6 +5,7 @@ import com.excel.forum.entity.PracticeQuestionSubmission;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
+import com.excel.forum.entity.dto.AdminPracticeSubmissionReviewRequest;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PracticeCampaignService;
@@ -58,7 +59,7 @@ public class AdminPracticeReviewController {
     public ResponseEntity<?> reviewPracticeSubmission(
             @PathVariable Long id,
             @RequestAttribute("userId") Long reviewerId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody AdminPracticeSubmissionReviewRequest body) {
         PracticeQuestionSubmission submission = practiceQuestionSubmissionService.getById(id);
         if (submission == null) {
             return ResponseEntity.notFound().build();
@@ -67,8 +68,8 @@ public class AdminPracticeReviewController {
             return ResponseEntity.badRequest().body(Map.of("message", "该投稿已处理"));
         }
 
-        String status = body.getOrDefault("status", "").trim();
-        String reason = body.getOrDefault("reason", "").trim();
+        String status = body == null || body.getStatus() == null ? "" : body.getStatus().trim();
+        String reason = body == null || body.getReason() == null ? "" : body.getReason().trim();
         if (!"approved".equals(status) && !"rejected".equals(status)) {
             return ResponseEntity.badRequest().body(Map.of("message", "无效的审核状态"));
         }

@@ -2,6 +2,8 @@ package com.excel.forum.controller;
 
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.UserEntitlement;
+import com.excel.forum.entity.dto.UserPrivacySettingsRequest;
+import com.excel.forum.entity.dto.UserProfileUpdateRequest;
 import com.excel.forum.service.CheckinService;
 import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.UserEntitlementService;
@@ -38,7 +40,7 @@ public class UserController {
     public ResponseEntity<?> updateProfile(
             @PathVariable Long id,
             @RequestAttribute Long userId,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody UserProfileUpdateRequest body) {
 
         if (!userId.equals(id)) {
             return ResponseEntity.status(403).body(Map.of("message", "只能修改自己的资料"));
@@ -49,7 +51,7 @@ public class UserController {
             return ResponseEntity.notFound().build();
         }
 
-        if (body.containsKey("username")) {
+        if (body != null && body.containsKey("username")) {
             String newUsername = UsernamePolicy.normalize((String) body.get("username"));
             if (newUsername != null && !newUsername.isBlank()) {
                 if (!UsernamePolicy.isValid(newUsername)) {
@@ -65,10 +67,10 @@ public class UserController {
                 user.setUsername(newUsername);
             }
         }
-        if (body.containsKey("bio")) {
+        if (body != null && body.containsKey("bio")) {
             user.setBio((String) body.get("bio"));
         }
-        if (body.containsKey("gender")) {
+        if (body != null && body.containsKey("gender")) {
             String gender = body.get("gender") == null ? null : String.valueOf(body.get("gender")).trim();
             if (gender == null || gender.isBlank()) {
                 user.setGender(null);
@@ -78,22 +80,22 @@ public class UserController {
                 return ResponseEntity.badRequest().body(Map.of("message", "性别设置无效"));
             }
         }
-        if (body.containsKey("avatar")) {
+        if (body != null && body.containsKey("avatar")) {
             user.setAvatar((String) body.get("avatar"));
         }
-        if (body.containsKey("jobTitle")) {
+        if (body != null && body.containsKey("jobTitle")) {
             user.setJobTitle(normalizeNullableString(body.get("jobTitle")));
         }
-        if (body.containsKey("location")) {
+        if (body != null && body.containsKey("location")) {
             user.setLocation(normalizeNullableString(body.get("location")));
         }
-        if (body.containsKey("website")) {
+        if (body != null && body.containsKey("website")) {
             user.setWebsite(normalizeNullableString(body.get("website")));
         }
-        if (body.containsKey("coverImage")) {
+        if (body != null && body.containsKey("coverImage")) {
             user.setCoverImage(normalizeNullableString(body.get("coverImage")));
         }
-        if (body.containsKey("expertise")) {
+        if (body != null && body.containsKey("expertise")) {
             Object expertise = body.get("expertise");
             if (expertise instanceof List<?>) {
                 List<?> expertiseList = (List<?>) expertise;
@@ -105,13 +107,13 @@ public class UserController {
                 user.setExpertise(text);
             }
         }
-        if (body.containsKey("notificationEmailEnabled")) {
+        if (body != null && body.containsKey("notificationEmailEnabled")) {
             user.setNotificationEmailEnabled(parseBoolean(body.get("notificationEmailEnabled"), true));
         }
-        if (body.containsKey("notificationPushEnabled")) {
+        if (body != null && body.containsKey("notificationPushEnabled")) {
             user.setNotificationPushEnabled(parseBoolean(body.get("notificationPushEnabled"), true));
         }
-        if (body.containsKey("themePreference")) {
+        if (body != null && body.containsKey("themePreference")) {
             user.setThemePreference(normalizeThemePreference(body.get("themePreference") == null ? null : body.get("themePreference").toString()));
         }
 
@@ -209,18 +211,18 @@ public class UserController {
     @PutMapping("/privacy")
     public ResponseEntity<?> updatePrivacySettings(
             @RequestAttribute Long userId,
-            @RequestBody Map<String, Boolean> body) {
+            @RequestBody UserPrivacySettingsRequest body) {
 
         User user = userService.getById(userId);
         if (user == null) {
             return ResponseEntity.notFound().build();
         }
 
-        if (body.containsKey("publicProfile")) {
-            user.setPublicProfile(body.get("publicProfile"));
+        if (body != null && body.getPublicProfile() != null) {
+            user.setPublicProfile(body.getPublicProfile());
         }
-        if (body.containsKey("showOnlineStatus")) {
-            user.setShowOnlineStatus(body.get("showOnlineStatus"));
+        if (body != null && body.getShowOnlineStatus() != null) {
+            user.setShowOnlineStatus(body.getShowOnlineStatus());
         }
 
         userService.updateById(user);

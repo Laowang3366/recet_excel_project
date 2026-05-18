@@ -1,29 +1,14 @@
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
-  Home, 
-  BookOpen, 
-  ShoppingBag, 
   Menu,
-  User,
   MoreVertical,
   ChevronDown,
   Activity,
-  Lightbulb,
-  Wrench,
-  Package,
-  Award,
-  Ticket,
-  ArrowRightLeft,
-  Target as TargetIcon,
-  FolderKanban,
   CalendarCheck,
-  Flame
 } from "lucide-react";
-import { startTransition, useState, useRef, useEffect } from "react";
+import { startTransition, useCallback, useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
-import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { hasAdminConsoleAccess } from "../admin/config";
@@ -36,72 +21,27 @@ import {
   shouldRenderCompactHeaderAccountAction,
   shouldRenderCompactHeaderNotificationAction,
 } from "../lib/layout-display";
-import { homeKeys, mallKeys, notificationKeys, pointsKeys, profileKeys } from "../lib/query-keys";
+import { notificationKeys } from "../lib/query-keys";
 import { preloadPublicRoute } from "../lib/route-preload";
 import { useSession } from "../lib/session";
 import {
   getVisibleNotificationTypeFilter,
   shouldRenderNotificationItem,
 } from "../lib/notification-display";
-import {
-  liteMobileBottomNavItems,
-  liteMobileDrawerNavItems,
-  publicNavItems,
-  resolveActiveNavItem,
-} from "../lib/site-navigation";
 import { useIsMobile } from "./ui/use-mobile";
 import { ONLINE_LITE_MODE, isLiteAllowedPath } from "../lib/site-mode";
 import { AssistantWidget } from "./layout/AssistantWidget";
 import { AccountMenu } from "./layout/AccountMenu";
 import { CategorySearch } from "./layout/CategorySearch";
+import { CheckinDialog, useCheckinStatusQuery } from "./layout/CheckinDialog";
+import { FeedbackDialog } from "./layout/FeedbackDialog";
 import { MobileBottomNav } from "./layout/MobileBottomNav";
 import { NotificationDropdown, type LayoutNotification } from "./layout/NotificationDropdown";
+import { SitePopupNotificationDialog } from "./layout/SitePopupNotificationDialog";
+import { UserPropsDialog } from "./layout/UserPropsDialog";
+import { buildLayoutNavigation } from "./layout/navigation-items";
 
 const OPEN_PROPS_EVENT = "excel-open-props-dialog";
-
-type UserPropRecord = {
-  id: number;
-  key?: string | null;
-  type?: string | null;
-  name?: string | null;
-  description?: string | null;
-  actionLabel?: string | null;
-  status?: string | null;
-  statusLabel?: string | null;
-  current?: boolean;
-  canUse?: boolean;
-  canUnequip?: boolean;
-};
-
-type CheckinStatus = {
-  hasCheckedInToday?: boolean;
-  currentContinuousDays?: number;
-  previewContinuousDays?: number;
-  todayExp?: number;
-  previewPoints?: number;
-  previewExpMin?: number;
-  previewExpMax?: number;
-  totalDays?: number;
-  makeupCardCount?: number;
-  basePoints?: number;
-  previewPointsBonus?: number;
-  previewExpBonus?: number;
-  latestMissedDate?: string | null;
-  canMakeupCheckin?: boolean;
-};
-
-type PropActionResponse = {
-  message?: string;
-};
-
-type CheckinActionResponse = {
-  gainedPoints?: number;
-  gainedExp?: number;
-};
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export function Layout() {
   const location = useLocation();
@@ -112,13 +52,7 @@ export function Layout() {
   const [propsOpen, setPropsOpen] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [popupNotification, setPopupNotification] = useState<LayoutNotification | null>(null);
-  const [feedbackForm, setFeedbackForm] = useState({
-    type: "performance_optimization",
-    content: "",
-  });
   const notificationRef = useRef<HTMLDivElement>(null);
-  const popupDismissedIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -183,56 +117,10 @@ export function Layout() {
     enabled: isAuthenticated,
     queryFn: () => api.get<{ count: number }>("/api/notifications/unread-count", { silent: true }),
   });
-  const popupNotificationsQuery = useQuery({
-    queryKey: notificationKeys.list({ page: 1, limit: 20, type: "site_notification", scope: "popup-notification" }),
-    enabled: isAuthenticated,
-    refetchInterval: 10000,
-    refetchOnWindowFocus: true,
-    queryFn: () => api.get<{ notifications: LayoutNotification[] }>("/api/notifications?page=1&limit=20&type=site_notification", { silent: true }),
-  });
   const notificationItems = (notificationsPreviewQuery.data?.notifications || []).filter((item) => shouldRenderNotificationItem(item.type));
-  const popupNotifications = popupNotificationsQuery.data?.notifications || [];
   const unreadNotificationCount = unreadNotificationsQuery.data?.count || 0;
-  const propsQuery = useQuery({
-    queryKey: profileKeys.props(),
-    enabled: isAuthenticated && propsOpen,
-    queryFn: () => api.get<{ records: UserPropRecord[] }>("/api/users/me/props", { silent: true }),
-  });
-  const checkinStatusQuery = useQuery({
-    queryKey: homeKeys.checkinStatus(),
-    enabled: isAuthenticated,
-    queryFn: () => api.get<CheckinStatus>("/api/checkin/status", { silent: true }),
-  });
-  const propsRecords = propsQuery.data?.records || [];
+  const checkinStatusQuery = useCheckinStatusQuery(isAuthenticated);
   const checkinStatus = checkinStatusQuery.data;
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      popupDismissedIdsRef.current.clear();
-      setPopupNotification(null);
-    }
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-    if (popupNotification) {
-      return;
-    }
-
-    const nextPopup = popupNotifications.find((item) =>
-      item &&
-      item.isRead !== 1 &&
-      item.announcementType === "popup" &&
-      typeof item.id === "number" &&
-      !popupDismissedIdsRef.current.has(item.id)
-    );
-
-    if (nextPopup) {
-      setPopupNotification(nextPopup);
-    }
-  }, [isAuthenticated, popupNotifications, popupNotification]);
 
   const markAllNotificationsReadMutation = useMutation({
     mutationFn: () => api.put("/api/notifications/read-all", {}),
@@ -245,76 +133,6 @@ export function Layout() {
     mutationFn: (notificationId: number) => api.put(`/api/notifications/${notificationId}/read`, {}),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-    },
-  });
-  const feedbackMutation = useMutation({
-    mutationFn: () => api.post("/api/feedback", feedbackForm),
-    onSuccess: () => {
-      toast.success("反馈建议已提交");
-      setFeedbackOpen(false);
-      setFeedbackForm({
-        type: "performance_optimization",
-        content: "",
-      });
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "反馈提交失败"));
-    },
-  });
-  const usePropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/use`, {}),
-    onSuccess: async (result) => {
-      toast.success(result?.message || "道具已使用");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: profileKeys.props() }),
-        queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
-      ]);
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "道具使用失败"));
-    },
-  });
-  const invalidateCheckinCaches = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
-      queryClient.invalidateQueries({ queryKey: pointsKeys.overview() }),
-      queryClient.invalidateQueries({ queryKey: pointsKeys.records() }),
-      queryClient.invalidateQueries({ queryKey: pointsKeys.tasks() }),
-      queryClient.invalidateQueries({ queryKey: mallKeys.overview() }),
-      queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-    ]);
-  const checkinMutation = useMutation({
-    mutationFn: () => api.post<CheckinActionResponse>("/api/checkin", {}),
-    onSuccess: async (result) => {
-      toast.success(`签到成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
-      await invalidateCheckinCaches();
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "签到失败"));
-    },
-  });
-  const makeupCheckinMutation = useMutation({
-    mutationFn: () => api.post<CheckinActionResponse>("/api/checkin/makeup", {}),
-    onSuccess: async (result) => {
-      toast.success(`补签成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
-      await invalidateCheckinCaches();
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "补签失败"));
-    },
-  });
-  const unequipPropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/unequip`, {}),
-    onSuccess: async (result) => {
-      toast.success(result?.message || "已取消佩戴");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: profileKeys.props() }),
-        queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-      ]);
-    },
-    onError: (error: unknown) => {
-      toast.error(getErrorMessage(error, "取消佩戴失败"));
     },
   });
 
@@ -331,68 +149,31 @@ export function Layout() {
     }
   };
 
-  const handleClosePopupNotification = async () => {
-    if (!popupNotification?.id) {
-      setPopupNotification(null);
-      return;
-    }
-    popupDismissedIdsRef.current.add(popupNotification.id);
-    try {
-      if (popupNotification.isRead !== 1) {
-        await markNotificationReadMutation.mutateAsync(popupNotification.id);
-      }
-    } finally {
-      setPopupNotification(null);
-    }
-  };
+  const {
+    activePublicNav,
+    navItems,
+    primaryLiteNavItems,
+    accountLiteNavItems,
+    mobileDrawerNavItems,
+    mobileBottomNavItems,
+  } = buildLayoutNavigation(location.pathname, isAuthenticated);
 
-  const navIconMap: Record<string, React.ReactNode> = {
-    home: <Home size={18} strokeWidth={1.8} />,
-    practice: <TargetIcon size={18} strokeWidth={1.8} />,
-    templates: <FolderKanban size={18} strokeWidth={1.8} />,
-    tutorials: <BookOpen size={18} strokeWidth={1.8} />,
-    mall: <ShoppingBag size={18} strokeWidth={1.8} />,
-    tools: <ArrowRightLeft size={18} strokeWidth={1.8} />,
-    assistant: <Lightbulb size={18} strokeWidth={1.8} />,
-    profile: <User size={18} strokeWidth={1.8} />,
-  };
-  const navItems = publicNavItems
-    .filter((item) => item.key !== "assistant")
-    .map((item) => ({
-      ...item,
-      icon: navIconMap[item.key],
-    }));
-  const primaryLiteNavItems = navItems.filter((item) =>
-    ["home", "practice", "tutorials"].includes(item.key)
-  );
-  const accountLiteNavItems = navItems.filter((item) =>
-    ["mall", "tools", "templates"].includes(item.key)
-  );
-  const activePublicNav = resolveActiveNavItem(location.pathname);
-  const mobileDrawerNavItems: Array<{ name: string; path: string; icon: React.ReactNode }> =
-    liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }));
-  const mobileBottomNavItems = liteMobileBottomNavItems.map((item) => ({
-        key: item.key,
-        name: item.shortName,
-        path: item.key === "profile" && !isAuthenticated ? "/auth" : item.path,
-        icon: navIconMap[item.key],
-      }));
-
-  const openPropsDialog = () => {
+  const openPropsDialog = useCallback(() => {
     if (!isAuthenticated) {
       navigate("/auth");
       return;
     }
     setPropsOpen(true);
-  };
+  }, [isAuthenticated, navigate]);
 
-  const openCheckinDialog = () => {
+  const openCheckinDialog = useCallback(() => {
     if (!isAuthenticated) {
       navigate("/auth");
       return;
     }
     setCheckinOpen(true);
-  };
+  }, [isAuthenticated, navigate]);
+
   const moreLiteNavItems = [
     ...accountLiteNavItems.map((item) => ({
       ...item,
@@ -417,25 +198,7 @@ export function Layout() {
     };
     window.addEventListener(OPEN_PROPS_EVENT, handleOpenProps);
     return () => window.removeEventListener(OPEN_PROPS_EVENT, handleOpenProps);
-  });
-
-  const resolvePropIcon = (item: UserPropRecord) => {
-    if (item?.key === "checkin_makeup_card") return Ticket;
-    if (item?.type === "badge") return Award;
-    if (item?.type === "privilege") return Wrench;
-    return Package;
-  };
-
-  const resolvePropTypeLabel = (type: string) => {
-    const map: Record<string, string> = {
-      badge: "头衔",
-      prop: "道具",
-      privilege: "权益",
-      coupon: "优惠券",
-      virtual: "虚拟物品",
-    };
-    return map[type] || type || "道具";
-  };
+  }, [openPropsDialog]);
 
   return (
     <div className={getAppShellClassName()}>
@@ -757,261 +520,13 @@ export function Layout() {
         />
       </div>
 
-      <Dialog open={propsOpen} onOpenChange={setPropsOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>我的道具</DialogTitle>
-                      <DialogDescription>这里统一收纳你通过积分经验中心兑换获得的道具、头衔与权益，可在此选择使用。</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {propsRecords.length > 0 ? (
-              propsRecords.map((item) => {
-                const Icon = resolvePropIcon(item);
-                const isUsing = usePropMutation.isPending && usePropMutation.variables === item.id;
-                const isUnequipping = unequipPropMutation.isPending && unequipPropMutation.variables === item.id;
-                const isPending = isUsing || isUnequipping;
-                const actionLabel = item.canUnequip ? "取消佩戴" : item.actionLabel;
-                return (
-                  <div key={item.id} className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
-                      <Icon size={22} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-bold text-slate-800">{item.name}</div>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">{resolvePropTypeLabel(item.type)}</span>
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                          item.status === "active"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : item.status === "pending"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-slate-100 text-slate-500"
-                        }`}>
-                          {item.statusLabel}
-                        </span>
-                        {item.current ? <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-700">当前使用中</span> : null}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        {item.key === "checkin_makeup_card"
-                          ? "可用于补签最近漏签的一天，并保持连续签到记录。"
-                          : item.type === "badge"
-                            ? "已拥有的头衔可在这里切换佩戴。"
-                            : "该道具已统一收纳到你的个人道具库。"}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.canUnequip) {
-                          void unequipPropMutation.mutateAsync(item.id);
-                          return;
-                        }
-                        if (item.canUse) {
-                          void usePropMutation.mutateAsync(item.id);
-                        }
-                      }}
-                      disabled={(!item.canUse && !item.canUnequip) || isPending}
-                      className="inline-flex h-10 min-w-[92px] items-center justify-center rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-700 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                    >
-                      {isPending ? "处理中..." : actionLabel}
-                    </button>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-400">
-                        暂无已获得的道具，先去积分经验中心兑换吧。
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={checkinOpen} onOpenChange={setCheckinOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>每日签到</DialogTitle>
-            <DialogDescription>连续签到会递增积分和经验，断签后从第一天重新计算。</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#f8fffe_0%,#fefbf3_100%)] p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-500">
-                    <CalendarCheck size={16} className="text-teal-500" />
-                    {checkinStatus?.hasCheckedInToday ? "今日已完成签到" : "今日可签到"}
-                  </div>
-                  <div className="mt-2 text-2xl font-black text-slate-900">
-                    {checkinStatus?.hasCheckedInToday ? `连签 ${checkinStatus?.currentContinuousDays ?? 0} 天` : `第 ${checkinStatus?.previewContinuousDays ?? 1} 天奖励`}
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">
-                    {checkinStatus?.hasCheckedInToday
-                      ? `今日已获得 ${checkinStatus?.todayExp ?? 0} 经验，连续签到越久，明日奖励越高。`
-                      : `今日签到可获得 ${checkinStatus?.previewPoints ?? 0} 积分，经验 ${checkinStatus?.previewExpMin ?? 0}-${checkinStatus?.previewExpMax ?? 0}。`}
-                  </div>
-                </div>
-                <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white text-amber-500 shadow-sm ring-1 ring-slate-200">
-                  <Flame size={24} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-bold tracking-[0.16em] text-slate-400">连续签到</div>
-                <div className="mt-2 text-2xl font-black text-slate-900">{checkinStatus?.currentContinuousDays ?? 0}</div>
-                <div className="mt-1 text-xs text-slate-500">当前连续天数</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-bold tracking-[0.16em] text-slate-400">累计签到</div>
-                <div className="mt-2 text-2xl font-black text-slate-900">{checkinStatus?.totalDays ?? 0}</div>
-                <div className="mt-1 text-xs text-slate-500">历史签到总天数</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-bold tracking-[0.16em] text-slate-400">积分奖励</div>
-                <div className="mt-2 text-2xl font-black text-slate-900">{checkinStatus?.previewPoints ?? 0}</div>
-                <div className="mt-1 text-xs text-slate-500">含连签加成</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-xs font-bold tracking-[0.16em] text-slate-400">补签卡</div>
-                <div className="mt-2 text-2xl font-black text-slate-900">{checkinStatus?.makeupCardCount ?? 0}</div>
-                <div className="mt-1 text-xs text-slate-500">可补最近漏签</div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              <div>基础积分：{checkinStatus?.basePoints ?? 0}</div>
-              <div>连签加成：+{checkinStatus?.previewPointsBonus ?? 0} 积分 / +{checkinStatus?.previewExpBonus ?? 0} 经验</div>
-              {checkinStatus?.latestMissedDate ? <div>最近漏签：{checkinStatus.latestMissedDate}</div> : null}
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => void makeupCheckinMutation.mutateAsync()}
-                disabled={!checkinStatus?.canMakeupCheckin || (checkinStatus?.makeupCardCount ?? 0) <= 0 || makeupCheckinMutation.isPending}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-              >
-                {makeupCheckinMutation.isPending ? "补签中..." : "使用补签卡"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void checkinMutation.mutateAsync()}
-                disabled={checkinStatus?.hasCheckedInToday || checkinMutation.isPending}
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-teal-500 px-5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {checkinStatus?.hasCheckedInToday ? "今日已签到" : checkinMutation.isPending ? "签到中..." : "立即签到"}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(popupNotification)} onOpenChange={(open) => {
-        if (!open) {
-          void handleClosePopupNotification();
-        }
-      }}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{popupNotification?.title || popupNotification?.content || "站内通知"}</DialogTitle>
-            <DialogDescription>管理员已向你发送一条弹窗通知，请确认内容后关闭。</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-teal-100 bg-teal-50/50 px-4 py-4">
-              {popupNotification?.detailContent ? (
-                <div
-                  className="prose prose-sm max-w-none text-slate-700"
-                  dangerouslySetInnerHTML={{ __html: popupNotification.detailContent }}
-                />
-              ) : (
-                <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">
-                  {popupNotification?.content || "暂无通知内容"}
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => void handleClosePopupNotification()}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-teal-500 px-5 text-sm font-semibold text-white transition hover:bg-teal-600"
-              >
-                关闭通知
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <UserPropsDialog open={propsOpen} isAuthenticated={isAuthenticated} onOpenChange={setPropsOpen} />
+      <CheckinDialog open={checkinOpen} status={checkinStatus} onOpenChange={setCheckinOpen} />
+      <SitePopupNotificationDialog isAuthenticated={isAuthenticated} />
 
       <AssistantWidget onOpen={() => setShowNotifications(false)} />
 
-      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>反馈建议</DialogTitle>
-            <DialogDescription>欢迎反馈产品问题和改进建议，我们会在后台统一处理与跟进。</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <label className="block">
-              <div className="mb-2 text-sm font-semibold text-slate-700">反馈类型</div>
-              <select
-                value={feedbackForm.type}
-                onChange={(e) => setFeedbackForm((prev) => ({ ...prev, type: e.target.value }))}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-              >
-                <option value="performance_optimization">性能优化</option>
-                <option value="feature_optimization">功能优化</option>
-                <option value="new_feature">新增功能</option>
-                <option value="other">其他</option>
-              </select>
-            </label>
-            <label className="block">
-              <div className="mb-2 text-sm font-semibold text-slate-700">反馈内容</div>
-              <textarea
-                value={feedbackForm.content}
-                onChange={(e) => setFeedbackForm((prev) => ({ ...prev, content: e.target.value }))}
-                placeholder="请尽量描述清楚问题场景、预期效果或新增需求。"
-                className="min-h-[160px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
-              />
-            </label>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              <div className="flex items-center gap-2">
-                <Lightbulb size={16} className="text-amber-500" />
-                <span>建议描述具体现象、影响范围和你的预期结果。</span>
-              </div>
-              <span>{feedbackForm.content.trim().length}/1000</span>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setFeedbackOpen(false)}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const content = feedbackForm.content.trim();
-                  if (!content) {
-                    toast.info("请填写反馈内容");
-                    return;
-                  }
-                  if (content.length > 1000) {
-                    toast.info("反馈内容不能超过1000字");
-                    return;
-                  }
-                  void feedbackMutation.mutateAsync();
-                }}
-                disabled={feedbackMutation.isPending}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:bg-teal-300"
-              >
-                {feedbackMutation.isPending ? "提交中..." : "提交反馈"}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </div>
   );
 }

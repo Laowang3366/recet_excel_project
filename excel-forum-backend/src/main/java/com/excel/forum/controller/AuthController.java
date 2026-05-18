@@ -1,7 +1,10 @@
 package com.excel.forum.controller;
 
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AuthEmailChangeRequest;
+import com.excel.forum.entity.dto.AuthPasswordChangeRequest;
 import com.excel.forum.entity.dto.AuthResponse;
+import com.excel.forum.entity.dto.ForgotPasswordRequest;
 import com.excel.forum.entity.dto.LoginRequest;
 import com.excel.forum.entity.dto.RegisterRequest;
 import com.excel.forum.service.UserService;
@@ -147,10 +150,10 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body) {
-        String username = UsernamePolicy.normalize(body.get("username"));
-        String email = normalizeEmail(body.get("email"));
-        String newPassword = body.get("newPassword");
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest body) {
+        String username = UsernamePolicy.normalize(body == null ? null : body.getUsername());
+        String email = normalizeEmail(body == null ? null : body.getEmail());
+        String newPassword = body == null ? null : body.getNewPassword();
 
         ResponseEntity<?> rateLimitResponse = guardRateLimit("auth:forgot:" + normalizeRateLimitKey(username + ":" + email), 5, 300, "重置密码过于频繁，请稍后再试");
         if (rateLimitResponse != null) {
@@ -233,10 +236,10 @@ public class AuthController {
     public ResponseEntity<?> changePassword(
             @RequestAttribute Long userId,
             HttpServletRequest request,
-            @RequestBody java.util.Map<String, String> body) {
+            @RequestBody AuthPasswordChangeRequest body) {
         
-        String oldPassword = body.get("oldPassword");
-        String newPassword = body.get("newPassword");
+        String oldPassword = body == null ? null : body.getOldPassword();
+        String newPassword = body == null ? null : body.getNewPassword();
         
         if (oldPassword == null || oldPassword.isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("message", "请输入当前密码"));
@@ -268,10 +271,10 @@ public class AuthController {
     @PutMapping("/email")
     public ResponseEntity<?> changeEmail(
             @RequestAttribute Long userId,
-            @RequestBody java.util.Map<String, String> body) {
+            @RequestBody AuthEmailChangeRequest body) {
         
-        String newEmail = normalizeEmail(body.get("newEmail"));
-        String password = body.get("password");
+        String newEmail = normalizeEmail(body == null ? null : body.getNewEmail());
+        String password = body == null ? null : body.getPassword();
         
         if (newEmail == null || newEmail.isBlank()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("message", "请输入新邮箱"));

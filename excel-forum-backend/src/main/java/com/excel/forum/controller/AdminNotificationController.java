@@ -1,6 +1,7 @@
 package com.excel.forum.controller;
 
 import com.excel.forum.entity.SiteNotification;
+import com.excel.forum.entity.dto.AdminNotificationRequest;
 import com.excel.forum.service.SiteNotificationService;
 import com.excel.forum.util.HtmlSanitizer;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,7 @@ public class AdminNotificationController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createNotification(@RequestBody Map<String, Object> body, @RequestAttribute("userId") Long userId) {
+    public ResponseEntity<?> createNotification(@RequestBody AdminNotificationRequest body, @RequestAttribute("userId") Long userId) {
         SiteNotification notification = buildSiteNotification(body, new SiteNotification());
         if (notification.getTitle() == null || notification.getTitle().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "标题不能为空"));
@@ -69,7 +70,7 @@ public class AdminNotificationController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateNotification(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ResponseEntity<?> updateNotification(@PathVariable Long id, @RequestBody AdminNotificationRequest body) {
         SiteNotification existing = siteNotificationService.getById(id);
         if (existing == null) {
             return ResponseEntity.notFound().build();
@@ -101,14 +102,14 @@ public class AdminNotificationController {
         return ResponseEntity.ok(Map.of("message", "通知已删除"));
     }
 
-    private SiteNotification buildSiteNotification(Map<String, Object> body, SiteNotification notification) {
-        notification.setTitle(stringValue(body.get("title")));
-        notification.setContent(htmlSanitizer.sanitize(stringValue(body.get("content"))));
-        notification.setType(defaultValue(stringValue(body.get("type")), "system"));
-        notification.setStatus(defaultValue(stringValue(body.get("status")), "draft"));
-        notification.setTargetType(defaultValue(stringValue(body.get("targetType")), "all"));
-        notification.setTargetRoles("role".equals(notification.getTargetType()) ? normalizeTargetRoles(body.get("targetRoles")) : null);
-        notification.setAttachments(stringValue(body.get("attachments")));
+    private SiteNotification buildSiteNotification(AdminNotificationRequest body, SiteNotification notification) {
+        notification.setTitle(body == null ? null : stringValue(body.getTitle()));
+        notification.setContent(htmlSanitizer.sanitize(body == null ? null : stringValue(body.getContent())));
+        notification.setType(defaultValue(body == null ? null : stringValue(body.getType()), "system"));
+        notification.setStatus(defaultValue(body == null ? null : stringValue(body.getStatus()), "draft"));
+        notification.setTargetType(defaultValue(body == null ? null : stringValue(body.getTargetType()), "all"));
+        notification.setTargetRoles("role".equals(notification.getTargetType()) && body != null ? normalizeTargetRoles(body.getTargetRoles()) : null);
+        notification.setAttachments(body == null ? null : stringValue(body.getAttachments()));
 
         if ("sent".equals(notification.getStatus())) {
             if (notification.getSendTime() == null) {
