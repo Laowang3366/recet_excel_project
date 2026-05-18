@@ -13,8 +13,6 @@ public class Notification {
     private String type;
     private String content;
     private Long relatedId;
-    private Long replyId;
-    private Long senderId;
     private Integer isRead;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

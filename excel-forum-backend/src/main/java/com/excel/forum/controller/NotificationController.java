@@ -111,7 +111,6 @@ public class NotificationController {
                 response.put("content", siteNotification.getContent());
                 response.put("type", siteNotification.getType());
                 response.put("relatedId", notification.getRelatedId());
-                response.put("replyId", notification.getReplyId());
                 response.put("isRead", notification.getIsRead());
                 response.put("createTime", notification.getCreateTime());
                 response.put("sendTime", siteNotification.getSendTime() != null ? siteNotification.getSendTime() : notification.getCreateTime());
@@ -145,7 +144,6 @@ public class NotificationController {
         response.put("content", notification.getContent());
         response.put("type", notification.getType());
         response.put("relatedId", notification.getRelatedId());
-        response.put("replyId", notification.getReplyId());
         response.put("isRead", notification.getIsRead());
         response.put("createTime", notification.getCreateTime());
         response.put("sendTime", notification.getCreateTime());
@@ -156,18 +154,6 @@ public class NotificationController {
         response.put("targetType", "single_user");
         response.put("targetRoles", null);
         response.put("attachments", null);
-
-        if (notification.getSenderId() != null) {
-            User sender = userService.getById(notification.getSenderId());
-            if (sender != null) {
-                Map<String, Object> senderPayload = new HashMap<>();
-                senderPayload.put("id", sender.getId());
-                senderPayload.put("username", sender.getUsername());
-                senderPayload.put("avatar", sender.getAvatar());
-                senderPayload.put("role", sender.getRole());
-                response.put("sender", senderPayload);
-            }
-        }
 
         return ResponseEntity.ok(response);
     }

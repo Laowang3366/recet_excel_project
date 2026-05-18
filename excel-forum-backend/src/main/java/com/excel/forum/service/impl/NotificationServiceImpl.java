@@ -127,8 +127,6 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         item.put("type", notification.getType());
         item.put("content", notification.getContent());
         item.put("relatedId", notification.getRelatedId());
-        item.put("replyId", notification.getReplyId());
-        item.put("senderId", notification.getSenderId());
         item.put("isRead", notification.getIsRead());
         item.put("createTime", notification.getCreateTime());
 
