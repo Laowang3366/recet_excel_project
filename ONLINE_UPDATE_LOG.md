@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 11:32 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 论坛遗留功能清理与性能优化上线；前端删除旧论坛页面和旧论坛路由，顶部搜索移除帖子/用户搜索和聊天私信入口；后台管理移除旧帖子审核、举报、帖子、分类、草稿、商城等打包模块；后端新增旧论坛接口统一下线过滤器，对旧帖子、回复、分类、收藏、点赞、消息、聊天、草稿、举报及对应后台接口返回 `410 Gone`；保留旧论坛数据库表作为 legacy data，并新增归档说明文档。
+- 验证：本地 `npm run build` 通过，产物未出现 `BoardDetail`、`PostDetail`、`CreatePost`、`Messages`、`Chat`、`UserProfile`、`AdminMall`、`AdminPosts`、`AdminReports`、`AdminReview`、`AdminDrafts`、`AdminCategories` 等旧 chunk；本地 `mvn test` 通过 87 个测试；本地 `git diff --check` 通过；源码扫描确认顶部搜索不再调用 `/api/posts/search`，旧公开放行规则不再出现在 `SecurityConfig`；服务器标准部署脚本执行成功；服务器 `nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`；服务器本机 `/api/public/home-overview` 与 `/api/practice/campaign/chapters` 返回 200；公网 `https://www.excelcc.cn/`、`/api/public/home-overview`、`/practice`、`/tutorials` 返回 200；公网 `/api/posts`、`/api/categories`、`POST /api/chat/send`、`/api/messages/conversations` 均返回 410。
+- 部署：提交 `b2cead5` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 确认最新代码后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-033028`。
+- 备注：未删除旧论坛数据库表，后续彻底清理需先完整备份数据库并单独新增 Flyway migration；部署过程中未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`；npm 构建阶段仍提示既有依赖审计项，未影响本次构建和健康检查。
+
 ## 2026-05-18 10:29 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 小试牛刀默认解锁上线；后端闯关章节响应统一返回 `unlocked=true`，未完成题目统一返回 `available`，保留已通关、满星、练习记录和判题逻辑不变；新增服务层回归测试覆盖章节与题目默认解锁。
