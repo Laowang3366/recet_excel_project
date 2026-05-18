@@ -19,6 +19,20 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
+      - name: Backend Source Guardrails
+        run: |
+          if grep -R -nE '@RequestBody[[:space:]]+(java\.util\.)?Map\b' src/main/java/com/excel/forum/controller; then
+            echo "Controller @RequestBody Map usage is not allowed."
+            exit 1
+          fi
+          if grep -R -nE '\.last[[:space:]]*\(' src/main/java; then
+            echo "MyBatis-Plus .last SQL suffix usage is not allowed."
+            exit 1
+          fi
+          if grep -R -nE 'catch[[:space:]]*\([^)]*\bignored\b[^)]*\)' src/main/java; then
+            echo "ignored catch blocks are not allowed."
+            exit 1
+          fi
       - name: Backend Compile
         run: mvn -q -DskipTests compile
       - name: Backend Test
@@ -38,5 +52,11 @@ jobs:
           cache-dependency-path: reace_web/package-lock.json
       - name: Install Dependencies
         run: npm ci
+      - name: Frontend Dependency Audit
+        run: npm audit --audit-level=moderate
+      - name: Frontend Typecheck
+        run: npm run typecheck
+      - name: Frontend Test
+        run: npm run test
       - name: Frontend Build
         run: npm run build

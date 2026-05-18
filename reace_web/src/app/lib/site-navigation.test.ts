@@ -20,6 +20,7 @@ describe("resolveActiveNavItem", () => {
       "templates",
       "mall",
       "tools",
+      "assistant",
     ]);
   });
 
@@ -44,7 +45,7 @@ describe("resolveActiveNavItem", () => {
   });
 
   it("keeps secondary destinations in the mobile drawer", () => {
-    expect(liteMobileDrawerNavItems.map((item) => item.key)).toEqual(["mall", "tools", "templates"]);
+    expect(liteMobileDrawerNavItems.map((item) => item.key)).toEqual(["mall", "tools", "assistant", "templates"]);
   });
 
   it("keeps every public module reachable across compact navigation surfaces", () => {

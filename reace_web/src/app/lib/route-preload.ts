@@ -7,6 +7,7 @@ const publicRoutePreloaders: Record<string, RoutePreloader> = {
   "/templates": () => import("../pages/TemplateCenter"),
   "/mall": () => import("../pages/Mall"),
   "/tools": () => import("../pages/Tools"),
+  "/assistant": () => import("../pages/Assistant"),
   "/profile": () => import("../pages/ProfileCenter"),
 };
 

@@ -1,7 +1,10 @@
 param(
     [switch]$SkipFrontend,
+    [switch]$SkipFrontendAudit,
+    [switch]$SkipFrontendTest,
     [switch]$SkipFrontendBuild,
-    [switch]$SkipBackend
+    [switch]$SkipBackend,
+    [switch]$SkipBackendCompile
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,14 +62,64 @@ function Test-FrontendExplicitAny {
     Write-Host "No explicit any usage found under reace_web/src/app."
 }
 
+function Test-BackendSourceGuardrails {
+    $sourceRoot = Join-Path $root "excel-forum-backend\src\main\java"
+    $controllerRoot = Join-Path $sourceRoot "com\excel\forum\controller"
+
+    $requestBodyMapMatches = Get-ChildItem -Path $controllerRoot -Recurse -Filter *.java -File |
+        Select-String -Pattern "@RequestBody\s+(java\.util\.)?Map\b"
+    $sqlSuffixMatches = Get-ChildItem -Path $sourceRoot -Recurse -Filter *.java -File |
+        Select-String -Pattern "\.last\s*\("
+    $ignoredCatchMatches = Get-ChildItem -Path $sourceRoot -Recurse -Filter *.java -File |
+        Select-String -Pattern "catch\s*\([^)]*\bignored\b[^)]*\)"
+
+    $failed = $false
+    foreach ($matchGroup in @(
+        @{ Name = "Controller @RequestBody Map"; Matches = $requestBodyMapMatches },
+        @{ Name = "MyBatis-Plus .last SQL suffix"; Matches = $sqlSuffixMatches },
+        @{ Name = "ignored catch blocks"; Matches = $ignoredCatchMatches }
+    )) {
+        if ($matchGroup.Matches) {
+            Write-Host ""
+            Write-Host ("{0} scan failed:" -f $matchGroup.Name)
+            $matchGroup.Matches | ForEach-Object {
+                Write-Host ("{0}:{1}: {2}" -f $_.Path, $_.LineNumber, $_.Line.Trim())
+            }
+            $failed = $true
+        }
+    }
+
+    if ($failed) {
+        throw "Backend source guardrail scan failed."
+    }
+
+    Write-Host "Backend source guardrails passed."
+}
+
 if (-not $SkipFrontend) {
     Invoke-Step "Frontend explicit any scan" {
         Test-FrontendExplicitAny
     }
 
+    if (-not $SkipFrontendAudit) {
+        Invoke-Step "Frontend dependency audit" {
+            Invoke-InDirectory (Join-Path $root "reace_web") {
+                npm audit --audit-level=moderate
+            }
+        }
+    }
+
     Invoke-Step "Frontend typecheck" {
         Invoke-InDirectory (Join-Path $root "reace_web") {
             npm run typecheck
+        }
+    }
+
+    if (-not $SkipFrontendTest) {
+        Invoke-Step "Frontend tests" {
+            Invoke-InDirectory (Join-Path $root "reace_web") {
+                npm run test
+            }
         }
     }
 
@@ -80,6 +133,18 @@ if (-not $SkipFrontend) {
 }
 
 if (-not $SkipBackend) {
+    Invoke-Step "Backend source guardrails" {
+        Test-BackendSourceGuardrails
+    }
+
+    if (-not $SkipBackendCompile) {
+        Invoke-Step "Backend compile" {
+            Invoke-InDirectory (Join-Path $root "excel-forum-backend") {
+                mvn -q -DskipTests compile
+            }
+        }
+    }
+
     Invoke-Step "Backend tests" {
         Invoke-InDirectory (Join-Path $root "excel-forum-backend") {
             mvn test

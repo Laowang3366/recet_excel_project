@@ -84,6 +84,7 @@ export const liteMobileBottomNavItems: LiteMobileBottomNavItem[] = [
 export const liteMobileDrawerNavItems: PublicNavItem[] = [
   publicNavItems[4],
   publicNavItems[5],
+  publicNavItems[6],
   publicNavItems[3],
 ];
 

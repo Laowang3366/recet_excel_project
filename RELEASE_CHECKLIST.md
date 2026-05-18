@@ -27,8 +27,11 @@
 - [ ] 后端 `mvn test` 通过
 - [ ] 后端 `mvn -q -DskipTests compile` 通过
 - [ ] 前端 `npm ci` 通过
+- [ ] 前端 `npm audit --audit-level=moderate` 通过
 - [ ] 前端 `npm run typecheck` 通过
+- [ ] 前端 `npm run test` 通过
 - [ ] 前端 `npm run build` 通过
+- [ ] 后端源码门禁通过：活跃 Controller 无 `@RequestBody Map`，主代码无 `.last(...)` 和 `catch (... ignored)`
 - [ ] GitHub Actions 全绿
 - [ ] `docs/release-audit.md` 中 P0 为 0
 - [ ] `docs/release-audit.md` 中阻断项已关闭

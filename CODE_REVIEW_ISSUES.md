@@ -14,6 +14,8 @@
 - 2026-05-18 P2 收口：`Layout.tsx` 从 1016 行收敛到 532 行，签到、道具、反馈、弹窗通知和导航图标构造已拆出独立 layout 模块。
 - 2026-05-18 P2 收口：Univer 编辑器依赖按渲染核心、文字数据、UI、公式、Sheets 分块，生产构建不再出现大 chunk 警告。
 - 2026-05-18 P2 收口：活跃 Controller 的 `@RequestBody Map` 已清零，管理、商城、反馈、账号、隐私、闯关配置等入口改用 DTO。
+- 2026-05-18 质量门禁收口：前端 `vitest` 已纳入脚本和 CI，`scripts/quality/check.ps1` 覆盖前端审计/类型/单测/构建与后端源码门禁/编译/测试。
+- 2026-05-18 旧数据归档：新增 `legacy_table_archive` 归档登记迁移，旧论坛表只做归档标记，不删除历史数据。
 
 ## 剩余 P1
 
@@ -32,11 +34,24 @@
 - Univer 相关 chunk 已拆为 `univer-render-text-data`、`univer-render-core`、`univer-ui`、`univer-sheets`、`univer-engine-formula`，构建无大 chunk 警告。
 - 活跃 Controller 请求体不再直接使用 `@RequestBody Map`，保留的 `Map` 主要用于响应组装、动态 Excel 数据和兼容性 DTO 内部字段记录。
 
+## 剩余质量与归档
+
+无。当前质量门禁和旧论坛数据库表归档已补齐：
+
+- 本地统一入口：`powershell -ExecutionPolicy Bypass -File scripts/quality/check.ps1`
+- CI 前端门禁：依赖审计、类型检查、Vitest、生产构建。
+- CI 后端门禁：编译、测试。
+- 旧论坛数据策略：保留历史表，新增 `legacy_table_archive` 登记表，不执行 drop/rename。
+
 ## 本轮验证
 
 - `cd excel-forum-backend; mvn test`
+- `cd excel-forum-backend; mvn -q -DskipTests compile`
+- `cd reace_web; npm audit --audit-level=moderate`
+- `cd reace_web; npm run test`
 - `cd reace_web; npm run typecheck`
 - `cd reace_web; npm run build`
+- `powershell -ExecutionPolicy Bypass -File scripts/quality/check.ps1`
 - `Get-ChildItem ... | Select-String -Pattern '\.last\('`：0 处
 - `Get-ChildItem ... | Select-String -Pattern 'catch \([^)]* ignored\)'`：0 处
 - `Get-ChildItem excel-forum-backend\src\main\java\com\excel\forum\controller -Filter *.java | Select-String -Pattern '@RequestBody (java\.util\.)?Map'`：0 处
