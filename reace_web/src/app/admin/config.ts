@@ -8,6 +8,7 @@ import {
   PanelsTopLeft,
   Shield,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 
 export type AdminRole = "admin" | "moderator";
@@ -27,7 +28,7 @@ export type AdminModule = {
   key: AdminModuleKey;
   label: string;
   path: string;
-  icon: any;
+  icon: LucideIcon;
   roles: AdminRole[];
 };
 

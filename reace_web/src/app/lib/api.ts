@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { isLoginRequiredResponse } from "./auth-errors";
 import { clearStoredSession, getStoredToken } from "./session-store";
 
-const API_BASE = ((import.meta as any).env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 export class ApiError extends Error {
   status: number;

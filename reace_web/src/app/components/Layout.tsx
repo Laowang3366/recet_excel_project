@@ -103,6 +103,62 @@ type AssistantWidgetTurn = {
   failed?: boolean;
 };
 
+type LayoutNotification = {
+  id: number;
+  type: string;
+  title?: string | null;
+  content?: string | null;
+  detailContent?: string | null;
+  relatedId?: number | null;
+  isRead?: number | boolean | null;
+  announcementType?: string | null;
+  createTime?: string | null;
+};
+
+type UserPropRecord = {
+  id: number;
+  key?: string | null;
+  type?: string | null;
+  name?: string | null;
+  description?: string | null;
+  actionLabel?: string | null;
+  status?: string | null;
+  statusLabel?: string | null;
+  current?: boolean;
+  canUse?: boolean;
+  canUnequip?: boolean;
+};
+
+type CheckinStatus = {
+  hasCheckedInToday?: boolean;
+  currentContinuousDays?: number;
+  previewContinuousDays?: number;
+  todayExp?: number;
+  previewPoints?: number;
+  previewExpMin?: number;
+  previewExpMax?: number;
+  totalDays?: number;
+  makeupCardCount?: number;
+  basePoints?: number;
+  previewPointsBonus?: number;
+  previewExpBonus?: number;
+  latestMissedDate?: string | null;
+  canMakeupCheckin?: boolean;
+};
+
+type PropActionResponse = {
+  message?: string;
+};
+
+type CheckinActionResponse = {
+  gainedPoints?: number;
+  gainedExp?: number;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -112,7 +168,7 @@ export function Layout() {
   const [propsOpen, setPropsOpen] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [popupNotification, setPopupNotification] = useState<any | null>(null);
+  const [popupNotification, setPopupNotification] = useState<LayoutNotification | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessage, setAssistantMessage] = useState("");
   const [assistantConversationId, setAssistantConversationId] = useState<string | null>(null);
@@ -349,7 +405,7 @@ export function Layout() {
   const notificationsPreviewQuery = useQuery({
     queryKey: notificationKeys.list({ page: 1, limit: 5, type: visibleNotificationTypeFilter, scope: "layout" }),
     enabled: isAuthenticated,
-    queryFn: () => api.get<{ notifications: any[] }>(`/api/notifications?page=1&limit=5&type=${encodeURIComponent(visibleNotificationTypeFilter)}`, { silent: true }),
+    queryFn: () => api.get<{ notifications: LayoutNotification[] }>(`/api/notifications?page=1&limit=5&type=${encodeURIComponent(visibleNotificationTypeFilter)}`, { silent: true }),
   });
   const unreadNotificationsQuery = useQuery({
     queryKey: [...notificationKeys.all, "unread-count"] as const,
@@ -361,7 +417,7 @@ export function Layout() {
     enabled: isAuthenticated,
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
-    queryFn: () => api.get<{ notifications: any[] }>("/api/notifications?page=1&limit=20&type=site_notification", { silent: true }),
+    queryFn: () => api.get<{ notifications: LayoutNotification[] }>("/api/notifications?page=1&limit=20&type=site_notification", { silent: true }),
   });
   const notificationItems = (notificationsPreviewQuery.data?.notifications || []).filter((item) => shouldRenderNotificationItem(item.type));
   const popupNotifications = popupNotificationsQuery.data?.notifications || [];
@@ -369,12 +425,12 @@ export function Layout() {
   const propsQuery = useQuery({
     queryKey: profileKeys.props(),
     enabled: isAuthenticated && propsOpen,
-    queryFn: () => api.get<{ records: any[] }>("/api/users/me/props", { silent: true }),
+    queryFn: () => api.get<{ records: UserPropRecord[] }>("/api/users/me/props", { silent: true }),
   });
   const checkinStatusQuery = useQuery({
     queryKey: homeKeys.checkinStatus(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/checkin/status", { silent: true }),
+    queryFn: () => api.get<CheckinStatus>("/api/checkin/status", { silent: true }),
   });
   const propsRecords = propsQuery.data?.records || [];
   const checkinStatus = checkinStatusQuery.data;
@@ -464,8 +520,8 @@ export function Layout() {
         requestAnimationFrame(() => scrollAssistantToLatestReply("smooth"));
       }
     },
-    onError: (error: any, variables) => {
-      const message = error?.message || "AI 助手暂时不可用";
+    onError: (error: unknown, variables) => {
+      const message = getErrorMessage(error, "AI 助手暂时不可用");
       setAssistantHistory((prev) => prev.map((item) => item.id === variables?.turnId
         ? {
           ...item,
@@ -489,12 +545,12 @@ export function Layout() {
         content: "",
       });
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "反馈提交失败");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "反馈提交失败"));
     },
   });
   const usePropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<any>(`/api/users/me/props/${entitlementId}/use`, {}),
+    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/use`, {}),
     onSuccess: async (result, entitlementId) => {
       toast.success(result?.message || "道具已使用");
       await Promise.all([
@@ -504,12 +560,12 @@ export function Layout() {
         queryClient.invalidateQueries({ queryKey: ["home", "checkin-status"] }),
       ]);
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "道具使用失败");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "道具使用失败"));
     },
   });
   const checkinMutation = useMutation({
-    mutationFn: () => api.post<any>("/api/checkin", {}),
+    mutationFn: () => api.post<CheckinActionResponse>("/api/checkin", {}),
     onSuccess: async (result) => {
       toast.success(`签到成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
       await Promise.all([
@@ -521,12 +577,12 @@ export function Layout() {
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
       ]);
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "签到失败");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "签到失败"));
     },
   });
   const makeupCheckinMutation = useMutation({
-    mutationFn: () => api.post<any>("/api/checkin/makeup", {}),
+    mutationFn: () => api.post<CheckinActionResponse>("/api/checkin/makeup", {}),
     onSuccess: async (result) => {
       toast.success(`补签成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
       await Promise.all([
@@ -538,12 +594,12 @@ export function Layout() {
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
       ]);
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "补签失败");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "补签失败"));
     },
   });
   const unequipPropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<any>(`/api/users/me/props/${entitlementId}/unequip`, {}),
+    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/unequip`, {}),
     onSuccess: async (result) => {
       toast.success(result?.message || "已取消佩戴");
       await Promise.all([
@@ -551,12 +607,12 @@ export function Layout() {
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
       ]);
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "取消佩戴失败");
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "取消佩戴失败"));
     },
   });
 
-  const resolveNotificationLink = (notification: any) => {
+  const resolveNotificationLink = (notification: LayoutNotification) => {
     switch (notification.type) {
       case "site_notification":
         return notification.relatedId ? `/notification/${notification.relatedId}` : "/notifications";
@@ -938,7 +994,7 @@ export function Layout() {
     return () => window.removeEventListener(OPEN_PROPS_EVENT, handleOpenProps);
   });
 
-  const resolvePropIcon = (item: any) => {
+  const resolvePropIcon = (item: UserPropRecord) => {
     if (item?.key === "checkin_makeup_card") return Ticket;
     if (item?.type === "badge") return Award;
     if (item?.type === "privilege") return Wrench;

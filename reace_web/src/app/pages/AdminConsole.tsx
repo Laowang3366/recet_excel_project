@@ -23,6 +23,7 @@ import {
   Users,
   X,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -98,6 +99,163 @@ import {
 const ExcelWorkbookEditor = lazy(() =>
   import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
+
+type AdminStatsGroup = Record<string, number | undefined>;
+
+type AdminStatsPayload = {
+  overview?: AdminStatsGroup;
+  users?: AdminStatsGroup;
+  moderation?: AdminStatsGroup;
+  practice?: AdminStatsGroup;
+  pointsAndLevels?: AdminStatsGroup;
+  notifications?: AdminStatsGroup;
+  userCount?: number;
+  pendingFeedback?: number;
+};
+
+type PagedAdminResponse<T> = {
+  records: T[];
+  total: number;
+};
+
+type AdminEditableUserRole = "admin" | "moderator" | "user";
+
+type AdminUserForm = {
+  username: string;
+  email: string;
+  password: string;
+  role: AdminEditableUserRole;
+  status: number;
+};
+
+type AdminUserRecord = {
+  id: number;
+  username: string;
+  email?: string | null;
+  avatar?: string | null;
+  role?: string | null;
+  status?: number | null;
+  isMuted?: boolean;
+  level?: number;
+  points?: number;
+  createTime?: string | null;
+};
+
+type AdminUserToggleResponse = {
+  locked?: boolean;
+  muted?: boolean;
+};
+
+type AdminNotificationForm = {
+  title: string;
+  content: string;
+  type: string;
+  status: string;
+  targetType: string;
+  targetRoles: string;
+  attachments: string;
+};
+
+type AdminNotificationRecord = AdminNotificationForm & {
+  id: number;
+  createTime?: string | null;
+};
+
+type AdminNotificationStats = {
+  total?: number;
+  sent?: number;
+  draft?: number;
+  totalUsers?: number;
+};
+
+type QuestionCategoryForm = {
+  name: string;
+  description: string;
+  groupName: string;
+  sortOrder: number | string;
+  enabled: boolean;
+};
+
+type QuestionCategoryRecord = QuestionCategoryForm & {
+  id: number;
+  questionCount?: number;
+};
+
+type DailyChallengeForm = {
+  challengeDate: string;
+  levelId: string;
+  rewardExp: string | number;
+  rewardPoints: string | number;
+  enabled: boolean;
+};
+
+type PracticeCampaignLevelRecord = {
+  id: number;
+  title?: string | null;
+  chapterName?: string | null;
+  questionTitle?: string | null;
+  levelType?: string | null;
+  difficulty?: string | null;
+  targetTimeSeconds?: number;
+  rewardExp?: number;
+  rewardPoints?: number;
+  firstPassBonus?: number;
+  enabled?: boolean;
+};
+
+type LevelConfigForm = {
+  levelType: string;
+  difficulty: string;
+  targetTimeSeconds: string;
+  rewardExp: string;
+  rewardPoints: string;
+  firstPassBonus: string;
+  enabled: boolean;
+};
+
+type QuestionGradingMode = "simple" | "dynamic_array";
+
+type QuestionDynamicArrayRuleForm = DynamicArrayHydrationRule & {
+  score: number | string;
+  label: string;
+  formulaKeywordsText: string;
+  requireAnchorFormula: boolean;
+  requireSpillCellsWithoutFormula: boolean;
+};
+
+type AdminQuestionForm = {
+  title: string;
+  questionCategoryId: string | number;
+  difficulty: string | number;
+  points: string | number;
+  explanation: string;
+  enabled: boolean;
+  templateFileUrl: string;
+  answerSheet: string;
+  answerRange: string;
+  answerSnapshotJson: string;
+  checkFormula: boolean;
+  gradingMode: QuestionGradingMode;
+  dynamicArrayRules: QuestionDynamicArrayRuleForm[];
+  gradingRuleJson: string;
+  sheetCountLimit: string | number;
+  version: string | number;
+};
+
+type AdminQuestionRecord = Partial<AdminQuestionForm> & {
+  id: number;
+  title: string;
+  type?: string | null;
+  categoryId?: number | string | null;
+  questionCategoryId?: number | string | null;
+  questionCategoryName?: string | null;
+  expectedSnapshotJson?: string | null;
+};
+
+type AdminQuestionsResponse = {
+  questions: AdminQuestionRecord[];
+  total: number;
+};
 
 type FormDialogProps = {
   open: boolean;
@@ -305,7 +463,7 @@ export function AdminOverview() {
     queryKey: adminKeys.stats(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest(api.get<{ stats: Record<string, any> }>("/api/admin/stats", { silent: true }), navigate, role);
+      const result = await adminRequest(api.get<{ stats: AdminStatsPayload }>("/api/admin/stats", { silent: true }), navigate, role);
       return result?.stats || null;
     },
   });
@@ -395,7 +553,7 @@ function OverviewMetricCard({
   label: string;
   value: React.ReactNode;
   hint?: string;
-  icon: any;
+  icon: LucideIcon;
   tone: "teal" | "blue" | "amber" | "rose";
 }) {
   const toneMap = {
@@ -481,9 +639,9 @@ export function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [pendingRemove, setPendingRemove] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultUserForm());
+  const [editing, setEditing] = useState<AdminUserRecord | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<AdminUserRecord | null>(null);
+  const [form, setForm] = useState<AdminUserForm>(defaultUserForm());
   const size = 10;
   const query = new URLSearchParams({ page: String(page), size: String(size) });
   if (keyword.trim()) query.set("keyword", keyword.trim());
@@ -495,7 +653,7 @@ export function AdminUsers() {
     queryKey: adminKeys.users({ page, size, keyword: keyword.trim(), role: roleFilter, status: statusFilter }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(`/api/admin/users?${queryString}`, { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<AdminUserRecord>>(api.get(`/api/admin/users?${queryString}`, { silent: true }), navigate, role);
       return result || { records: [], total: 0 };
     },
   });
@@ -511,33 +669,33 @@ export function AdminUsers() {
     setOpen(true);
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: AdminUserRecord) => {
     setEditing(item);
     setForm({
       username: item.username || "",
       email: item.email || "",
       password: "",
-      role: item.role || "user",
+      role: isEditableUserRole(item.role) ? item.role : "user",
       status: Number(item.status ?? 0),
     });
     setOpen(true);
   };
 
   const submit = async () => {
-    const payload: any = {
+    const payload: Partial<AdminUserForm> = {
       email: form.email,
       role: form.role,
       status: Number(form.status),
     };
     if (editing) {
-      const result = await adminRequest(api.put(`/api/admin/users/${editing.id}`, payload), navigate, role, "更新用户");
+      const result = await adminRequest<AdminUserRecord>(api.put(`/api/admin/users/${editing.id}`, payload), navigate, role, "更新用户");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("用户", editing.username || result?.username || form.username, "已更新"));
     } else {
       payload.username = form.username;
       payload.password = form.password;
-      const result = await adminRequest(api.post("/api/admin/users", payload), navigate, role, "创建用户");
+      const result = await adminRequest<AdminUserRecord>(api.post("/api/admin/users", payload), navigate, role, "创建用户");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("用户", result?.username || form.username, "已创建"));
@@ -545,7 +703,7 @@ export function AdminUsers() {
     await refreshUsers();
   };
 
-  const resetPassword = async (item: any) => {
+  const resetPassword = async (item: AdminUserRecord) => {
     const password = await openAdminPrompt({
       title: "重置用户密码",
       message: `为 ${item.username} 设置新的登录密码。`,
@@ -560,7 +718,7 @@ export function AdminUsers() {
     showAdminSuccess(formatAdminEntityMessage("用户", item.username, "密码已重置"));
   };
 
-  const remove = (item: any) => {
+  const remove = (item: AdminUserRecord) => {
     setPendingRemove(item);
   };
 
@@ -577,15 +735,15 @@ export function AdminUsers() {
     });
   };
 
-  const toggleLock = async (item: any) => {
-    const result = await adminRequest<any>(api.put(`/api/admin/users/${item.id}/lock`, {}), navigate, role, item.status === 1 ? "解除用户锁定" : "锁定用户");
+  const toggleLock = async (item: AdminUserRecord) => {
+    const result = await adminRequest<AdminUserToggleResponse>(api.put(`/api/admin/users/${item.id}/lock`, {}), navigate, role, item.status === 1 ? "解除用户锁定" : "锁定用户");
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("用户", item.username, result.locked ? "已锁定" : "已解锁"));
     await refreshUsers();
   };
 
-  const toggleMute = async (item: any) => {
-    const result = await adminRequest<any>(api.put(`/api/admin/users/${item.id}/mute`, {}), navigate, role, item.isMuted ? "解除用户禁言" : "禁言用户");
+  const toggleMute = async (item: AdminUserRecord) => {
+    const result = await adminRequest<AdminUserToggleResponse>(api.put(`/api/admin/users/${item.id}/mute`, {}), navigate, role, item.isMuted ? "解除用户禁言" : "禁言用户");
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("用户", item.username, result.muted ? "已禁言" : "已解除禁言"));
     await refreshUsers();
@@ -682,26 +840,26 @@ export function AdminUsers() {
         <div className="grid gap-4 md:grid-cols-2">
           {!editing && (
             <Field label="用户名">
-              <input value={form.username} onChange={(e) => setForm((prev: any) => ({ ...prev, username: e.target.value }))} className={inputClassName()} />
+              <input value={form.username} onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))} className={inputClassName()} />
             </Field>
           )}
           <Field label="邮箱">
-            <input value={form.email} onChange={(e) => setForm((prev: any) => ({ ...prev, email: e.target.value }))} className={inputClassName()} />
+            <input value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} className={inputClassName()} />
           </Field>
           {!editing && (
             <Field label="初始密码">
-              <input type="password" value={form.password} onChange={(e) => setForm((prev: any) => ({ ...prev, password: e.target.value }))} className={inputClassName()} />
+              <input type="password" value={form.password} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} className={inputClassName()} />
             </Field>
           )}
           <Field label="角色">
-            <select value={form.role} onChange={(e) => setForm((prev: any) => ({ ...prev, role: e.target.value }))} className={inputClassName()}>
+            <select value={form.role} onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as AdminEditableUserRole }))} className={inputClassName()}>
               <option value="user">用户</option>
               <option value="moderator">运营</option>
               <option value="admin">管理员</option>
             </select>
           </Field>
           <Field label="状态">
-            <select value={String(form.status)} onChange={(e) => setForm((prev: any) => ({ ...prev, status: Number(e.target.value) }))} className={inputClassName()}>
+            <select value={String(form.status)} onChange={(e) => setForm((prev) => ({ ...prev, status: Number(e.target.value) }))} className={inputClassName()}>
               <option value="0">正常</option>
               <option value="1">已锁定</option>
             </select>
@@ -727,15 +885,15 @@ export function AdminNotifications() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [pendingRemove, setPendingRemove] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultNotificationForm());
+  const [editing, setEditing] = useState<AdminNotificationRecord | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<AdminNotificationRecord | null>(null);
+  const [form, setForm] = useState<AdminNotificationForm>(defaultNotificationForm());
   const size = 10;
   const statsQuery = useQuery({
     queryKey: adminKeys.notificationsStats(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/notifications/stats", { silent: true }), navigate, role);
+      const result = await adminRequest<AdminNotificationStats>(api.get("/api/admin/notifications/stats", { silent: true }), navigate, role);
       return result || null;
     },
   });
@@ -743,7 +901,7 @@ export function AdminNotifications() {
     queryKey: adminKeys.notifications({ page, size }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(`/api/admin/notifications?page=${page}&size=${size}`, { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<AdminNotificationRecord>>(api.get(`/api/admin/notifications?page=${page}&size=${size}`, { silent: true }), navigate, role);
       return result || { records: [], total: 0 };
     },
   });
@@ -757,7 +915,7 @@ export function AdminNotifications() {
     setOpen(true);
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: AdminNotificationRecord) => {
     setEditing(item);
     setForm({
       title: item.title || "",
@@ -774,12 +932,12 @@ export function AdminNotifications() {
   const submit = async () => {
     const payload = { ...form };
     if (editing) {
-      const result = await adminRequest(api.put(`/api/admin/notifications/${editing.id}`, payload), navigate, role, "更新通知");
+      const result = await adminRequest<AdminNotificationRecord>(api.put(`/api/admin/notifications/${editing.id}`, payload), navigate, role, "更新通知");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("通知", editing.title || result?.title || form.title, "已更新"));
     } else {
-      const result = await adminRequest(api.post("/api/admin/notifications", payload), navigate, role, "创建通知");
+      const result = await adminRequest<AdminNotificationRecord>(api.post("/api/admin/notifications", payload), navigate, role, "创建通知");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("通知", result?.title || form.title, "已创建"));
@@ -790,7 +948,7 @@ export function AdminNotifications() {
     ]);
   };
 
-  const sendNow = async (item: any) => {
+  const sendNow = async (item: AdminNotificationRecord) => {
     const result = await adminRequest(api.put(`/api/admin/notifications/${item.id}/send`, {}), navigate, role, "发送通知");
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("通知", item.title, "已发送"));
@@ -800,7 +958,7 @@ export function AdminNotifications() {
     ]);
   };
 
-  const remove = (item: any) => {
+  const remove = (item: AdminNotificationRecord) => {
     setPendingRemove(item);
   };
 
@@ -884,22 +1042,22 @@ export function AdminNotifications() {
         submitLabel={editing ? "保存通知" : "创建通知"}
         onSubmit={submit}
       >
-        <Field label="标题"><input value={form.title} onChange={(e) => setForm((prev: any) => ({ ...prev, title: e.target.value }))} className={inputClassName()} /></Field>
-        <Field label="内容"><textarea value={form.content} onChange={(e) => setForm((prev: any) => ({ ...prev, content: e.target.value }))} className={textareaClassName()} /></Field>
+        <Field label="标题"><input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className={inputClassName()} /></Field>
+        <Field label="内容"><textarea value={form.content} onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))} className={textareaClassName()} /></Field>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="类型">
-            <select value={form.type} onChange={(e) => setForm((prev: any) => ({ ...prev, type: e.target.value }))} className={inputClassName()}>
+            <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className={inputClassName()}>
               {NOTIFICATION_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
           <Field label="状态">
-            <select value={form.status} onChange={(e) => setForm((prev: any) => ({ ...prev, status: e.target.value }))} className={inputClassName()}>
+            <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))} className={inputClassName()}>
               <option value="draft">草稿</option>
               <option value="sent">已发送</option>
             </select>
           </Field>
           <Field label="发送目标">
-            <select value={form.targetType} onChange={(e) => setForm((prev: any) => ({ ...prev, targetType: e.target.value }))} className={inputClassName()}>
+            <select value={form.targetType} onChange={(e) => setForm((prev) => ({ ...prev, targetType: e.target.value }))} className={inputClassName()}>
               {NOTIFICATION_TARGET_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
@@ -922,7 +1080,7 @@ export function AdminNotifications() {
                         } else {
                           next.delete(item.value);
                         }
-                        setForm((prev: any) => ({ ...prev, targetRoles: Array.from(next).join(",") }));
+                        setForm((prev) => ({ ...prev, targetRoles: Array.from(next).join(",") }));
                       }}
                     />
                     {item.label}
@@ -933,7 +1091,7 @@ export function AdminNotifications() {
           </Field>
         )}
         <Field label="附件 JSON / 链接">
-          <textarea value={form.attachments} onChange={(e) => setForm((prev: any) => ({ ...prev, attachments: e.target.value }))} className={textareaClassName()} />
+          <textarea value={form.attachments} onChange={(e) => setForm((prev) => ({ ...prev, attachments: e.target.value }))} className={textareaClassName()} />
         </Field>
       </FormDialog>
       <DeleteConfirmDialog
@@ -953,13 +1111,13 @@ export function AdminQuestionCategories() {
   const role = useAdminRole();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultQuestionCategoryForm());
+  const [editing, setEditing] = useState<QuestionCategoryRecord | null>(null);
+  const [form, setForm] = useState<QuestionCategoryForm>(defaultQuestionCategoryForm());
   const questionCategoriesQuery = useQuery({
     queryKey: adminKeys.questionCategories(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any[]>(api.get("/api/admin/question-categories", { silent: true }), navigate, role);
+      const result = await adminRequest<QuestionCategoryRecord[]>(api.get("/api/admin/question-categories", { silent: true }), navigate, role);
       return result || [];
     },
   });
@@ -971,7 +1129,7 @@ export function AdminQuestionCategories() {
     setOpen(true);
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: QuestionCategoryRecord) => {
     setEditing(item);
     setForm({
       name: item.name || "",
@@ -992,12 +1150,12 @@ export function AdminQuestionCategories() {
       enabled: Boolean(form.enabled),
     };
     if (editing) {
-      const result = await adminRequest(api.put(`/api/admin/question-categories/${editing.id}`, payload), navigate, role, "更新题目分类");
+      const result = await adminRequest<QuestionCategoryRecord>(api.put(`/api/admin/question-categories/${editing.id}`, payload), navigate, role, "更新题目分类");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("题目分类", editing.name || result?.name || form.name, "已更新"));
     } else {
-      const result = await adminRequest(api.post("/api/admin/question-categories", payload), navigate, role, "创建题目分类");
+      const result = await adminRequest<QuestionCategoryRecord>(api.post("/api/admin/question-categories", payload), navigate, role, "创建题目分类");
       if (!result) return;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("题目分类", result?.name || form.name, "已创建"));
@@ -1005,7 +1163,7 @@ export function AdminQuestionCategories() {
     await queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() });
   };
 
-  const toggleEnabled = async (item: any, nextEnabled: boolean) => {
+  const toggleEnabled = async (item: QuestionCategoryRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/question-categories/${item.id}`, {
         name: item.name,
@@ -1023,7 +1181,7 @@ export function AdminQuestionCategories() {
     await queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() });
   };
 
-  const remove = async (item: any) => {
+  const remove = async (item: QuestionCategoryRecord) => {
     const confirmed = await openAdminConfirm({
       title: "删除题目分类",
       message: `确认删除题目分类 ${item.name}？`,
@@ -1092,16 +1250,16 @@ export function AdminQuestionCategories() {
         onSubmit={submit}
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="名称"><input value={form.name} onChange={(e) => setForm((prev: any) => ({ ...prev, name: e.target.value }))} className={inputClassName()} /></Field>
-          <Field label="分组"><input value={form.groupName} onChange={(e) => setForm((prev: any) => ({ ...prev, groupName: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="名称"><input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="分组"><input value={form.groupName} onChange={(e) => setForm((prev) => ({ ...prev, groupName: e.target.value }))} className={inputClassName()} /></Field>
         </div>
-        <Field label="描述"><textarea value={form.description} onChange={(e) => setForm((prev: any) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} /></Field>
+        <Field label="描述"><textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} /></Field>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="排序"><input type="number" value={form.sortOrder} onChange={(e) => setForm((prev: any) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="排序"><input type="number" value={form.sortOrder} onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} /></Field>
           <AdminFormSwitch
             label="启用该分类"
             checked={Boolean(form.enabled)}
-            onCheckedChange={(next) => setForm((prev: any) => ({ ...prev, enabled: next }))}
+            onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
           />
         </div>
       </FormDialog>
@@ -1115,7 +1273,7 @@ export function AdminQuestions() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [questionCategoryId, setQuestionCategoryId] = useState("");
-  const [dailyChallengeForm, setDailyChallengeForm] = useState<any>({
+  const [dailyChallengeForm, setDailyChallengeForm] = useState<DailyChallengeForm>({
     challengeDate: "",
     levelId: "",
     rewardExp: "",
@@ -1123,8 +1281,8 @@ export function AdminQuestions() {
     enabled: true,
   });
   const [levelConfigOpen, setLevelConfigOpen] = useState(false);
-  const [levelConfigEditing, setLevelConfigEditing] = useState<any>(null);
-  const [levelConfigForm, setLevelConfigForm] = useState<any>({
+  const [levelConfigEditing, setLevelConfigEditing] = useState<PracticeCampaignLevelRecord | null>(null);
+  const [levelConfigForm, setLevelConfigForm] = useState<LevelConfigForm>({
     levelType: "normal",
     difficulty: "easy",
     targetTimeSeconds: "300",
@@ -1134,8 +1292,8 @@ export function AdminQuestions() {
     enabled: true,
   });
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultQuestionForm());
+  const [editing, setEditing] = useState<AdminQuestionRecord | null>(null);
+  const [form, setForm] = useState<AdminQuestionForm>(defaultQuestionForm());
   const [templateWorkbook, setTemplateWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [editorWorkbook, setEditorWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [selectedSheetName, setSelectedSheetName] = useState("");
@@ -1157,7 +1315,7 @@ export function AdminQuestions() {
     queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(`/api/admin/questions?${queryString}`, { silent: true }), navigate, role);
+      const result = await adminRequest<AdminQuestionsResponse>(api.get(`/api/admin/questions?${queryString}`, { silent: true }), navigate, role);
       return result || { questions: [], total: 0 };
     },
   });
@@ -1166,7 +1324,7 @@ export function AdminQuestions() {
     queryKey: adminKeys.questionCategories(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any[]>(api.get("/api/admin/question-categories", { silent: true }), navigate, role);
+      const result = await adminRequest<QuestionCategoryRecord[]>(api.get("/api/admin/question-categories", { silent: true }), navigate, role);
       return result || [];
     },
   });
@@ -1178,7 +1336,7 @@ export function AdminQuestions() {
     queryKey: adminKeys.practiceCampaignLevels(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/practice-campaign/levels", { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<PracticeCampaignLevelRecord>>(api.get("/api/admin/practice-campaign/levels", { silent: true }), navigate, role);
       return result || { records: [] };
     },
   });
@@ -1186,7 +1344,7 @@ export function AdminQuestions() {
     queryKey: adminKeys.practiceCampaignDaily(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/practice-campaign/daily-challenge", { silent: true }), navigate, role);
+      const result = await adminRequest<{ record?: Partial<DailyChallengeForm> & { levelId?: number | string | null } }>(api.get("/api/admin/practice-campaign/daily-challenge", { silent: true }), navigate, role);
       return result || { record: {} };
     },
   });
@@ -1225,7 +1383,7 @@ export function AdminQuestions() {
     setTemplateLoading(true);
     setTemplateLoadError("");
     try {
-      const snapshot = await adminRequest<any>(
+      const snapshot = await adminRequest<ExcelWorkbookSnapshot>(
         api.get(`/api/admin/questions/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`, { silent: true }),
         navigate,
         role,
@@ -1272,7 +1430,7 @@ export function AdminQuestions() {
     setOpen(true);
   };
 
-  const openEdit = async (item: any) => {
+  const openEdit = async (item: AdminQuestionRecord) => {
     const dynamicArrayRules = parseDynamicArrayRulesFromJson(item.gradingRuleJson, item.answerSheet || "");
     const gradingMode = dynamicArrayRules.some((rule) => rule.anchorCell && rule.spillRange) ? "dynamic_array" : "simple";
     setFormulaDetectionNotice("");
@@ -1329,7 +1487,7 @@ export function AdminQuestions() {
       return;
     }
     const normalizedDynamicRules = isDynamicArrayMode
-      ? (form.dynamicArrayRules || []).map((item: any) => ({
+      ? (form.dynamicArrayRules || []).map((item) => ({
         ...item,
         sheet: String(item?.sheet || "").trim(),
         anchorCell: String(item?.anchorCell || "").trim().toUpperCase(),
@@ -1342,7 +1500,7 @@ export function AdminQuestions() {
         toast.error("请至少配置一条动态数组判题规则");
         return;
       }
-      if (normalizedDynamicRules.some((item: any) => !item.sheet || !item.anchorCell || !item.spillRange)) {
+      if (normalizedDynamicRules.some((item) => !item.sheet || !item.anchorCell || !item.spillRange)) {
         toast.error("动态数组规则必须填写工作表、锚点单元格和溢出区域");
         return;
       }
@@ -1395,7 +1553,7 @@ export function AdminQuestions() {
     await queryClient.invalidateQueries({ queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }) });
   };
 
-  const toggleEnabled = async (item: any, nextEnabled: boolean) => {
+  const toggleEnabled = async (item: AdminQuestionRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/questions/${item.id}`, {
         title: item.title,
@@ -1425,7 +1583,7 @@ export function AdminQuestions() {
     await queryClient.invalidateQueries({ queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }) });
   };
 
-  const remove = async (item: any) => {
+  const remove = async (item: AdminQuestionRecord) => {
     const confirmed = await openAdminConfirm({
       title: "删除题目",
       message: `确认删除题目《${item.title}》？`,
@@ -1465,7 +1623,7 @@ export function AdminQuestions() {
     ]);
   };
 
-  const openLevelConfig = (item: any) => {
+  const openLevelConfig = (item: PracticeCampaignLevelRecord) => {
     setLevelConfigEditing(item);
     setLevelConfigForm({
       levelType: item.levelType || "normal",
@@ -1655,12 +1813,12 @@ export function AdminQuestions() {
       toast.error("请先在模板编辑器中选择答题区域");
       return;
     }
-    setForm((prev: any) => ({
+    setForm((prev) => ({
       ...prev,
       answerSheet: selection.sheetName,
       answerRange: nextRange,
       dynamicArrayRules: prev.gradingMode === "dynamic_array"
-        ? (prev.dynamicArrayRules || []).map((item: any, index: number) => (index === 0
+        ? (prev.dynamicArrayRules || []).map((item, index) => (index === 0
           ? { ...item, sheet: selection.sheetName, spillRange: nextRange }
           : item))
         : prev.dynamicArrayRules,
@@ -1684,18 +1842,18 @@ export function AdminQuestions() {
             <input
               type="date"
               value={dailyChallengeForm.challengeDate}
-              onChange={(e) => setDailyChallengeForm((prev: any) => ({ ...prev, challengeDate: e.target.value }))}
+              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, challengeDate: e.target.value }))}
               className={inputClassName()}
             />
           </FilterField>
           <FilterField label="挑战关卡">
             <select
               value={dailyChallengeForm.levelId}
-              onChange={(e) => setDailyChallengeForm((prev: any) => ({ ...prev, levelId: e.target.value }))}
+              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, levelId: e.target.value }))}
               className={inputClassName()}
             >
               <option value="">请选择关卡</option>
-              {campaignLevels.map((item: any) => (
+              {campaignLevels.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.chapterName} / {item.title}
                 </option>
@@ -1706,7 +1864,7 @@ export function AdminQuestions() {
             <input
               type="number"
               value={dailyChallengeForm.rewardExp}
-              onChange={(e) => setDailyChallengeForm((prev: any) => ({ ...prev, rewardExp: e.target.value }))}
+              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardExp: e.target.value }))}
               className={inputClassName()}
             />
           </FilterField>
@@ -1714,7 +1872,7 @@ export function AdminQuestions() {
             <input
               type="number"
               value={dailyChallengeForm.rewardPoints}
-              onChange={(e) => setDailyChallengeForm((prev: any) => ({ ...prev, rewardPoints: e.target.value }))}
+              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardPoints: e.target.value }))}
               className={inputClassName()}
             />
           </FilterField>
@@ -1744,7 +1902,7 @@ export function AdminQuestions() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {campaignLevels.map((item: any) => (
+              {campaignLevels.map((item) => (
                 <TableRow key={`campaign-level-${item.id}`}>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.title}</div>
@@ -1769,7 +1927,7 @@ export function AdminQuestions() {
                       checked={Boolean(item.enabled)}
                       onCheckedChange={(next) => {
                         openLevelConfig({ ...item, enabled: next });
-                        setLevelConfigForm((prev: any) => ({ ...prev, enabled: next }));
+                        setLevelConfigForm((prev) => ({ ...prev, enabled: next }));
                       }}
                     />
                   </TableCell>
@@ -1857,27 +2015,27 @@ export function AdminQuestions() {
         bodyClassName="px-6 py-5"
         onSubmit={submit}
       >
-        <Field label="题目标题"><textarea value={form.title} onChange={(e) => setForm((prev: any) => ({ ...prev, title: e.target.value }))} className={textareaClassName()} /></Field>
+        <Field label="题目标题"><textarea value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className={textareaClassName()} /></Field>
         <div className="grid gap-4 md:grid-cols-4">
           <Field label="题目分类">
-            <select value={String(form.questionCategoryId)} onChange={(e) => setForm((prev: any) => ({ ...prev, questionCategoryId: e.target.value }))} className={inputClassName()}>
+            <select value={String(form.questionCategoryId)} onChange={(e) => setForm((prev) => ({ ...prev, questionCategoryId: e.target.value }))} className={inputClassName()}>
               <option value="">请选择</option>
               {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </Field>
           <Field label="题型"><input value={formatQuestionType("excel_template")} readOnly className={inputClassName()} /></Field>
-          <Field label="难度"><input type="number" value={form.difficulty} onChange={(e) => setForm((prev: any) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()} /></Field>
-          <Field label="奖励积分"><input type="number" value={form.points} onChange={(e) => setForm((prev: any) => ({ ...prev, points: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="难度"><input type="number" value={form.difficulty} onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="奖励积分"><input type="number" value={form.points} onChange={(e) => setForm((prev) => ({ ...prev, points: e.target.value }))} className={inputClassName()} /></Field>
         </div>
         <div className="grid gap-4 md:grid-cols-[220px,1fr]">
           <Field label="判题模式">
             <select
               value={form.gradingMode}
-              onChange={(e) => setForm((prev: any) => ({
+              onChange={(e) => setForm((prev) => ({
                 ...prev,
-                gradingMode: e.target.value,
+                gradingMode: e.target.value as QuestionGradingMode,
                 dynamicArrayRules: e.target.value === "dynamic_array"
-                  ? ((prev.dynamicArrayRules?.length && prev.dynamicArrayRules.some((item: any) => item.anchorCell || item.spillRange))
+                  ? ((prev.dynamicArrayRules?.length && prev.dynamicArrayRules.some((item) => item.anchorCell || item.spillRange))
                     ? prev.dynamicArrayRules
                     : [{
                       ...defaultDynamicArrayRule(prev.answerSheet || selectedSheetName),
@@ -1951,11 +2109,11 @@ export function AdminQuestions() {
                   onChange={(e) => {
                     const nextSheetName = e.target.value;
                     setSelectedSheetName(nextSheetName);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       answerSheet: nextSheetName,
                       dynamicArrayRules: prev.gradingMode === "dynamic_array"
-                        ? (prev.dynamicArrayRules || []).map((item: any, index: number) => (index === 0 ? { ...item, sheet: nextSheetName } : item))
+                        ? (prev.dynamicArrayRules || []).map((item, index) => (index === 0 ? { ...item, sheet: nextSheetName } : item))
                         : prev.dynamicArrayRules,
                     }));
                     const persistedForSheet = prevSelectionForSheet(nextSheetName, primaryRangeRef);
@@ -2003,9 +2161,9 @@ export function AdminQuestions() {
                   <input
                     value={primaryDynamicRule.anchorCell}
                     disabled={!isTemplateEditMode}
-                    onChange={(e) => setForm((prev: any) => ({
+                    onChange={(e) => setForm((prev) => ({
                       ...prev,
-                      dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, index: number) => (index === 0
+                      dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, index) => (index === 0
                         ? { ...item, anchorCell: e.target.value.toUpperCase() }
                         : item)),
                     }))}
@@ -2020,7 +2178,7 @@ export function AdminQuestions() {
                       type="checkbox"
                       checked={Boolean(form.checkFormula)}
                       disabled={!isTemplateEditMode}
-                      onChange={(e) => setForm((prev: any) => ({ ...prev, checkFormula: e.target.checked }))}
+                      onChange={(e) => setForm((prev) => ({ ...prev, checkFormula: e.target.checked }))}
                     />
                     检测函数公式
                   </span>
@@ -2037,7 +2195,7 @@ export function AdminQuestions() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setForm((prev: any) => ({
+                  onClick={() => setForm((prev) => ({
                     ...prev,
                     dynamicArrayRules: [...(prev.dynamicArrayRules || []), defaultDynamicArrayRule(primarySheetName)],
                   }))}
@@ -2048,14 +2206,14 @@ export function AdminQuestions() {
                 </button>
               </div>
               <div className="space-y-4">
-                {(form.dynamicArrayRules || []).map((rule: any, index: number) => (
+                {(form.dynamicArrayRules || []).map((rule, index) => (
                   <div key={`dynamic-rule-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="text-sm font-black text-slate-800">规则 {index + 1}</div>
                       <button
                         type="button"
-                        onClick={() => setForm((prev: any) => {
-                          const nextRules = (prev.dynamicArrayRules || []).filter((_: any, ruleIndex: number) => ruleIndex !== index);
+                        onClick={() => setForm((prev) => {
+                          const nextRules = (prev.dynamicArrayRules || []).filter((_, ruleIndex) => ruleIndex !== index);
                           return { ...prev, dynamicArrayRules: nextRules.length > 0 ? nextRules : [defaultDynamicArrayRule(primarySheetName)] };
                         })}
                         className={secondaryButtonClassName()}
@@ -2069,9 +2227,9 @@ export function AdminQuestions() {
                       <Field label="工作表">
                         <select
                           value={rule.sheet}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, sheet: e.target.value }
                               : item)),
                           }))}
@@ -2084,9 +2242,9 @@ export function AdminQuestions() {
                       <Field label="锚点单元格">
                         <input
                           value={rule.anchorCell}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, anchorCell: e.target.value.toUpperCase() }
                               : item)),
                           }))}
@@ -2097,9 +2255,9 @@ export function AdminQuestions() {
                       <Field label="溢出区域">
                         <input
                           value={rule.spillRange}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, spillRange: e.target.value.toUpperCase() }
                               : item)),
                           }))}
@@ -2112,9 +2270,9 @@ export function AdminQuestions() {
                           type="number"
                           min="1"
                           value={rule.score}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, score: e.target.value }
                               : item)),
                           }))}
@@ -2126,9 +2284,9 @@ export function AdminQuestions() {
                       <Field label="规则名称">
                         <input
                           value={rule.label}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, label: e.target.value }
                               : item)),
                           }))}
@@ -2139,9 +2297,9 @@ export function AdminQuestions() {
                       <Field label="公式关键字">
                         <input
                           value={rule.formulaKeywordsText}
-                          onChange={(e) => setForm((prev: any) => ({
+                          onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                               ? { ...item, formulaKeywordsText: e.target.value }
                               : item)),
                           }))}
@@ -2154,9 +2312,9 @@ export function AdminQuestions() {
                       <AdminFormSwitch
                         label="首格必须包含公式"
                         checked={Boolean(rule.requireAnchorFormula)}
-                        onCheckedChange={(next) => setForm((prev: any) => ({
+                        onCheckedChange={(next) => setForm((prev) => ({
                           ...prev,
-                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                             ? { ...item, requireAnchorFormula: next }
                             : item)),
                         }))}
@@ -2164,9 +2322,9 @@ export function AdminQuestions() {
                       <AdminFormSwitch
                         label="溢出子单元格不允许手填公式"
                         checked={Boolean(rule.requireSpillCellsWithoutFormula)}
-                        onCheckedChange={(next) => setForm((prev: any) => ({
+                        onCheckedChange={(next) => setForm((prev) => ({
                           ...prev,
-                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item: any, ruleIndex: number) => (ruleIndex === index
+                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
                             ? { ...item, requireSpillCellsWithoutFormula: next }
                             : item)),
                         }))}
@@ -3996,19 +4154,23 @@ function toNullableNumber(value: unknown) {
   return Number.isNaN(numeric) ? null : numeric;
 }
 
-function defaultUserForm() {
+function isEditableUserRole(value: unknown): value is AdminEditableUserRole {
+  return value === "admin" || value === "moderator" || value === "user";
+}
+
+function defaultUserForm(): AdminUserForm {
   return { username: "", email: "", password: "", role: "user", status: 0 };
 }
 
-function defaultNotificationForm() {
+function defaultNotificationForm(): AdminNotificationForm {
   return { title: "", content: "", type: "system", status: "draft", targetType: "all", targetRoles: "", attachments: "" };
 }
 
-function defaultQuestionCategoryForm() {
+function defaultQuestionCategoryForm(): QuestionCategoryForm {
   return { name: "", description: "", groupName: "", sortOrder: 0, enabled: true };
 }
 
-function defaultQuestionForm() {
+function defaultQuestionForm(): AdminQuestionForm {
   return {
     title: "",
     questionCategoryId: "",
@@ -4029,7 +4191,7 @@ function defaultQuestionForm() {
   };
 }
 
-function defaultDynamicArrayRule(sheet = "") {
+function defaultDynamicArrayRule(sheet = ""): QuestionDynamicArrayRuleForm {
   return {
     sheet,
     anchorCell: "",
@@ -4049,32 +4211,35 @@ function parseFormulaKeywords(value: unknown) {
     .filter(Boolean);
 }
 
-function parseDynamicArrayRulesFromJson(gradingRuleJson: unknown, fallbackSheet = "") {
+function parseDynamicArrayRulesFromJson(gradingRuleJson: unknown, fallbackSheet = ""): QuestionDynamicArrayRuleForm[] {
   if (!gradingRuleJson) {
     return [defaultDynamicArrayRule(fallbackSheet)];
   }
   try {
-    const parsed = JSON.parse(String(gradingRuleJson));
+    const parsed = JSON.parse(String(gradingRuleJson)) as { dynamicArrayRules?: unknown[] };
     const rules = Array.isArray(parsed?.dynamicArrayRules) ? parsed.dynamicArrayRules : [];
     if (rules.length === 0) {
       return [defaultDynamicArrayRule(fallbackSheet)];
     }
-    return rules.map((item: any) => ({
-      sheet: String(item?.sheet || fallbackSheet || ""),
-      anchorCell: String(item?.anchorCell || ""),
-      spillRange: String(item?.spillRange || ""),
-      score: Number(item?.score || 1),
-      label: String(item?.label || ""),
-      formulaKeywordsText: Array.isArray(item?.formulaKeywords) ? item.formulaKeywords.join(", ") : "",
-      requireAnchorFormula: item?.requireAnchorFormula !== false,
-      requireSpillCellsWithoutFormula: item?.requireSpillCellsWithoutFormula !== false,
-    }));
+    return rules.map((item) => {
+      const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      return {
+        sheet: String(record.sheet || fallbackSheet || ""),
+        anchorCell: String(record.anchorCell || ""),
+        spillRange: String(record.spillRange || ""),
+        score: Number(record.score || 1),
+        label: String(record.label || ""),
+        formulaKeywordsText: Array.isArray(record.formulaKeywords) ? record.formulaKeywords.join(", ") : "",
+        requireAnchorFormula: record.requireAnchorFormula !== false,
+        requireSpillCellsWithoutFormula: record.requireSpillCellsWithoutFormula !== false,
+      };
+    });
   } catch {
     return [defaultDynamicArrayRule(fallbackSheet)];
   }
 }
 
-function buildDynamicArrayRuleJson(rules: any[]) {
+function buildDynamicArrayRuleJson(rules: QuestionDynamicArrayRuleForm[]) {
   const normalizedRules = (rules || [])
     .map((item) => ({
       sheet: String(item?.sheet || "").trim(),

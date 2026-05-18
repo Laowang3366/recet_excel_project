@@ -1,11 +1,14 @@
+import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate, useParams, useSearchParams } from "react-router";
 import { Layout } from "./components/Layout";
 import { getCampaignQuestionListPath } from "./lib/practice-campaign-ui";
 
-function lazyPage(importer: () => Promise<any>, exportName: string) {
+type LazyRouteModule = Record<string, unknown>;
+
+function lazyPage(importer: () => Promise<LazyRouteModule>, exportName: string) {
   return async () => {
     const module = await importer();
-    return { Component: module[exportName] };
+    return { Component: module[exportName] as ComponentType };
   };
 }
 
@@ -23,7 +26,7 @@ function PracticeChaptersRedirect() {
   return <Navigate to={getCampaignQuestionListPath(searchParams.get("chapter"))} replace />;
 }
 
-function pageRoute(path: string, importer: () => Promise<any>, exportName: string) {
+function pageRoute(path: string, importer: () => Promise<LazyRouteModule>, exportName: string) {
   return { path, lazy: lazyPage(importer, exportName) };
 }
 
