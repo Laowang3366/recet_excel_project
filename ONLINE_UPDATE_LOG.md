@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 14:55 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 稳定性与代码结构优化上线；小试牛刀公开读取接口移除目录同步写入并保留后台变更触发同步，目录同步增加最小并发保护；后台用户新增/编辑改为 DTO 校验，删除用户改为安全停用并禁止停用当前管理员；通知 read/delete/batch delete 限制为当前业务通知类型；后台用户接口拆分到 `AdminUserController` 并移除 `AdminController` 中用户管理重复职责；前端清理旧论坛 `post/board` 缓存刷新残留、未使用导入，并新增 `npm run typecheck` 类型检查门禁。
+- 验证：本地后端定向测试 `mvn "-Dtest=AdminControllerTest,RequestParsingErrorTest,PracticeCampaignServiceImplReadPathTest,NotificationServiceImplMutationTest,NotificationControllerTest" test` 通过，`Tests run: 16, Failures: 0, Errors: 0, Skipped: 0`；本地 `npm run typecheck` 通过；本地 `npm run build` 通过；本地 `mvn test` 通过，`Tests run: 69, Failures: 0, Errors: 0, Skipped: 0`；本地 `git diff --check` 通过；服务器标准部署成功，部署仓为 `main` / `64c3e44` 且 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`；服务器本机 `/api/public/home-overview` 与 `/api/practice/campaign/chapters` 返回 200；公网 `https://www.excelcc.cn/`、`/api/public/home-overview`、`/practice`、`/api/practice/campaign/chapters`、`/api/tutorials/home`、`/api/templates` 均返回 200；旧接口 `/api/posts`、`/api/categories`、`POST /api/chat/send`、`/api/messages/conversations`、`/api/admin/posts` 均返回 410。
+- 部署：提交 `64c3e44` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 确认最新代码后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-065319`。
+- 备注：未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`；首次读取部署输出时本地 PowerShell GBK 无法编码 Vite 输出中的 Unicode 字符导致本地会话中断，随后改为服务器日志文件方式重新执行标准部署成功；npm 仍报告既有依赖审计项，未影响构建、部署和健康检查。
+
 ## 2026-05-18 13:36 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 旧论坛运行面彻底收敛上线；删除旧帖子、回复、分类、收藏、点赞、私信、聊天、草稿、举报相关 Controller/Service/Mapper/Entity/DTO/WebSocket 支持和旧测试；保留 `LegacyForumFeatureShutdownFilter` 对旧接口返回 `410 Gone`；通知中心只统计当前可见通知类型；后台与文档收敛为当前学习平台口径；旧论坛数据库表作为历史数据继续保留，未做 drop table。
