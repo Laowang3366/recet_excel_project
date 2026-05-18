@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-18 12:42 Asia/Shanghai
+
+- 范围：公共生产目标 `https://www.excelcc.cn/` 小试牛刀页面运行时错误热修；恢复 `Layout.tsx` 中仍在使用的 `ChevronDown` 图标 import，修复 `/practice` 进入后出现 `Unexpected Application Error: ChevronDown is not defined` 的问题。
+- 验证：本地 `npm run build` 通过；本地 `git diff --check` 通过；线上标准部署成功；公网 `https://www.excelcc.cn/practice` 返回 200；Headless Chrome 打开 `/practice` 未发现 `Unexpected Application Error` 或 `ChevronDown is not defined`；公网 `/api/public/home-overview` 返回 200；旧论坛接口 `/api/posts` 仍返回 410；服务器部署仓为 `main` / `3235738` 且 clean；`nginx`、`mysql`、`redis-server`、`kick-backend.service`、`quick-translate.service` 均为 `active`。
+- 部署：提交 `3235738` 已推送到 `origin/main`；在服务器 `/www/wwwroot/excelcc/kick-deploy/repo` 执行 `bash scripts/deploy/production-deploy.sh`，脚本从 GitHub `main` 快进拉取后构建前端、构建后端、发布受管文件并重启后端服务。
+- 服务器备份：标准部署备份 `/www/wwwroot/excelcc/kick-deploy/backups/20260518-044020`。
+- 备注：本次只修复前端图标 import，未修改后端业务逻辑或数据库；未处理 `/www/wwwroot/quick-translate`，该服务保持 `active`。
+
 ## 2026-05-18 11:32 Asia/Shanghai
 
 - 范围：公共生产目标 `https://www.excelcc.cn/` 论坛遗留功能清理与性能优化上线；前端删除旧论坛页面和旧论坛路由，顶部搜索移除帖子/用户搜索和聊天私信入口；后台管理移除旧帖子审核、举报、帖子、分类、草稿、商城等打包模块；后端新增旧论坛接口统一下线过滤器，对旧帖子、回复、分类、收藏、点赞、消息、聊天、草稿、举报及对应后台接口返回 `410 Gone`；保留旧论坛数据库表作为 legacy data，并新增归档说明文档。
