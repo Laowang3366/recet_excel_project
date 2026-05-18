@@ -5,14 +5,35 @@ import { LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSu
 import { api } from "../lib/api";
 import { profileKeys } from "../lib/query-keys";
 
-function resolvePropIcon(item: any) {
+type UserPropRecord = {
+  id: number;
+  key?: string | null;
+  type?: string | null;
+  name?: string | null;
+  status?: string | null;
+  statusLabel?: string | null;
+  current?: boolean;
+  canUnequip?: boolean;
+  canUse?: boolean;
+  actionLabel?: string | null;
+};
+
+type UserPropsResponse = {
+  records?: UserPropRecord[];
+};
+
+type PropActionResponse = {
+  message?: string;
+};
+
+function resolvePropIcon(item: UserPropRecord) {
   if (item?.key === "checkin_makeup_card") return Ticket;
   if (item?.type === "badge") return Award;
   if (item?.type === "privilege") return Wrench;
   return Package;
 }
 
-function resolvePropTypeLabel(type: string) {
+function resolvePropTypeLabel(type?: string | null) {
   const map: Record<string, string> = {
     badge: "头衔",
     prop: "道具",
@@ -27,29 +48,29 @@ export function MallProps() {
   const queryClient = useQueryClient();
   const propsQuery = useQuery({
     queryKey: profileKeys.props(),
-    queryFn: () => api.get<{ records: any[] }>("/api/users/me/props", { silent: true }),
+    queryFn: () => api.get<UserPropsResponse>("/api/users/me/props", { silent: true }),
   });
   const propsRecords = propsQuery.data?.records || [];
 
   const usePropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<any>(`/api/users/me/props/${entitlementId}/use`, {}),
+    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/use`, {}),
     onSuccess: async (result) => {
       toast.success(result?.message || "道具已使用");
       await queryClient.invalidateQueries({ queryKey: profileKeys.props() });
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "道具使用失败");
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "道具使用失败");
     },
   });
 
   const unequipPropMutation = useMutation({
-    mutationFn: (entitlementId: number) => api.post<any>(`/api/users/me/props/${entitlementId}/unequip`, {}),
+    mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/unequip`, {}),
     onSuccess: async (result) => {
       toast.success(result?.message || "已取消佩戴");
       await queryClient.invalidateQueries({ queryKey: profileKeys.props() });
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "取消佩戴失败");
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "取消佩戴失败");
     },
   });
 

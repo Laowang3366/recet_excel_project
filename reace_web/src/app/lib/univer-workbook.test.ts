@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { IWorkbookData } from "@univerjs/core";
 import { extractRangeAnswerSnapshot } from "./excel";
-import { captureUniverWorkbookSnapshot, univerDataToWorkbookSnapshot } from "./univer-workbook";
+import { captureUniverWorkbookSnapshot, univerDataToWorkbookSnapshot, type UniverWorkbookSnapshotSource } from "./univer-workbook";
 
 describe("univerDataToWorkbookSnapshot", () => {
   it("reconstructs fill-down formulas stored as shared formula ids", () => {
@@ -24,7 +25,7 @@ describe("univerDataToWorkbookSnapshot", () => {
           },
         },
       },
-    } as any, {
+    } as unknown as IWorkbookData, {
       moveFormulaRefOffset: (formula, colOffset, rowOffset) => {
         expect(colOffset).toBe(0);
         if (rowOffset === 0) return formula;
@@ -72,7 +73,7 @@ describe("univerDataToWorkbookSnapshot", () => {
             },
           },
         },
-      } as any),
+      } as unknown as IWorkbookData),
       getSheets: () => [
         {
           getSheetName: () => "Sheet1",
@@ -89,7 +90,7 @@ describe("univerDataToWorkbookSnapshot", () => {
           },
         },
       ],
-    });
+    } satisfies UniverWorkbookSnapshotSource);
 
     const sheet = snapshot.sheets[0];
     expect(extractRangeAnswerSnapshot(snapshot, "Sheet1", "B2:C3").values).toEqual([

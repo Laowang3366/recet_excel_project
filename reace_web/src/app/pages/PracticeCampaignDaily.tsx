@@ -9,12 +9,38 @@ import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
 
+type DailyChallenge = {
+  levelId?: number | null;
+  title?: string | null;
+  rewardExp?: number;
+  rewardPoints?: number;
+  completed?: boolean;
+  rewardGranted?: boolean;
+  configured?: boolean;
+};
+
+type DailyChallengeResponse = {
+  challenge?: DailyChallenge;
+};
+
+type CampaignLevelDetailResponse = {
+  level?: {
+    questionId?: number | null;
+  } | null;
+  chapter?: {
+    id?: number | string | null;
+  } | null;
+  question?: {
+    id?: number | null;
+  } | null;
+};
+
 export function PracticeCampaignDaily() {
   const navigate = useNavigate();
   const { isAuthenticated } = useSession();
   const dailyQuery = useQuery({
     queryKey: practiceKeys.campaignDaily(),
-    queryFn: () => api.get<any>("/api/practice/campaign/daily-challenge", { silent: true }),
+    queryFn: () => api.get<DailyChallengeResponse>("/api/practice/campaign/daily-challenge", { silent: true }),
   });
 
   const challenge = dailyQuery.data?.challenge;
@@ -28,7 +54,7 @@ export function PracticeCampaignDaily() {
       return;
     }
     try {
-      const levelDetail = await api.get<any>(`/api/practice/campaign/levels/${challenge.levelId}`, { silent: true });
+      const levelDetail = await api.get<CampaignLevelDetailResponse>(`/api/practice/campaign/levels/${challenge.levelId}`, { silent: true });
       const level = levelDetail?.level;
       const chapter = levelDetail?.chapter;
       const result = await startCampaignLevel(challenge.levelId, level?.questionId || levelDetail?.question?.id);
@@ -40,9 +66,9 @@ export function PracticeCampaignDaily() {
           campaignAttemptId: result.attemptId,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!handleLoginRequiredError(error, "请先登录后再开始每日挑战")) {
-        toast.error(error?.message || "开始答题失败");
+        toast.error(error instanceof Error ? error.message : "开始答题失败");
       }
     }
   };

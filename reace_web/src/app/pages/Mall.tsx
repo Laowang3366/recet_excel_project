@@ -38,6 +38,51 @@ const fallbackPointModel = [
   },
 ];
 
+type PointsTask = {
+  id?: number | string;
+  taskKey?: string | null;
+  name?: string | null;
+  description?: string | null;
+  points?: number | string | null;
+  type?: string | null;
+};
+
+type PointsOverviewResponse = {
+  user?: {
+    points?: number;
+    exp?: number;
+    level?: number;
+  };
+  expProgress?: {
+    level?: number;
+    currentInLevel?: number;
+    totalInLevel?: number;
+  };
+  tasks?: PointsTask[];
+};
+
+type PointRecord = {
+  id: number | string;
+  change?: number;
+  balance?: number;
+  ruleName?: string | null;
+  description?: string | null;
+  createTime?: string | null;
+};
+
+type PointRecordsPage = {
+  records?: PointRecord[];
+  pages?: number;
+};
+
+type PointModelItem = {
+  id: number | string;
+  name?: string | null;
+  description: string;
+  points: number | null;
+  type: string;
+};
+
 function resolveModelTypeLabel(type?: string | null) {
   if (type === "daily") return "每日";
   if (type === "once") return "一次性";
@@ -53,13 +98,13 @@ function formatChange(value?: number | null) {
 export function Mall() {
   const pointsOverviewQuery = useQuery({
     queryKey: pointsKeys.overview(),
-    queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
+    queryFn: () => api.get<PointsOverviewResponse>("/api/points/overview", { silent: true }),
   });
 
   const recordsQuery = useInfiniteQuery({
     queryKey: [...pointsKeys.records(), "mall"] as const,
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.get<any>(`/api/points/records?page=${pageParam}&size=12`, { silent: true }),
+    queryFn: ({ pageParam }) => api.get<PointRecordsPage>(`/api/points/records?page=${pageParam}&size=12`, { silent: true }),
     getNextPageParam: (lastPage, allPages) =>
       allPages.length < Number(lastPage.pages || 1) ? allPages.length + 1 : undefined,
   });
@@ -69,15 +114,15 @@ export function Mall() {
   const expProgress = overview?.expProgress || {};
   const records = recordsQuery.data?.pages.flatMap((page) => page.records || []) || [];
   const pointModel = useMemo(() => {
-    const tasks = (overview?.tasks || []).filter((item: any) => item?.name);
+    const tasks = (overview?.tasks || []).filter((item) => item?.name);
     if (!tasks.length) return fallbackPointModel;
-    return tasks.map((item: any) => ({
+    return tasks.map((item) => ({
       id: item.id || item.taskKey || item.name,
       name: item.name,
       description: item.description || "按平台积分规则入账。",
       points: Number.isFinite(Number(item.points)) ? Number(item.points) : null,
       type: resolveModelTypeLabel(item.type),
-    }));
+    })) satisfies PointModelItem[];
   }, [overview?.tasks]);
 
   const displayedEarn = records
@@ -175,7 +220,7 @@ export function Mall() {
           </div>
 
           <div className="mt-6 divide-y divide-emerald-100/80 overflow-hidden rounded-3xl border border-emerald-200/80 bg-white/70">
-            {pointModel.map((item: any) => (
+            {pointModel.map((item) => (
               <div key={item.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_auto] sm:items-center">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -220,7 +265,7 @@ export function Mall() {
             <span>时间</span>
           </div>
           <div className="divide-y divide-emerald-100/70 bg-white/82">
-            {records.map((record: any) => {
+            {records.map((record) => {
               const change = Number(record.change || 0);
               return (
                 <div key={record.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_120px_120px_180px] sm:items-center">

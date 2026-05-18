@@ -50,14 +50,66 @@ type FormDialogProps = {
   children: ReactNode;
 };
 
-const defaultCategoryForm = {
+type TutorialCategoryForm = {
+  name: string;
+  description: string;
+  sortOrder: number;
+  enabled: boolean;
+};
+
+type TutorialCategoryRecord = TutorialCategoryForm & {
+  id: number;
+  articleCount?: number;
+};
+
+type TutorialArticleForm = {
+  categoryId: string;
+  title: string;
+  summary: string;
+  oneLineUsage: string;
+  content: string;
+  audienceTrack: string;
+  difficulty: string;
+  recommendLevel: number;
+  functionTags: string;
+  starter: boolean;
+  homeFeatured: boolean;
+  relatedChapterIds: number[];
+  relatedQuestionIds: number[];
+  sortOrder: number;
+  enabled: boolean;
+};
+
+type TutorialArticleRecord = Omit<TutorialArticleForm, "categoryId"> & {
+  id: number;
+  categoryId: number | string;
+  categoryName?: string | null;
+};
+
+type TutorialArticleListResponse = {
+  records?: TutorialArticleRecord[];
+};
+
+type TutorialLinkOption = {
+  id: number;
+  name?: string | null;
+  title?: string | null;
+  description?: string | null;
+};
+
+type TutorialLinkOptionsResponse = {
+  chapters?: TutorialLinkOption[];
+  questions?: TutorialLinkOption[];
+};
+
+const defaultCategoryForm: TutorialCategoryForm = {
   name: "",
   description: "",
   sortOrder: 0,
   enabled: true,
 };
 
-const defaultArticleForm = {
+const defaultArticleForm: TutorialArticleForm = {
   categoryId: "",
   title: "",
   summary: "",
@@ -82,18 +134,18 @@ export function AdminHomeContent() {
   const isAdmin = hasAdminConsoleAccess(user?.role) && user?.role === "admin";
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [articleOpen, setArticleOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [editingArticle, setEditingArticle] = useState<any>(null);
+  const [editingCategory, setEditingCategory] = useState<TutorialCategoryRecord | null>(null);
+  const [editingArticle, setEditingArticle] = useState<TutorialArticleRecord | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [categoryForm, setCategoryForm] = useState<any>(defaultCategoryForm);
-  const [articleForm, setArticleForm] = useState<any>(defaultArticleForm);
+  const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
+  const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
 
   const categoriesQuery = useQuery({
     queryKey: adminKeys.tutorialCategories(),
     enabled: isAdmin,
     queryFn: async () => {
       try {
-        return await api.get<any[]>("/api/admin/tutorials/categories", { silent: true });
+        return await api.get<TutorialCategoryRecord[]>("/api/admin/tutorials/categories", { silent: true });
       } catch (error) {
         handleAdminError(error, navigate);
         return [];
@@ -106,7 +158,7 @@ export function AdminHomeContent() {
     queryFn: async () => {
       try {
         const suffix = categoryFilter ? `?categoryId=${categoryFilter}` : "";
-        const result = await api.get<any>(`/api/admin/tutorials/articles${suffix}`, { silent: true });
+        const result = await api.get<TutorialArticleListResponse>(`/api/admin/tutorials/articles${suffix}`, { silent: true });
         return result?.records || [];
       } catch (error) {
         handleAdminError(error, navigate);
@@ -119,7 +171,7 @@ export function AdminHomeContent() {
     enabled: isAdmin,
     queryFn: async () => {
       try {
-        return await api.get<any>("/api/admin/tutorials/link-options", { silent: true });
+        return await api.get<TutorialLinkOptionsResponse>("/api/admin/tutorials/link-options", { silent: true });
       } catch (error) {
         handleAdminError(error, navigate);
         return { chapters: [], questions: [] };
@@ -132,7 +184,7 @@ export function AdminHomeContent() {
   const chapterOptions = articleLinkOptionsQuery.data?.chapters || [];
   const questionOptions = articleLinkOptionsQuery.data?.questions || [];
   const categoryOptions = useMemo(
-    () => categories.map((item: any) => ({ value: String(item.id), label: item.name })),
+    () => categories.map((item) => ({ value: String(item.id), label: item.name })),
     [categories]
   );
 
@@ -157,7 +209,7 @@ export function AdminHomeContent() {
     setCategoryOpen(true);
   };
 
-  const openEditCategory = (item: any) => {
+  const openEditCategory = (item: TutorialCategoryRecord) => {
     setEditingCategory(item);
     setCategoryForm({
       name: item.name || "",
@@ -187,7 +239,7 @@ export function AdminHomeContent() {
     }
   };
 
-  const deleteCategory = async (item: any) => {
+  const deleteCategory = async (item: TutorialCategoryRecord) => {
     if (!window.confirm(`确认删除分类“${item.name}”及其下所有教程？`)) {
       return;
     }
@@ -209,7 +261,7 @@ export function AdminHomeContent() {
     setArticleOpen(true);
   };
 
-  const openEditArticle = (item: any) => {
+  const openEditArticle = (item: TutorialArticleRecord) => {
     setEditingArticle(item);
     setArticleForm({
       categoryId: String(item.categoryId || ""),
@@ -259,7 +311,7 @@ export function AdminHomeContent() {
     }
   };
 
-  const deleteArticle = async (item: any) => {
+  const deleteArticle = async (item: TutorialArticleRecord) => {
     if (!window.confirm(`确认删除条目“${item.title}”？`)) {
       return;
     }
@@ -287,7 +339,7 @@ export function AdminHomeContent() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {categories.map((item: any) => (
+            {categories.map((item) => (
               <TableRow key={item.id}>
                 <TableCell className="font-bold text-slate-800">{item.name}</TableCell>
                 <TableCell className="max-w-[420px] truncate">{item.description || "-"}</TableCell>
@@ -357,7 +409,7 @@ export function AdminHomeContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {articles.map((item: any) => (
+              {articles.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.title}</div>
@@ -431,19 +483,19 @@ export function AdminHomeContent() {
         onSubmit={submitCategory}
       >
         <Field label="分类名称">
-          <input value={categoryForm.name} onChange={(e) => setCategoryForm((prev: any) => ({ ...prev, name: e.target.value }))} className={inputClassName()} />
+          <input value={categoryForm.name} onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))} className={inputClassName()} />
         </Field>
         <Field label="分类说明">
-          <textarea value={categoryForm.description} onChange={(e) => setCategoryForm((prev: any) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} />
+          <textarea value={categoryForm.description} onChange={(e) => setCategoryForm((prev) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} />
         </Field>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="排序">
-            <input type="number" value={categoryForm.sortOrder} onChange={(e) => setCategoryForm((prev: any) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
+            <input type="number" value={categoryForm.sortOrder} onChange={(e) => setCategoryForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
           </Field>
           <AdminFormSwitch
             label="启用该分类"
             checked={Boolean(categoryForm.enabled)}
-            onCheckedChange={(next) => setCategoryForm((prev: any) => ({ ...prev, enabled: next }))}
+            onCheckedChange={(next) => setCategoryForm((prev) => ({ ...prev, enabled: next }))}
           />
         </div>
       </FormDialog>
@@ -458,7 +510,7 @@ export function AdminHomeContent() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="所属分类">
-            <select value={articleForm.categoryId} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, categoryId: e.target.value }))} className={inputClassName()}>
+            <select value={articleForm.categoryId} onChange={(e) => setArticleForm((prev) => ({ ...prev, categoryId: e.target.value }))} className={inputClassName()}>
               <option value="">请选择</option>
               {categoryOptions.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
@@ -466,58 +518,58 @@ export function AdminHomeContent() {
             </select>
           </Field>
           <Field label="排序">
-            <input type="number" value={articleForm.sortOrder} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
+            <input type="number" value={articleForm.sortOrder} onChange={(e) => setArticleForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
           </Field>
         </div>
         <Field label="条目标题">
-          <input value={articleForm.title} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, title: e.target.value }))} className={inputClassName()} />
+          <input value={articleForm.title} onChange={(e) => setArticleForm((prev) => ({ ...prev, title: e.target.value }))} className={inputClassName()} />
         </Field>
         <Field label="一句话用途">
-          <input value={articleForm.oneLineUsage} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, oneLineUsage: e.target.value }))} className={inputClassName()} />
+          <input value={articleForm.oneLineUsage} onChange={(e) => setArticleForm((prev) => ({ ...prev, oneLineUsage: e.target.value }))} className={inputClassName()} />
         </Field>
         <Field label="摘要">
-          <textarea value={articleForm.summary} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, summary: e.target.value }))} className={textareaClassName()} />
+          <textarea value={articleForm.summary} onChange={(e) => setArticleForm((prev) => ({ ...prev, summary: e.target.value }))} className={textareaClassName()} />
         </Field>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="学习轨道">
-            <select value={articleForm.audienceTrack} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, audienceTrack: e.target.value }))} className={inputClassName()}>
+            <select value={articleForm.audienceTrack} onChange={(e) => setArticleForm((prev) => ({ ...prev, audienceTrack: e.target.value }))} className={inputClassName()}>
               {Object.entries(audienceTrackLabel).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </Field>
           <Field label="难度等级">
-            <select value={articleForm.difficulty} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()}>
+            <select value={articleForm.difficulty} onChange={(e) => setArticleForm((prev) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()}>
               {Object.entries(difficultyLabel).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </Field>
           <Field label="推荐权重">
-            <input type="number" value={articleForm.recommendLevel} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, recommendLevel: Number(e.target.value || 0) }))} className={inputClassName()} />
+            <input type="number" value={articleForm.recommendLevel} onChange={(e) => setArticleForm((prev) => ({ ...prev, recommendLevel: Number(e.target.value || 0) }))} className={inputClassName()} />
           </Field>
         </div>
         <Field label="函数标签">
-          <input value={articleForm.functionTags} onChange={(e) => setArticleForm((prev: any) => ({ ...prev, functionTags: e.target.value }))} placeholder="例如：SUM, AVERAGE" className={inputClassName()} />
+          <input value={articleForm.functionTags} onChange={(e) => setArticleForm((prev) => ({ ...prev, functionTags: e.target.value }))} placeholder="例如：SUM, AVERAGE" className={inputClassName()} />
         </Field>
         <div className="block">
           <div className="mb-1.5 text-sm font-bold text-slate-700">正文内容</div>
           <TutorialContentEditor
             value={articleForm.content}
-            onChange={(next) => setArticleForm((prev: any) => ({ ...prev, content: next }))}
+            onChange={(next) => setArticleForm((prev) => ({ ...prev, content: next }))}
           />
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
           <Field label="关联章节">
             <div className="max-h-[220px] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="space-y-2">
-                {chapterOptions.map((item: any) => (
+                {chapterOptions.map((item) => (
                   <label key={item.id} className="flex cursor-pointer items-start gap-3 rounded-xl bg-white px-3 py-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={articleForm.relatedChapterIds.includes(item.id)}
                       onChange={(event) =>
-                        setArticleForm((prev: any) => ({
+                        setArticleForm((prev) => ({
                           ...prev,
                           relatedChapterIds: toggleId(prev.relatedChapterIds, item.id, event.target.checked),
                         }))
@@ -536,13 +588,13 @@ export function AdminHomeContent() {
           <Field label="关联题目">
             <div className="max-h-[220px] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="space-y-2">
-                {questionOptions.map((item: any) => (
+                {questionOptions.map((item) => (
                   <label key={item.id} className="flex cursor-pointer items-start gap-3 rounded-xl bg-white px-3 py-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={articleForm.relatedQuestionIds.includes(item.id)}
                       onChange={(event) =>
-                        setArticleForm((prev: any) => ({
+                        setArticleForm((prev) => ({
                           ...prev,
                           relatedQuestionIds: toggleId(prev.relatedQuestionIds, item.id, event.target.checked),
                         }))
@@ -560,18 +612,18 @@ export function AdminHomeContent() {
           <AdminFormSwitch
             label="标记为新手起步内容"
             checked={Boolean(articleForm.starter)}
-            onCheckedChange={(next) => setArticleForm((prev: any) => ({ ...prev, starter: next }))}
+            onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, starter: next }))}
           />
           <AdminFormSwitch
             label="在首页优先展示"
             checked={Boolean(articleForm.homeFeatured)}
-            onCheckedChange={(next) => setArticleForm((prev: any) => ({ ...prev, homeFeatured: next }))}
+            onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, homeFeatured: next }))}
           />
         </div>
         <AdminFormSwitch
           label="启用该条目"
           checked={Boolean(articleForm.enabled)}
-          onCheckedChange={(next) => setArticleForm((prev: any) => ({ ...prev, enabled: next }))}
+          onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, enabled: next }))}
         />
       </FormDialog>
     </AdminPageShell>

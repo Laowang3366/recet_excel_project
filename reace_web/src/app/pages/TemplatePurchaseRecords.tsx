@@ -21,11 +21,33 @@ function formatRecordTime(value?: string | null) {
   }).format(date);
 }
 
+type TemplatePurchaseRecord = {
+  id: number;
+  title?: string | null;
+  downloadUrl?: string | null;
+  templateFileUrl?: string | null;
+  previewImageUrl?: string | null;
+  industryCategory?: string | null;
+  difficultyLevel?: string | null;
+  createTime?: string | null;
+  pointsCost?: number;
+  useScenario?: string | null;
+  templateDescription?: string | null;
+  functionsUsed?: string[];
+  hasTemplateFile?: boolean;
+};
+
+type TemplatePurchaseRecordsResponse = {
+  records?: TemplatePurchaseRecord[];
+  totalDownloads?: number;
+  totalSpentPoints?: number;
+};
+
 export function TemplatePurchaseRecords() {
   const navigate = useNavigate();
   const recordsQuery = useQuery({
     queryKey: templateKeys.records(),
-    queryFn: () => api.get<any>("/api/templates/records", { silent: true }),
+    queryFn: () => api.get<TemplatePurchaseRecordsResponse>("/api/templates/records", { silent: true }),
   });
   const downloadMutation = useMutation({
     mutationFn: ({ url, fileName }: { id: number; url: string; fileName: string }) => downloadFile(url, fileName),
@@ -35,7 +57,7 @@ export function TemplatePurchaseRecords() {
   const totalDownloads = Number(recordsQuery.data?.totalDownloads || 0);
   const totalSpentPoints = Number(recordsQuery.data?.totalSpentPoints || 0);
 
-  const handleDownload = (item: any) => {
+  const handleDownload = (item: TemplatePurchaseRecord) => {
     const url = item.downloadUrl || item.templateFileUrl;
     if (!url) {
       toast.info("当前模板文件不可用");
@@ -89,7 +111,7 @@ export function TemplatePurchaseRecords() {
         </LitePanel>
       ) : (
         <section className="grid gap-5 xl:grid-cols-2">
-          {records.map((item: any) => {
+          {records.map((item) => {
             const previewUrl = normalizeResourceUrl(item.previewImageUrl);
             const pending = downloadMutation.isPending && downloadMutation.variables?.id === item.id;
             return (

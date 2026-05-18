@@ -7,12 +7,27 @@ import { api } from "../lib/api";
 import { normalizeAvatarUrl } from "../lib/mappers";
 import { practiceKeys } from "../lib/query-keys";
 
+type CampaignRankingRecord = {
+  userId: number | string;
+  username?: string | null;
+  avatar?: string | null;
+  rank?: number;
+  clearedLevels?: number;
+  perfectLevels?: number;
+  totalStars?: number;
+  totalScore?: number;
+};
+
+type CampaignRankingsResponse = {
+  records?: CampaignRankingRecord[];
+};
+
 export function PracticeCampaignRanking() {
   const navigate = useNavigate();
   const [scope, setScope] = useState("all");
   const rankingQuery = useQuery({
     queryKey: practiceKeys.campaignRankings(scope),
-    queryFn: () => api.get<any>(`/api/practice/campaign/rankings?scope=${scope}`, { silent: true }),
+    queryFn: () => api.get<CampaignRankingsResponse>(`/api/practice/campaign/rankings?scope=${scope}`, { silent: true }),
   });
 
   const records = rankingQuery.data?.records || [];
@@ -55,7 +70,7 @@ export function PracticeCampaignRanking() {
         </div>
 
         <div className="mt-6 space-y-4">
-          {records.map((item: any, index: number) => (
+          {records.map((item, index) => (
             <motion.div
               key={item.userId}
               initial={{ opacity: 0, y: 10 }}

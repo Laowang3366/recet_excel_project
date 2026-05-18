@@ -12,10 +12,26 @@ function formatEntitlementStatus(value?: string | null) {
   return value || "-";
 }
 
+type MallRedemptionRecord = {
+  id: number | string;
+  itemName?: string | null;
+  itemTypeLabel?: string | null;
+  itemType?: string | null;
+  status?: string | null;
+  statusLabel?: string | null;
+  price?: number;
+  createTime?: string | null;
+  entitlementStatus?: string | null;
+};
+
+type MallOverviewResponse = {
+  recentRedemptions?: MallRedemptionRecord[];
+};
+
 export function MallRedemptions() {
   const overviewQuery = useQuery({
     queryKey: mallKeys.overview(),
-    queryFn: () => api.get<any>("/api/mall/overview", { silent: true }),
+    queryFn: () => api.get<MallOverviewResponse>("/api/mall/overview", { silent: true }),
   });
 
   const records = overviewQuery.data?.recentRedemptions || [];
@@ -30,7 +46,7 @@ export function MallRedemptions() {
         />
         <div className="mt-6 space-y-3">
           {records.length > 0 ? (
-            records.map((record: any) => (
+            records.map((record) => (
               <div key={record.id} className="rounded-[24px] border border-slate-200 bg-slate-50/90 px-4 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

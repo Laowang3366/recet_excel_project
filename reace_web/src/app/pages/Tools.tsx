@@ -10,6 +10,7 @@ import {
   FolderUp,
   LoaderCircle,
   Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
@@ -25,7 +26,7 @@ const targetCards: Array<{
   id: TargetType;
   title: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
   accent: string;
 }> = [
   {
@@ -60,7 +61,7 @@ export function Tools() {
   const [lastResult, setLastResult] = useState<{ fileName: string; url: string } | null>(null);
   const overviewQuery = useQuery({
     queryKey: ["tools", "overview"],
-    queryFn: () => api.get<any>("/api/tools/overview", { silent: true }),
+    queryFn: () => api.get<{ conversionCostPoints?: number; user?: { points?: number } }>("/api/tools/overview", { silent: true }),
   });
   const conversionCostPoints = Number(overviewQuery.data?.conversionCostPoints || 5);
   const currentPoints = Number(overviewQuery.data?.user?.points || 0);
@@ -83,8 +84,8 @@ export function Tools() {
       void queryClient.invalidateQueries({ queryKey: ["points", "overview"] });
       void queryClient.invalidateQueries({ queryKey: ["tools", "history"] });
     },
-    onError: (error: any) => {
-      toast.error(error?.message || "文件转换失败");
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "文件转换失败");
     },
   });
 

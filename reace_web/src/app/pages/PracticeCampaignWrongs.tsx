@@ -10,12 +10,38 @@ import { startCampaignLevel } from "../lib/practice-campaign";
 import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
 
+type WrongQuestionRecord = {
+  id: number;
+  title?: string | null;
+  wrongCount?: number;
+  difficulty?: number | string | null;
+  lastWrongTime?: string | null;
+  recommendedLevelId?: number | null;
+};
+
+type CampaignWrongsResponse = {
+  records?: WrongQuestionRecord[];
+};
+
+type CampaignLevelDetailResponse = {
+  level?: {
+    id?: number;
+    questionId?: number | null;
+  } | null;
+  chapter?: {
+    id?: number | string | null;
+  } | null;
+  question?: {
+    id?: number | null;
+  } | null;
+};
+
 export function PracticeCampaignWrongs() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const wrongsQuery = useQuery({
     queryKey: practiceKeys.campaignWrongs(),
-    queryFn: () => api.get<any>("/api/practice/campaign/wrongs", { silent: true }),
+    queryFn: () => api.get<CampaignWrongsResponse>("/api/practice/campaign/wrongs", { silent: true }),
   });
   const resolveMutation = useMutation({
     mutationFn: (id: number) => api.put(`/api/practice/campaign/wrongs/${id}/resolve`, {}, { silent: true }),
@@ -25,7 +51,7 @@ export function PracticeCampaignWrongs() {
     },
     onError: (error) => {
       if (!handleLoginRequiredError(error, "请先登录后再管理错题")) {
-        toast.error((error as any)?.message || "错题状态更新失败");
+        toast.error(error instanceof Error ? error.message : "错题状态更新失败");
       }
     },
   });
@@ -37,7 +63,7 @@ export function PracticeCampaignWrongs() {
       return;
     }
     try {
-      const levelDetail = await api.get<any>(`/api/practice/campaign/levels/${levelId}`, { silent: true });
+      const levelDetail = await api.get<CampaignLevelDetailResponse>(`/api/practice/campaign/levels/${levelId}`, { silent: true });
       const level = levelDetail?.level;
       const chapter = levelDetail?.chapter;
       const result = await startCampaignLevel(levelId, level?.questionId || levelDetail?.question?.id);
@@ -49,9 +75,9 @@ export function PracticeCampaignWrongs() {
           campaignAttemptId: result.attemptId,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!handleLoginRequiredError(error, "请先登录后再开始答题")) {
-        toast.error(error?.message || "开始答题失败");
+        toast.error(error instanceof Error ? error.message : "开始答题失败");
       }
     }
   };
@@ -75,7 +101,7 @@ export function PracticeCampaignWrongs() {
         </div>
 
         <div className="mt-6 space-y-4">
-          {records.map((item: any, index: number) => (
+          {records.map((item, index) => (
             <motion.div
               key={item.id}
               initial={{ opacity: 0, y: 12 }}

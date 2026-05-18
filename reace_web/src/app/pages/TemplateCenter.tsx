@@ -21,6 +21,38 @@ function formatTemplateTime(value?: string | null) {
   }).format(date);
 }
 
+type TemplateCategory = {
+  key: string;
+  label: string;
+  count?: number;
+};
+
+type TemplateRecord = {
+  id: number;
+  title?: string | null;
+  industryCategory?: string | null;
+  useScenario?: string | null;
+  previewImageUrl?: string | null;
+  templateDescription?: string | null;
+  functionsUsed?: string[];
+  difficultyLevel?: string | null;
+  downloadCostPoints?: number;
+  hasTemplateFile?: boolean;
+  downloaded?: boolean;
+  updateTime?: string | null;
+};
+
+type TemplatesResponse = {
+  categories?: TemplateCategory[];
+  records?: TemplateRecord[];
+};
+
+type PointsOverviewResponse = {
+  user?: {
+    points?: number;
+  };
+};
+
 export function TemplateCenter() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -31,7 +63,7 @@ export function TemplateCenter() {
   const templatesQuery = useQuery({
     queryKey: templateKeys.list(selectedCategory),
     queryFn: () =>
-      api.get<any>(`/api/templates${selectedCategory ? `?industryCategory=${encodeURIComponent(selectedCategory)}` : ""}`, {
+      api.get<TemplatesResponse>(`/api/templates${selectedCategory ? `?industryCategory=${encodeURIComponent(selectedCategory)}` : ""}`, {
         silent: true,
       }),
   });
@@ -39,14 +71,14 @@ export function TemplateCenter() {
   const pointsOverviewQuery = useQuery({
     queryKey: pointsKeys.overview(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
+    queryFn: () => api.get<PointsOverviewResponse>("/api/points/overview", { silent: true }),
   });
 
   const currentPoints = Number(pointsOverviewQuery.data?.user?.points || 0);
   const categories = templatesQuery.data?.categories || [];
   const records = templatesQuery.data?.records || [];
   const selectedCategoryLabel = selectedCategory || "全部行业";
-  const downloadedCount = records.filter((item: any) => item.downloaded).length;
+  const downloadedCount = records.filter((item) => item.downloaded).length;
 
   const downloadMutation = useMutation({
     mutationFn: async (templateId: number) => {
@@ -67,8 +99,8 @@ export function TemplateCenter() {
 
   const summary = useMemo(() => {
     const total = records.length;
-    const free = records.filter((item: any) => Number(item.downloadCostPoints || 0) <= 0).length;
-    const withFile = records.filter((item: any) => item.hasTemplateFile).length;
+    const free = records.filter((item) => Number(item.downloadCostPoints || 0) <= 0).length;
+    const withFile = records.filter((item) => item.hasTemplateFile).length;
     return { total, free, withFile };
   }, [records]);
 
@@ -81,7 +113,7 @@ export function TemplateCenter() {
     setSearchParams({ category });
   };
 
-  const handleDownload = (item: any) => {
+  const handleDownload = (item: TemplateRecord) => {
     if (!item?.hasTemplateFile) {
       toast.info("当前模板还未上传下载文件");
       return;
@@ -136,7 +168,7 @@ export function TemplateCenter() {
           >
             全部行业
           </button>
-          {categories.map((category: any) => {
+          {categories.map((category) => {
             const active = category.key === selectedCategory;
             return (
               <button
@@ -169,7 +201,7 @@ export function TemplateCenter() {
         </LitePanel>
       ) : (
         <section className="grid gap-5 xl:grid-cols-2">
-          {records.map((item: any) => {
+          {records.map((item) => {
             const previewUrl = normalizeResourceUrl(item.previewImageUrl);
             const costLabel = formatTemplateCost(item.downloadCostPoints);
             const canDownload = item.hasTemplateFile;

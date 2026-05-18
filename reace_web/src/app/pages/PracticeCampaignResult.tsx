@@ -7,27 +7,68 @@ import { handleLoginRequiredError } from "../lib/auth-required";
 import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
 import { formatDuration } from "../lib/format";
 import { startCampaignLevel } from "../lib/practice-campaign";
-import { getCampaignResultAnswerReviews } from "../lib/practice-campaign-result-ui";
+import { getCampaignResultAnswerReviews, type CampaignRecordDetail, type CampaignRuleResult } from "../lib/practice-campaign-result-ui";
 import { practiceKeys } from "../lib/query-keys";
+
+type CampaignLevelState = {
+  id?: number | null;
+  title?: string | null;
+  questionId?: number | null;
+};
+
+type CampaignChapterState = {
+  id?: number | null;
+  name?: string | null;
+};
+
+type DailyChallengeState = {
+  rewardGranted?: boolean;
+  rewardPoints?: number;
+  rewardExp?: number;
+};
+
+type CampaignResultLocationState = {
+  campaignLevel?: CampaignLevelState;
+  campaignChapter?: CampaignChapterState;
+  nextLevelId?: number | null;
+  passed?: boolean;
+  stars?: number;
+  firstPassBonusAwarded?: number;
+  totalRewardPoints?: number;
+  totalExpGained?: number;
+  dailyChallenge?: DailyChallengeState;
+};
+
+type CampaignLevelDetailResponse = {
+  level?: CampaignLevelState | null;
+  chapter?: CampaignChapterState | null;
+  question?: { id?: number | null } | null;
+};
+
+type CorrectAnswerSnapshot = {
+  rangeValues?: Record<string, unknown[][]>;
+  rangeFormulas?: Record<string, string[][]>;
+};
 
 export function PracticeCampaignResult() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const campaignLevel = (location.state as any)?.campaignLevel;
-  const campaignChapter = (location.state as any)?.campaignChapter;
-  const nextLevelId = (location.state as any)?.nextLevelId;
-  const passedFromState = Boolean((location.state as any)?.passed);
-  const starsFromState = Number((location.state as any)?.stars || 0);
-  const firstPassBonusAwarded = Number((location.state as any)?.firstPassBonusAwarded || 0);
-  const totalRewardPoints = Number((location.state as any)?.totalRewardPoints || 0);
-  const totalExpGained = Number((location.state as any)?.totalExpGained || 0);
-  const dailyChallenge = (location.state as any)?.dailyChallenge || {};
+  const routeState = (location.state || {}) as CampaignResultLocationState;
+  const campaignLevel = routeState.campaignLevel;
+  const campaignChapter = routeState.campaignChapter;
+  const nextLevelId = routeState.nextLevelId;
+  const passedFromState = Boolean(routeState.passed);
+  const starsFromState = Number(routeState.stars || 0);
+  const firstPassBonusAwarded = Number(routeState.firstPassBonusAwarded || 0);
+  const totalRewardPoints = Number(routeState.totalRewardPoints || 0);
+  const totalExpGained = Number(routeState.totalExpGained || 0);
+  const dailyChallenge = routeState.dailyChallenge || {};
 
   const recordQuery = useQuery({
     queryKey: practiceKeys.recordDetail(id || "unknown"),
     enabled: Boolean(id),
-    queryFn: () => api.get<any>(`/api/practice/history/${id}`, { silent: true }),
+    queryFn: () => api.get<CampaignRecordDetail>(`/api/practice/history/${id}`, { silent: true }),
   });
 
   const record = recordQuery.data;
@@ -41,7 +82,7 @@ export function PracticeCampaignResult() {
       return;
     }
     try {
-      const levelDetail = await api.get<any>(`/api/practice/campaign/levels/${levelId}`, { silent: true });
+      const levelDetail = await api.get<CampaignLevelDetailResponse>(`/api/practice/campaign/levels/${levelId}`, { silent: true });
       const level = levelDetail?.level;
       const chapter = levelDetail?.chapter;
       const result = await startCampaignLevel(levelId, level?.questionId || levelDetail?.question?.id);
@@ -53,9 +94,9 @@ export function PracticeCampaignResult() {
           campaignAttemptId: result.attemptId,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!handleLoginRequiredError(error, "请先登录后再开始答题")) {
-        toast.error(error?.message || "开始答题失败");
+        toast.error(error instanceof Error ? error.message : "开始答题失败");
       }
     }
   };
@@ -185,7 +226,7 @@ export function PracticeCampaignResult() {
                           判题明细
                         </div>
                         <div className="space-y-2">
-                          {answer.gradingDetail.ruleResults.map((rule: any, ruleIndex: number) => (
+                          {answer.gradingDetail?.ruleResults?.map((rule: CampaignRuleResult, ruleIndex: number) => (
                             <div key={`${answer.id}-rule-${ruleIndex}`} className={`rounded-lg border px-3 py-2 text-sm ${rule.passed ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
                               <div className="font-bold">{rule.label || rule.target || `规则 ${ruleIndex + 1}`}</div>
                               <div className="mt-1 text-xs opacity-80">{rule.message || (rule.passed ? "校验通过" : "未通过")}</div>
@@ -312,9 +353,10 @@ function hasAnyFormula(formulas: string[][] | undefined) {
   );
 }
 
-function renderCorrectAnswerSummary(correctAnswer: any) {
-  const rangeValues = Object.entries(correctAnswer?.rangeValues || {});
-  const rangeFormulas = correctAnswer?.rangeFormulas || {};
+function renderCorrectAnswerSummary(correctAnswer: unknown) {
+  const snapshot = (correctAnswer || {}) as CorrectAnswerSnapshot;
+  const rangeValues = Object.entries(snapshot.rangeValues || {});
+  const rangeFormulas = snapshot.rangeFormulas || {};
 
   if (!rangeValues.length) {
     return <div className="text-sm text-emerald-700">按后台答案区域规则校验</div>;

@@ -27,6 +27,57 @@ type ExcelExpectedSnapshot = {
   rangeFormulas?: Record<string, string[][]>;
 };
 
+type PracticeGradingRuleResult = {
+  passed?: boolean;
+  label?: string | null;
+  target?: string | null;
+  expected?: unknown;
+  actual?: unknown;
+};
+
+type PracticeRecordAnswer = {
+  id?: number | string | null;
+  questionId?: number | string | null;
+  questionType?: string | null;
+  questionTitle?: string | null;
+  questionExplanation?: string | null;
+  isCorrect?: boolean;
+  options?: Array<string | number | boolean | null>;
+  userAnswer?: unknown;
+  correctAnswer?: ExcelExpectedSnapshot | unknown;
+  gradingDetail?: {
+    ruleResults?: PracticeGradingRuleResult[];
+  } | null;
+  rewardGranted?: boolean;
+  rewardPoints?: number;
+};
+
+type PracticeRecordResponse = {
+  score?: number;
+  accuracy?: number;
+  questionTitle?: string | null;
+  questionCategoryName?: string | null;
+  categoryName?: string | null;
+  correctCount?: number;
+  questionCount?: number;
+  durationSeconds?: number;
+  submitTime?: string | null;
+  rewardPoints?: number;
+  answers?: PracticeRecordAnswer[];
+};
+
+type PracticeSidebarQuestion = {
+  id: number | string;
+  title?: string | null;
+  difficulty?: number | string | null;
+  score?: number;
+  completed?: boolean;
+};
+
+type PracticeQuestionListResponse = {
+  questions?: PracticeSidebarQuestion[];
+};
+
 function formatAnswerValue(value: unknown) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
@@ -73,7 +124,7 @@ function renderMatrix(matrix: unknown[][] | undefined, tone: "emerald" | "slate"
   );
 }
 
-function ExcelExpectedAnswerCard({ answer }: { answer: any }) {
+function ExcelExpectedAnswerCard({ answer }: { answer: PracticeRecordAnswer }) {
   const correctAnswer = (answer?.correctAnswer || {}) as ExcelExpectedSnapshot;
   const rangeValues = Object.entries(correctAnswer.rangeValues || {});
   const rangeFormulas = correctAnswer.rangeFormulas || {};
@@ -130,16 +181,16 @@ export function PracticeRecordDetail() {
   const recordQuery = useQuery({
     queryKey: practiceKeys.recordDetail(id || "unknown"),
     enabled: Boolean(id),
-    queryFn: () => api.get(`/api/practice/history/${id}`, { silent: true }),
+    queryFn: () => api.get<PracticeRecordResponse>(`/api/practice/history/${id}`, { silent: true }),
     retry: false,
   });
-  const record = recordQuery.data as any;
+  const record = recordQuery.data;
 
   const sidebarQuery = useQuery({
     queryKey: ["practice", "record-detail-sidebar", "all"],
     enabled: Boolean(record),
     queryFn: () =>
-      api.get<any>(
+      api.get<PracticeQuestionListResponse>(
         "/api/practice/question-list",
         { silent: true },
       ),
@@ -147,7 +198,7 @@ export function PracticeRecordDetail() {
 
   useEffect(() => {
     if (recordQuery.data) {
-      const result = recordQuery.data as any;
+      const result = recordQuery.data;
       setExpandedId(result.answers?.[0]?.id ? String(result.answers[0].id) : null);
     }
   }, [recordQuery.data]);
@@ -164,7 +215,7 @@ export function PracticeRecordDetail() {
 
   const passed = (record.accuracy || 0) >= 60;
   const sidebarQuestions = sidebarQuery.data?.questions || [];
-  const currentQuestionIds = new Set((record.answers || []).map((item: any) => Number(item.questionId)).filter(Boolean));
+  const currentQuestionIds = new Set((record.answers || []).map((item) => Number(item.questionId)).filter(Boolean));
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
@@ -210,7 +261,7 @@ export function PracticeRecordDetail() {
 
             <div className="max-h-[calc(100vh-10rem)] space-y-3 overflow-y-auto pr-1">
               {sidebarQuestions.length > 0 ? (
-                sidebarQuestions.map((question: any) => {
+                sidebarQuestions.map((question) => {
                   const isCurrent = currentQuestionIds.has(Number(question.id));
                   return (
                     <button
@@ -296,7 +347,7 @@ export function PracticeRecordDetail() {
               答题明细
             </h3>
 
-            {(record.answers || []).map((answer: any, idx: number) => {
+            {(record.answers || []).map((answer, idx) => {
               const questionId = String(answer.id || answer.questionId);
               return (
                 <div key={questionId} className={`bg-white rounded-2xl border ${answer.isCorrect ? "border-emerald-100 shadow-sm shadow-emerald-50/50" : "border-rose-100 shadow-sm shadow-rose-50/50"} overflow-hidden transition-all`}>
@@ -331,7 +382,7 @@ export function PracticeRecordDetail() {
                           <div className="text-[15px] text-slate-700 leading-relaxed font-medium bg-gray-50/50 p-4 rounded-xl">{answer.questionTitle}</div>
                           {answer.options?.length > 0 && (
                             <div className="space-y-3">
-                              {answer.options.map((option: any, optionIndex: number) => (
+                              {answer.options.map((option, optionIndex) => (
                                 <div key={optionIndex} className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 bg-white transition-colors">
                                   <div className="flex items-center gap-3">
                                     <span className="w-6 h-6 rounded bg-white border border-gray-200 flex items-center justify-center text-[12px] font-bold text-slate-500 shadow-sm">{"ABCDEFGHIJKLMNOPQRSTUVWXYZ"[optionIndex]}</span>
@@ -359,7 +410,7 @@ export function PracticeRecordDetail() {
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                               <div className="mb-3 text-[12px] font-black uppercase tracking-[0.18em] text-slate-500">判题结果</div>
                               <div className="space-y-2">
-                                {answer.gradingDetail.ruleResults.map((rule: any, ruleIndex: number) => (
+                                {answer.gradingDetail.ruleResults.map((rule, ruleIndex) => (
                                   <div key={`${questionId}-rule-${ruleIndex}`} className={`rounded-xl border px-3 py-2 text-sm ${rule.passed ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-rose-100 bg-rose-50 text-rose-700"}`}>
                                     <div className="font-bold">{rule.label || rule.target || `规则 ${ruleIndex + 1}`}</div>
                                     <div className="mt-1 text-xs opacity-80">{rule.passed ? "校验通过" : "未通过"}</div>

@@ -36,6 +36,33 @@ function formatRoleList(value?: string | null) {
     .join("、");
 }
 
+type NotificationAttachment = string | {
+  url?: string | null;
+  name?: string | null;
+  size?: string | number | null;
+};
+
+type NotificationDetailResponse = {
+  id: number;
+  type?: string | null;
+  title?: string | null;
+  content?: string;
+  attachments?: string | null;
+  targetLink?: string | null;
+  isAnnouncement?: boolean;
+  isRead?: boolean;
+  readCount?: number;
+  totalCount?: number;
+  sendTime?: string | null;
+  createTime?: string | null;
+  targetType?: string | null;
+  targetRoles?: string | null;
+  sender?: {
+    avatar?: string | null;
+    username?: string | null;
+  } | null;
+};
+
 export function NotificationDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -46,11 +73,11 @@ export function NotificationDetail() {
     enabled: Boolean(id),
     queryFn: async () => {
       try {
-        return await api.get(`/api/notifications/${id}`, { silent: true });
+        return await api.get<NotificationDetailResponse>(`/api/notifications/${id}`, { silent: true });
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) {
           try {
-            return await api.get(`/api/notifications/announcements/${id}`, { silent: true });
+            return await api.get<NotificationDetailResponse>(`/api/notifications/announcements/${id}`, { silent: true });
           } catch (inner) {
             if (inner instanceof ApiError && inner.status === 404) return null;
             throw inner;
@@ -123,11 +150,11 @@ export function NotificationDetail() {
     return <div className="p-10 text-center text-slate-400">加载中...</div>;
   }
 
-  const attachments = parseJsonText<any[]>(notification?.attachments, []);
+  const attachments = parseJsonText<NotificationAttachment[]>(notification?.attachments, []);
   const targetLink = notification?.targetLink || null;
   const isAnnouncement = Boolean(notification?.isAnnouncement);
 
-  const handleDownload = (file: any) => {
+  const handleDownload = (file: NotificationAttachment) => {
     const url = typeof file === "string" ? file : file?.url;
     if (!url) return;
     window.open(normalizeImageUrl(url), "_blank", "noopener,noreferrer");
@@ -242,7 +269,7 @@ export function NotificationDetail() {
                   附件下载 ({attachments.length})
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {attachments.map((file: any, index: number) => (
+                  {attachments.map((file, index) => (
                     <div key={index} onClick={() => handleDownload(file)} className="flex items-center p-3 bg-white rounded-xl border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all group cursor-pointer">
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-3 shrink-0 bg-emerald-100 text-emerald-600">
                         <FileText size={20} />
@@ -311,7 +338,7 @@ export function NotificationDetail() {
                 附件列表
               </h3>
               <div className="space-y-2">
-                {attachments.map((file: any, index: number) => (
+                {attachments.map((file, index) => (
                   <div key={index} onClick={() => handleDownload(file)} className="flex items-center gap-2 p-2 rounded-lg hover:bg-teal-50 cursor-pointer transition-colors group">
                     <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 text-xs font-bold">
                       {index + 1}

@@ -27,6 +27,7 @@ const ExcelWorkbookEditor = lazy(() =>
 );
 
 type PracticeCategorySummary = {
+  id?: number | string;
   name?: string | null;
 };
 
@@ -44,6 +45,47 @@ type PracticeQuestionSummary = {
   count?: number | string | null;
   completed?: boolean | null;
   score?: number | string | null;
+};
+
+type PracticeCategoriesResponse = {
+  categories?: PracticeCategorySummary[];
+};
+
+type PracticeQuestionListResponse = {
+  questions?: PracticeQuestionSummary[];
+};
+
+type PracticeLeaderboardRecord = {
+  userId?: number | string;
+  username?: string | null;
+  avatar?: string | null;
+  totalScore?: number;
+  completedQuestionCount?: number;
+};
+
+type PracticeLeaderboardResponse = {
+  records?: PracticeLeaderboardRecord[];
+};
+
+type PracticeSubmissionRecord = {
+  id: number | string;
+  title?: string | null;
+  status?: string | null;
+  questionCategoryName?: string | null;
+  difficulty?: number | string | null;
+  points?: number | string | null;
+  answerSheet?: string | null;
+  answerRange?: string | null;
+  createTime?: string | null;
+  reviewedTime?: string | null;
+  reviewNote?: string | null;
+  templateFileUrl?: string | null;
+};
+
+type PracticeSubmissionsResponse = {
+  records?: PracticeSubmissionRecord[];
+  total?: number;
+  pages?: number;
 };
 
 function defaultSubmissionForm() {
@@ -82,24 +124,24 @@ export function Practice() {
 
   const categoriesQuery = useQuery({
     queryKey: practiceKeys.categories(),
-    queryFn: () => api.get<any>("/api/practice/categories", { auth: false, silent: true }),
+    queryFn: () => api.get<PracticeCategoriesResponse>("/api/practice/categories", { auth: false, silent: true }),
   });
   const questionListQuery = useQuery({
     queryKey: practiceKeys.questionList(),
-    queryFn: () => api.get<any>("/api/practice/question-list", { silent: true }),
+    queryFn: () => api.get<PracticeQuestionListResponse>("/api/practice/question-list", { silent: true }),
   });
   const leaderboardQuery = useQuery({
     queryKey: practiceKeys.leaderboard(),
-    queryFn: () => api.get<any>("/api/practice/leaderboard", { auth: false, silent: true }),
+    queryFn: () => api.get<PracticeLeaderboardResponse>("/api/practice/leaderboard", { auth: false, silent: true }),
   });
   const submissionProgressQuery = useQuery({
     queryKey: practiceKeys.submissions({ page: submissionProgressPage, size: 8 }),
     enabled: Boolean(isAuthenticated && submissionProgressOpen),
-    queryFn: () => api.get<any>(`/api/practice/submissions/mine?page=${submissionProgressPage}&size=8`, { silent: true }),
+    queryFn: () => api.get<PracticeSubmissionsResponse>(`/api/practice/submissions/mine?page=${submissionProgressPage}&size=8`, { silent: true }),
   });
 
-  const categories = (categoriesQuery.data?.categories || []) as PracticeCategorySummary[];
-  const questionGroups = (questionListQuery.data?.questions || []) as PracticeQuestionSummary[];
+  const categories = categoriesQuery.data?.categories || [];
+  const questionGroups = questionListQuery.data?.questions || [];
   const leaderboard = leaderboardQuery.data?.records || [];
 
   const tabs = useMemo(() => {
@@ -132,7 +174,7 @@ export function Practice() {
   ) => {
     setTemplateLoading(true);
     try {
-      const snapshot = await api.get<any>(`/api/practice/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`, { silent: true });
+      const snapshot = await api.get<ExcelWorkbookSnapshot>(`/api/practice/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`, { silent: true });
       const sheetName = answerSheet || snapshot?.sheets?.[0]?.name || "";
       const workbookWithAnswer = buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson);
       setTemplateWorkbook(snapshot || { sheets: [] });
@@ -179,7 +221,7 @@ export function Practice() {
     },
     onError: (error) => {
       if (!handleLoginRequiredError(error, "请先登录后再投稿试题")) {
-        toast.error((error as any)?.message || "试题投稿提交失败");
+        toast.error(error instanceof Error ? error.message : "试题投稿提交失败");
       }
     },
   });
@@ -228,7 +270,7 @@ export function Practice() {
       toast.success("模板上传完成");
     } catch (error) {
       if (!handleLoginRequiredError(error, "请先登录后再上传模板")) {
-        toast.error((error as any)?.message || "模板上传失败");
+        toast.error(error instanceof Error ? error.message : "模板上传失败");
       }
     } finally {
       setIsUploadingTemplate(false);
@@ -517,7 +559,7 @@ export function Practice() {
                     className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                   >
                     <option value="">请选择分类</option>
-                    {categories.map((item: any) => (
+                    {categories.map((item) => (
                       <option key={item.id || item.name} value={item.id || ""}>{item.name}</option>
                     ))}
                   </select>
@@ -780,7 +822,7 @@ export function Practice() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {submissionProgressRecords.map((item: any) => {
+                  {submissionProgressRecords.map((item) => {
                     const statusText = item.status === "approved" ? "已完成" : item.status === "rejected" ? "已驳回" : "待审核";
                     const statusClassName = item.status === "approved"
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"

@@ -46,8 +46,22 @@ type AiAssistantConfigRecord = {
 };
 
 type AiAssistantStatsResponse = {
-  overview?: Record<string, any>;
-  records?: Array<Record<string, any>>;
+  overview?: {
+    totalCalls?: number;
+    successCalls?: number;
+    failedCalls?: number;
+    activeUsers?: number;
+  };
+  records?: Array<{
+    userId?: number | string;
+    username?: string | null;
+    email?: string | null;
+    totalCalls?: number;
+    successCalls?: number;
+    failedCalls?: number;
+    fallbackCalls?: number;
+    lastCallTime?: string | null;
+  }>;
   total?: number;
   current?: number;
   size?: number;

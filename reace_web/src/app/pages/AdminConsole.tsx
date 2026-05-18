@@ -257,6 +257,141 @@ type AdminQuestionsResponse = {
   total: number;
 };
 
+type PointsRuleForm = {
+  name: string;
+  description: string;
+  taskKey: string;
+  points: string | number;
+  type: string;
+  enabled: boolean;
+  userVisible: boolean;
+  sortOrder: string | number;
+};
+
+type PointsRuleRecord = PointsRuleForm & {
+  id: number;
+};
+
+type PointsOptionKind = "type" | "task_key";
+
+type PointsOptionForm = {
+  kind: PointsOptionKind;
+  value: string;
+  label: string;
+  sortOrder: string | number;
+};
+
+type PointsOptionRecord = PointsOptionForm & {
+  id: number;
+  optionValue?: string | null;
+  usageCount?: number;
+};
+
+type AdminOptionChoiceInput = {
+  value?: string | null;
+  optionValue?: string | null;
+  label?: string | null;
+};
+
+type PointsStatsResponse = {
+  activeUsers?: number;
+  totalPoints?: number;
+  todayPoints?: number;
+};
+
+type PointsOptionsResponse = {
+  types: PointsOptionRecord[];
+  taskKeys: PointsOptionRecord[];
+};
+
+type PointsRecord = {
+  id?: number;
+  userId?: number;
+  username?: string | null;
+  user?: { username?: string | null } | null;
+  change?: number;
+  points?: number;
+  reason?: string | null;
+  bizLabel?: string | null;
+  taskName?: string | null;
+  createTime?: string | null;
+};
+
+type PointsGrantResponse = {
+  username?: string | null;
+  points?: number;
+};
+
+type LevelRuleForm = {
+  level: string;
+  name: string;
+  threshold: string;
+  enabled: boolean;
+};
+
+type LevelRuleRecord = {
+  level: number;
+  name?: string | null;
+  threshold?: number;
+  enabled?: boolean;
+};
+
+type ExpRuleForm = {
+  key: string;
+  name: string;
+  description: string;
+  minExp: string;
+  maxExp: string;
+  maxObtainCount: string;
+  enabled: boolean;
+};
+
+type ExpRuleRecord = {
+  key: string;
+  label?: string | null;
+  description?: string | null;
+  minExp?: number;
+  maxExp?: number;
+  maxObtainCount?: number | null;
+  enabled?: boolean;
+  rangeText?: string | null;
+};
+
+type LevelsOverviewResponse = {
+  stats?: {
+    userCount?: number;
+    totalExp?: number;
+    todayExp?: number;
+    highestLevelName?: string | null;
+    highestLevel?: number;
+    highestLevelUsers?: number;
+  };
+  levelRules?: LevelRuleRecord[];
+  expRules?: ExpRuleRecord[];
+};
+
+type LevelUserRecord = {
+  id: number;
+  username?: string | null;
+  levelName?: string | null;
+  level?: number;
+  exp?: number;
+  progress?: {
+    current?: number;
+    nextThreshold?: number;
+  };
+};
+
+type ExpLogRecord = {
+  id: number;
+  user?: { username?: string | null } | null;
+  bizLabel?: string | null;
+  bizType?: string | null;
+  expChange?: number;
+  reason?: string | null;
+  createTime?: string | null;
+};
+
 type FormDialogProps = {
   open: boolean;
   onOpenChange: (next: boolean) => void;
@@ -1544,8 +1679,8 @@ export function AdminQuestions() {
       version: Number(form.version || 1),
     };
     const request = editing
-      ? api.put(`/api/admin/questions/${editing.id}`, payload)
-      : api.post("/api/admin/questions", payload);
+      ? api.put<AdminQuestionRecord>(`/api/admin/questions/${editing.id}`, payload)
+      : api.post<AdminQuestionRecord>("/api/admin/questions", payload);
     const result = await adminRequest(request, navigate, role, editing ? "更新题目" : "创建题目");
     if (!result) return;
     setOpen(false);
@@ -2460,7 +2595,7 @@ export function AdminQuestions() {
                   onSelectedSheetNameChange={(sheetName) => {
                     setSelectedSheetName(sheetName);
                     if (isTemplateEditMode) {
-                      setForm((prev: any) => ({ ...prev, answerSheet: sheetName }));
+                      setForm((prev) => ({ ...prev, answerSheet: sheetName }));
                     }
                   }}
                   selection={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
@@ -2487,11 +2622,11 @@ export function AdminQuestions() {
             </div>
           )}
         </div>
-        <Field label="解析说明"><textarea value={form.explanation} onChange={(e) => setForm((prev: any) => ({ ...prev, explanation: e.target.value }))} className={textareaClassName()} /></Field>
+        <Field label="解析说明"><textarea value={form.explanation} onChange={(e) => setForm((prev) => ({ ...prev, explanation: e.target.value }))} className={textareaClassName()} /></Field>
         <AdminFormSwitch
           label="启用该题目"
           checked={Boolean(form.enabled)}
-          onCheckedChange={(next) => setForm((prev: any) => ({ ...prev, enabled: next }))}
+          onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
         />
       </FormDialog>
 
@@ -2505,7 +2640,7 @@ export function AdminQuestions() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="关卡类型">
-            <select value={levelConfigForm.levelType} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, levelType: e.target.value }))} className={inputClassName()}>
+            <select value={levelConfigForm.levelType} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, levelType: e.target.value }))} className={inputClassName()}>
               <option value="normal">普通关</option>
               <option value="elite">精英关</option>
               <option value="exam">测验关</option>
@@ -2514,7 +2649,7 @@ export function AdminQuestions() {
             </select>
           </Field>
           <Field label="难度">
-            <select value={levelConfigForm.difficulty} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()}>
+            <select value={levelConfigForm.difficulty} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()}>
               <option value="easy">简单</option>
               <option value="medium">普通</option>
               <option value="hard">困难</option>
@@ -2522,22 +2657,22 @@ export function AdminQuestions() {
             </select>
           </Field>
           <Field label="目标时间（秒）">
-            <input type="number" value={levelConfigForm.targetTimeSeconds} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, targetTimeSeconds: e.target.value }))} className={inputClassName()} />
+            <input type="number" value={levelConfigForm.targetTimeSeconds} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, targetTimeSeconds: e.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="奖励经验">
-            <input type="number" value={levelConfigForm.rewardExp} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, rewardExp: e.target.value }))} className={inputClassName()} />
+            <input type="number" value={levelConfigForm.rewardExp} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, rewardExp: e.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="奖励积分">
-            <input type="number" value={levelConfigForm.rewardPoints} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, rewardPoints: e.target.value }))} className={inputClassName()} />
+            <input type="number" value={levelConfigForm.rewardPoints} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, rewardPoints: e.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="首通额外奖励">
-            <input type="number" value={levelConfigForm.firstPassBonus} onChange={(e) => setLevelConfigForm((prev: any) => ({ ...prev, firstPassBonus: e.target.value }))} className={inputClassName()} />
+            <input type="number" value={levelConfigForm.firstPassBonus} onChange={(e) => setLevelConfigForm((prev) => ({ ...prev, firstPassBonus: e.target.value }))} className={inputClassName()} />
           </Field>
         </div>
         <AdminFormSwitch
           label="启用该关卡"
           checked={Boolean(levelConfigForm.enabled)}
-          onCheckedChange={(next) => setLevelConfigForm((prev: any) => ({ ...prev, enabled: next }))}
+          onCheckedChange={(next) => setLevelConfigForm((prev) => ({ ...prev, enabled: next }))}
         />
       </FormDialog>
     </AdminPageShell>
@@ -2554,12 +2689,12 @@ export function AdminPoints() {
   const [grantForm, setGrantForm] = useState({ username: "", points: "", reason: "" });
   const [showGrantUserSuggestions, setShowGrantUserSuggestions] = useState(false);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultPointsRuleForm());
+  const [editing, setEditing] = useState<PointsRuleRecord | null>(null);
+  const [form, setForm] = useState<PointsRuleForm>(defaultPointsRuleForm());
   const [optionOpen, setOptionOpen] = useState(false);
-  const [optionEditing, setOptionEditing] = useState<any>(null);
-  const [optionKind, setOptionKind] = useState<"type" | "task_key">("type");
-  const [optionForm, setOptionForm] = useState<any>(defaultPointsOptionForm("type"));
+  const [optionEditing, setOptionEditing] = useState<PointsOptionRecord | null>(null);
+  const [optionKind, setOptionKind] = useState<PointsOptionKind>("type");
+  const [optionForm, setOptionForm] = useState<PointsOptionForm>(defaultPointsOptionForm("type"));
   const grantUsernameRef = useRef<HTMLDivElement | null>(null);
   const size = 10;
   const recordsQueryPath = `/api/admin/points/records?page=${recordsPage}&size=${size}${recordsKeyword.trim() ? `&username=${encodeURIComponent(recordsKeyword.trim())}` : ""}`;
@@ -2567,7 +2702,7 @@ export function AdminPoints() {
     queryKey: adminKeys.pointsStats(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/points/stats", { silent: true }), navigate, role);
+      const result = await adminRequest<PointsStatsResponse>(api.get("/api/admin/points/stats", { silent: true }), navigate, role);
       return result || null;
     },
   });
@@ -2575,7 +2710,7 @@ export function AdminPoints() {
     queryKey: adminKeys.pointsGrantUsers({ keyword: grantForm.username.trim() }),
     enabled: Boolean(role && grantForm.username.trim()),
     queryFn: async () => {
-      const result = await adminRequest<any>(
+      const result = await adminRequest<PagedAdminResponse<AdminUserRecord>>(
         api.get(`/api/admin/users?page=1&size=8&keyword=${encodeURIComponent(grantForm.username.trim())}`, { silent: true }),
         navigate,
         role
@@ -2587,7 +2722,7 @@ export function AdminPoints() {
     queryKey: adminKeys.pointsOptions(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/points/options", { silent: true }), navigate, role);
+      const result = await adminRequest<PointsOptionsResponse>(api.get("/api/admin/points/options", { silent: true }), navigate, role);
       return result || { types: [], taskKeys: [] };
     },
   });
@@ -2595,7 +2730,7 @@ export function AdminPoints() {
     queryKey: adminKeys.pointsRules(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any[]>(api.get("/api/admin/points/rules", { silent: true }), navigate, role);
+      const result = await adminRequest<PointsRuleRecord[]>(api.get("/api/admin/points/rules", { silent: true }), navigate, role);
       return result || [];
     },
   });
@@ -2603,7 +2738,7 @@ export function AdminPoints() {
     queryKey: adminKeys.pointsRecords({ page: recordsPage, size, keyword: recordsKeyword.trim() }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(recordsQueryPath, { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<PointsRecord>>(api.get(recordsQueryPath, { silent: true }), navigate, role);
       return result || { records: [], total: 0 };
     },
   });
@@ -2612,8 +2747,8 @@ export function AdminPoints() {
   const rules = rulesQuery.data || [];
   const records = recordsQuery.data?.records || [];
   const grantUserOptions = grantUsersQuery.data?.records || [];
-  const existingTypeValues = useMemo(() => (pointsOptions.types || []).map((item: any) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.types]);
-  const existingTaskKeyValues = useMemo(() => (pointsOptions.taskKeys || []).map((item: any) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.taskKeys]);
+  const existingTypeValues = useMemo(() => (pointsOptions.types || []).map((item) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.types]);
+  const existingTaskKeyValues = useMemo(() => (pointsOptions.taskKeys || []).map((item) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.taskKeys]);
   const typeOptions = useMemo(
     () => buildAdminOptionChoices(pointsOptions.types, POINTS_RULE_TYPE_OPTIONS, form.type),
     [pointsOptions.types, form.type],
@@ -2656,7 +2791,7 @@ export function AdminPoints() {
     setOpen(true);
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: PointsRuleRecord) => {
     setEditing(item);
     setForm({
       name: item.name || "",
@@ -2671,14 +2806,14 @@ export function AdminPoints() {
     setOpen(true);
   };
 
-  const openOptionCreate = (kind: "type" | "task_key") => {
+  const openOptionCreate = (kind: PointsOptionKind) => {
     setOptionEditing(null);
     setOptionKind(kind);
     setOptionForm(defaultPointsOptionForm(kind));
     setOptionOpen(true);
   };
 
-  const openOptionEdit = (kind: "type" | "task_key", item: any) => {
+  const openOptionEdit = (kind: PointsOptionKind, item: PointsOptionRecord) => {
     setOptionEditing(item);
     setOptionKind(kind);
     setOptionForm({
@@ -2696,7 +2831,7 @@ export function AdminPoints() {
       points: Number(form.points || 0),
       sortOrder: Number(form.sortOrder || 0),
     };
-    const request = editing ? api.put(`/api/admin/points/rules/${editing.id}`, payload) : api.post("/api/admin/points/rules", payload);
+    const request = editing ? api.put<PointsRuleRecord>(`/api/admin/points/rules/${editing.id}`, payload) : api.post<PointsRuleRecord>("/api/admin/points/rules", payload);
     const result = await adminRequest(request, navigate, role, editing ? "更新积分规则" : "创建积分规则");
     if (!result) return;
     setOpen(false);
@@ -2728,7 +2863,7 @@ export function AdminPoints() {
     ]);
   };
 
-  const toggleRuleEnabled = async (item: any, nextEnabled: boolean) => {
+  const toggleRuleEnabled = async (item: PointsRuleRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/points/rules/${item.id}`, {
         name: item.name,
@@ -2752,7 +2887,7 @@ export function AdminPoints() {
     ]);
   };
 
-  const remove = async (item: any) => {
+  const remove = async (item: PointsRuleRecord) => {
     const confirmed = await openAdminConfirm({
       title: "删除积分规则",
       message: `确认删除积分规则 ${item.name}？`,
@@ -2775,7 +2910,7 @@ export function AdminPoints() {
     });
   };
 
-  const removeOption = async (kind: "type" | "task_key", item: any) => {
+  const removeOption = async (kind: PointsOptionKind, item: PointsOptionRecord) => {
     const confirmed = await openAdminConfirm({
       title: kind === "type" ? "删除规则类型" : "删除任务类型",
       message: `确认删除${kind === "type" ? "规则类型" : "任务类型"} ${item.label}？`,
@@ -2804,7 +2939,7 @@ export function AdminPoints() {
       reason: grantForm.reason.trim(),
     };
     const result = await adminRequest(
-      api.post("/api/admin/points/grant", payload),
+      api.post<PointsGrantResponse>("/api/admin/points/grant", payload),
       navigate,
       role,
       "手动发放积分",
@@ -2851,7 +2986,7 @@ export function AdminPoints() {
               />
               {showGrantUserSuggestions && grantUserOptions.length > 0 && (
                 <div className="absolute z-20 mt-2 max-h-56 w-full overflow-y-auto rounded-[8px] border border-[#d9d9d9] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
-                  {grantUserOptions.map((item: any) => (
+                  {grantUserOptions.map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -2951,7 +3086,7 @@ export function AdminPoints() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(pointsOptions.types || []).map((item: any) => (
+              {(pointsOptions.types || []).map((item) => (
                 <TableRow key={`type-${item.id}`}>
                   <TableCell>{item.label}</TableCell>
                   <TableCell>{resolveRuleTypeLabel(item.value)}</TableCell>
@@ -2983,7 +3118,7 @@ export function AdminPoints() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(pointsOptions.taskKeys || []).map((item: any) => (
+              {(pointsOptions.taskKeys || []).map((item) => (
                 <TableRow key={`task-${item.id}`}>
                   <TableCell>{item.label}</TableCell>
                   <TableCell>{resolveTaskKeyLabel(item.value)}</TableCell>
@@ -3019,7 +3154,7 @@ export function AdminPoints() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {records.map((item: any, index: number) => (
+                {records.map((item, index) => (
                   <TableRow key={item.id ?? `${item.userId}-${index}`}>
                     <TableCell>{item.username || item.user?.username || "-"}</TableCell>
                     <TableCell>{item.change ?? item.points ?? "-"}</TableCell>
@@ -3045,34 +3180,34 @@ export function AdminPoints() {
         onSubmit={submit}
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="规则名称"><input value={form.name} onChange={(e) => setForm((prev: any) => ({ ...prev, name: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="规则名称"><input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} className={inputClassName()} /></Field>
           <Field label="任务标识">
-            <select value={form.taskKey} onChange={(e) => setForm((prev: any) => ({ ...prev, taskKey: e.target.value }))} className={inputClassName()}>
+            <select value={form.taskKey} onChange={(e) => setForm((prev) => ({ ...prev, taskKey: e.target.value }))} className={inputClassName()}>
               <option value="">无任务标识</option>
               {taskKeyOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
         </div>
-        <Field label="描述"><textarea value={form.description} onChange={(e) => setForm((prev: any) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} /></Field>
+        <Field label="描述"><textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} /></Field>
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="分值"><input type="number" value={form.points} onChange={(e) => setForm((prev: any) => ({ ...prev, points: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="分值"><input type="number" value={form.points} onChange={(e) => setForm((prev) => ({ ...prev, points: e.target.value }))} className={inputClassName()} /></Field>
           <Field label="类型">
-            <select value={form.type} onChange={(e) => setForm((prev: any) => ({ ...prev, type: e.target.value }))} className={inputClassName()}>
+            <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className={inputClassName()}>
               {typeOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
-          <Field label="排序"><input type="number" value={form.sortOrder} onChange={(e) => setForm((prev: any) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="排序"><input type="number" value={form.sortOrder} onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} /></Field>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <AdminFormSwitch
             label="启用规则"
             checked={Boolean(form.enabled)}
-            onCheckedChange={(next) => setForm((prev: any) => ({ ...prev, enabled: next }))}
+            onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
           />
           <AdminFormSwitch
             label="用户可见"
             checked={Boolean(form.userVisible)}
-            onCheckedChange={(next) => setForm((prev: any) => ({ ...prev, userVisible: next }))}
+            onCheckedChange={(next) => setForm((prev) => ({ ...prev, userVisible: next }))}
           />
         </div>
       </FormDialog>
@@ -3090,7 +3225,7 @@ export function AdminPoints() {
               value={optionForm.label}
               onChange={(e) => {
                 const nextLabel = e.target.value;
-                setOptionForm((prev: any) => ({
+                setOptionForm((prev) => ({
                   ...prev,
                   label: nextLabel,
                   value: optionEditing
@@ -3111,7 +3246,7 @@ export function AdminPoints() {
           </Field>
         </div>
         <Field label="排序">
-          <input type="number" value={optionForm.sortOrder} onChange={(e) => setOptionForm((prev: any) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} />
+          <input type="number" value={optionForm.sortOrder} onChange={(e) => setOptionForm((prev) => ({ ...prev, sortOrder: e.target.value }))} className={inputClassName()} />
         </Field>
         <div className="rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] px-3 py-2 text-xs text-slate-500">
           {optionKind === "type"
@@ -3130,13 +3265,13 @@ export function AdminLevels() {
   const [userPage, setUserPage] = useState(1);
   const [logPage, setLogPage] = useState(1);
   const [levelRuleOpen, setLevelRuleOpen] = useState(false);
-  const [levelRuleEditing, setLevelRuleEditing] = useState<any>(null);
-  const [pendingLevelRuleRemove, setPendingLevelRuleRemove] = useState<any>(null);
-  const [levelRuleForm, setLevelRuleForm] = useState<any>({ level: "", name: "", threshold: "0", enabled: true });
+  const [levelRuleEditing, setLevelRuleEditing] = useState<LevelRuleRecord | null>(null);
+  const [pendingLevelRuleRemove, setPendingLevelRuleRemove] = useState<LevelRuleRecord | null>(null);
+  const [levelRuleForm, setLevelRuleForm] = useState<LevelRuleForm>({ level: "", name: "", threshold: "0", enabled: true });
   const [expRuleOpen, setExpRuleOpen] = useState(false);
-  const [expRuleEditing, setExpRuleEditing] = useState<any>(null);
-  const [pendingExpRuleRemove, setPendingExpRuleRemove] = useState<any>(null);
-  const [expRuleForm, setExpRuleForm] = useState<any>({ key: "", name: "", description: "", minExp: "0", maxExp: "0", maxObtainCount: "", enabled: true });
+  const [expRuleEditing, setExpRuleEditing] = useState<ExpRuleRecord | null>(null);
+  const [pendingExpRuleRemove, setPendingExpRuleRemove] = useState<ExpRuleRecord | null>(null);
+  const [expRuleForm, setExpRuleForm] = useState<ExpRuleForm>({ key: "", name: "", description: "", minExp: "0", maxExp: "0", maxObtainCount: "", enabled: true });
   const [userKeyword, setUserKeyword] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [logUsername, setLogUsername] = useState("");
@@ -3153,7 +3288,7 @@ export function AdminLevels() {
     queryKey: adminKeys.levelsOverview(),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get("/api/admin/levels/overview", { silent: true }), navigate, role);
+      const result = await adminRequest<LevelsOverviewResponse>(api.get("/api/admin/levels/overview", { silent: true }), navigate, role);
       return result || null;
     },
   });
@@ -3161,7 +3296,7 @@ export function AdminLevels() {
     queryKey: adminKeys.levelsUsers({ page: userPage, size, keyword: userKeyword.trim(), level: levelFilter }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(`/api/admin/levels/users?${userQuery.toString()}`, { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<LevelUserRecord>>(api.get(`/api/admin/levels/users?${userQuery.toString()}`, { silent: true }), navigate, role);
       return result || { records: [], total: 0 };
     },
   });
@@ -3169,7 +3304,7 @@ export function AdminLevels() {
     queryKey: adminKeys.levelsLogs({ page: logPage, size, username: logUsername.trim(), bizType: bizType.trim() }),
     enabled: Boolean(role),
     queryFn: async () => {
-      const result = await adminRequest<any>(api.get(`/api/admin/levels/logs?${logQuery.toString()}`, { silent: true }), navigate, role);
+      const result = await adminRequest<PagedAdminResponse<ExpLogRecord>>(api.get(`/api/admin/levels/logs?${logQuery.toString()}`, { silent: true }), navigate, role);
       return result || { records: [], total: 0 };
     },
   });
@@ -3179,7 +3314,7 @@ export function AdminLevels() {
   const userTotal = usersQuery.data?.total || 0;
   const logs = logsQuery.data?.records || [];
   const logTotal = logsQuery.data?.total || 0;
-  const existingExpRuleKeys = useMemo(() => (overview?.expRules || []).map((item: any) => String(item.key || "").trim()).filter(Boolean), [overview?.expRules]);
+  const existingExpRuleKeys = useMemo(() => (overview?.expRules || []).map((item) => String(item.key || "").trim()).filter(Boolean), [overview?.expRules]);
   const experienceBizTypeOptions = useMemo(() => {
     const normalizedCurrentBizType = String(bizType || "").trim();
     if (!normalizedCurrentBizType) return EXPERIENCE_BIZ_TYPE_OPTIONS;
@@ -3198,7 +3333,7 @@ export function AdminLevels() {
     setLevelRuleOpen(true);
   };
 
-  const updateLevelRule = (item: any) => {
+  const updateLevelRule = (item: LevelRuleRecord) => {
     setLevelRuleEditing(item);
     setLevelRuleForm({
       level: String(item.level ?? ""),
@@ -3239,7 +3374,7 @@ export function AdminLevels() {
     await Promise.all([refreshOverview(), refreshUsers()]);
   };
 
-  const removeLevelRule = (item: any) => {
+  const removeLevelRule = (item: LevelRuleRecord) => {
     setPendingLevelRuleRemove(item);
   };
 
@@ -3257,7 +3392,7 @@ export function AdminLevels() {
     await Promise.all([refreshOverview(), refreshUsers()]);
   };
 
-  const toggleLevelRuleEnabled = async (item: any, nextEnabled: boolean) => {
+  const toggleLevelRuleEnabled = async (item: LevelRuleRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/levels/rules/${item.level}`, {
         name: item.name,
@@ -3279,7 +3414,7 @@ export function AdminLevels() {
     setExpRuleOpen(true);
   };
 
-  const updateExpRule = (item: any) => {
+  const updateExpRule = (item: ExpRuleRecord) => {
     setExpRuleEditing(item);
     setExpRuleForm({
       key: String(item.key ?? ""),
@@ -3329,7 +3464,7 @@ export function AdminLevels() {
     await refreshOverview();
   };
 
-  const removeExpRule = (item: any) => {
+  const removeExpRule = (item: ExpRuleRecord) => {
     setPendingExpRuleRemove(item);
   };
 
@@ -3347,7 +3482,7 @@ export function AdminLevels() {
     await refreshOverview();
   };
 
-  const toggleExpRuleEnabled = async (item: any, nextEnabled: boolean) => {
+  const toggleExpRuleEnabled = async (item: ExpRuleRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/levels/exp-rules/${item.key}`, {
         name: item.label,
@@ -3366,7 +3501,7 @@ export function AdminLevels() {
     await refreshOverview();
   };
 
-  const updateUser = async (item: any) => {
+  const updateUser = async (item: LevelUserRecord) => {
     const level = await openAdminPrompt({
       title: "更新用户等级",
       message: `设置 ${item.username} 的等级。`,
@@ -3447,7 +3582,7 @@ export function AdminLevels() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(overview?.levelRules || []).map((item: any) => (
+              {(overview?.levelRules || []).map((item) => (
                 <TableRow key={item.level}>
                   <TableCell>Lv.{item.level}</TableCell>
                   <TableCell>{item.name}</TableCell>
@@ -3544,7 +3679,7 @@ export function AdminLevels() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(overview?.expRules || []).map((item: any) => (
+              {(overview?.expRules || []).map((item) => (
                 <TableRow key={item.key}>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.label}</div>
@@ -3639,14 +3774,14 @@ export function AdminLevels() {
               min={1}
               value={levelRuleForm.level}
               disabled={Boolean(levelRuleEditing)}
-              onChange={(e) => setLevelRuleForm((prev: any) => ({ ...prev, level: e.target.value }))}
+              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, level: e.target.value }))}
               className={inputClassName()}
             />
           </Field>
           <Field label="等级名称">
             <input
               value={levelRuleForm.name}
-              onChange={(e) => setLevelRuleForm((prev: any) => ({ ...prev, name: e.target.value }))}
+              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, name: e.target.value }))}
               className={inputClassName()}
             />
           </Field>
@@ -3655,7 +3790,7 @@ export function AdminLevels() {
               type="number"
               min={0}
               value={levelRuleForm.threshold}
-              onChange={(e) => setLevelRuleForm((prev: any) => ({ ...prev, threshold: e.target.value }))}
+              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, threshold: e.target.value }))}
               className={inputClassName()}
             />
           </Field>
@@ -3663,7 +3798,7 @@ export function AdminLevels() {
             <AdminFormSwitch
               label="启用该等级定义"
               checked={Boolean(levelRuleForm.enabled)}
-              onCheckedChange={(next) => setLevelRuleForm((prev: any) => ({ ...prev, enabled: next }))}
+              onCheckedChange={(next) => setLevelRuleForm((prev) => ({ ...prev, enabled: next }))}
             />
           </Field>
         </div>
@@ -3693,7 +3828,7 @@ export function AdminLevels() {
               value={expRuleForm.name}
               onChange={(e) => {
                 const nextName = e.target.value;
-                setExpRuleForm((prev: any) => ({
+                setExpRuleForm((prev) => ({
                   ...prev,
                   name: nextName,
                   key: expRuleEditing ? prev.key : generateMachineIdentifier(nextName, "exp_rule", existingExpRuleKeys),
@@ -3707,7 +3842,7 @@ export function AdminLevels() {
               type="number"
               min={0}
               value={expRuleForm.minExp}
-              onChange={(e) => setExpRuleForm((prev: any) => ({ ...prev, minExp: e.target.value }))}
+              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, minExp: e.target.value }))}
               className={inputClassName()}
             />
           </Field>
@@ -3716,7 +3851,7 @@ export function AdminLevels() {
               type="number"
               min={0}
               value={expRuleForm.maxExp}
-              onChange={(e) => setExpRuleForm((prev: any) => ({ ...prev, maxExp: e.target.value }))}
+              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, maxExp: e.target.value }))}
               className={inputClassName()}
             />
           </Field>
@@ -3725,7 +3860,7 @@ export function AdminLevels() {
               type="number"
               min={0}
               value={expRuleForm.maxObtainCount}
-              onChange={(e) => setExpRuleForm((prev: any) => ({ ...prev, maxObtainCount: e.target.value }))}
+              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, maxObtainCount: e.target.value }))}
               className={inputClassName()}
               placeholder="留空或 0 表示不限制"
             />
@@ -3734,7 +3869,7 @@ export function AdminLevels() {
             <Field label="规则说明">
               <textarea
                 value={expRuleForm.description}
-                onChange={(e) => setExpRuleForm((prev: any) => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => setExpRuleForm((prev) => ({ ...prev, description: e.target.value }))}
                 className={textareaClassName()}
               />
             </Field>
@@ -3743,7 +3878,7 @@ export function AdminLevels() {
             <AdminFormSwitch
               label="启用该经验规则"
               checked={Boolean(expRuleForm.enabled)}
-              onCheckedChange={(next) => setExpRuleForm((prev: any) => ({ ...prev, enabled: next }))}
+              onCheckedChange={(next) => setExpRuleForm((prev) => ({ ...prev, enabled: next }))}
             />
           </Field>
         </div>
@@ -4255,20 +4390,21 @@ function buildDynamicArrayRuleJson(rules: QuestionDynamicArrayRuleForm[]) {
   return JSON.stringify({ dynamicArrayRules: normalizedRules });
 }
 
-function defaultPointsRuleForm(defaultType = "daily") {
+function defaultPointsRuleForm(defaultType = "daily"): PointsRuleForm {
   return { name: "", description: "", taskKey: "", points: 0, type: defaultType, enabled: true, userVisible: true, sortOrder: 0 };
 }
 
-function defaultPointsOptionForm(kind: "type" | "task_key") {
+function defaultPointsOptionForm(kind: PointsOptionKind): PointsOptionForm {
   return { kind, value: "", label: "", sortOrder: 0 };
 }
 
 function buildAdminOptionChoices(
-  source: any[] | undefined,
-  fallback: Array<{ value: string; label: string }>,
+  source: PointsOptionRecord[] | undefined,
+  fallback: AdminOptionChoiceInput[],
   currentValue?: unknown,
 ) {
-  const normalizedSource = (source && source.length > 0 ? source : fallback).map((item: any) => ({
+  const sourceItems: AdminOptionChoiceInput[] = source && source.length > 0 ? source : fallback;
+  const normalizedSource = sourceItems.map((item) => ({
     value: String(item.value ?? item.optionValue ?? "").trim(),
     label: String(item.label ?? item.value ?? item.optionValue ?? "").trim(),
   })).filter((item) => item.value);

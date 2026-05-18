@@ -14,16 +14,71 @@ const ExcelWorkbookEditor = lazy(() =>
   import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
+type PracticeCampaignLevelState = {
+  id?: number | string | null;
+  title?: string | null;
+  levelType?: string | null;
+  difficulty?: string | number | null;
+  targetTimeSeconds?: number | null;
+  rewardPoints?: number | null;
+};
+
+type PracticeCampaignChapterState = {
+  id?: number | string | null;
+  name?: string | null;
+};
+
+type PracticeDetailLocationState = {
+  campaignLevel?: PracticeCampaignLevelState;
+  campaignChapter?: PracticeCampaignChapterState;
+  campaignAttemptId?: number | string | null;
+  backTo?: string;
+};
+
+type PracticeQuestionDetail = {
+  id: number;
+  title?: string | null;
+  questionCategoryId?: number | null;
+  categoryId?: number | null;
+  explanation?: string | null;
+  answerSheet?: string | null;
+  answerRange?: string | null;
+  templateWorkbook?: ExcelWorkbookSnapshot | null;
+  difficulty?: number | string | null;
+  score?: number | null;
+  checkFormula?: boolean;
+};
+
+type PracticeRandomQuestionsResponse = {
+  questions?: PracticeQuestionDetail[];
+};
+
+type PracticeSubmitResponse = {
+  recordId?: number | string;
+  firstPass?: boolean;
+  rewardPoints?: number;
+  score?: number;
+  passed?: boolean;
+  stars?: number;
+  nextLevelId?: number | null;
+  firstPassBonusAwarded?: number;
+  totalRewardPoints?: number;
+  totalExpGained?: number;
+  expGained?: number;
+  dailyChallenge?: unknown;
+};
+
 export function PracticeDetail() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isRandomMode = location.pathname.endsWith("/practice/random");
-  const campaignLevel = (location.state as any)?.campaignLevel;
-  const campaignChapter = (location.state as any)?.campaignChapter;
-  const campaignAttemptId = (location.state as any)?.campaignAttemptId;
-  const backTo = (location.state as any)?.backTo || "/practice";
+  const routeState = (location.state || {}) as PracticeDetailLocationState;
+  const campaignLevel = routeState.campaignLevel;
+  const campaignChapter = routeState.campaignChapter;
+  const campaignAttemptId = routeState.campaignAttemptId;
+  const backTo = routeState.backTo || "/practice";
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [selectedSheetName, setSelectedSheetName] = useState("");
   const [workbook, setWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
@@ -35,10 +90,10 @@ export function PracticeDetail() {
     retry: false,
     queryFn: async () => {
       if (isRandomMode) {
-        const result = await api.get<any>("/api/practice/questions?count=1", { silent: true });
+        const result = await api.get<PracticeRandomQuestionsResponse>("/api/practice/questions?count=1", { silent: true });
         return result?.questions?.[0] || null;
       }
-      return api.get<any>(`/api/practice/questions/${id}`, { silent: true });
+      return api.get<PracticeQuestionDetail>(`/api/practice/questions/${id}`, { silent: true });
     },
   });
 
@@ -80,12 +135,12 @@ export function PracticeDetail() {
         setWorkbook(latestWorkbook);
       }
       const result = campaignLevel?.id
-        ? await api.post<any>(`/api/practice/campaign/levels/${campaignLevel.id}/submit`, {
+        ? await api.post<PracticeSubmitResponse>(`/api/practice/campaign/levels/${campaignLevel.id}/submit`, {
             attemptId: campaignAttemptId,
             usedSeconds: elapsedSeconds,
             userAnswer: latestWorkbook,
           }, { silent: true })
-        : await api.post<any>("/api/practice/submit", {
+        : await api.post<PracticeSubmitResponse>("/api/practice/submit", {
             questionCategoryId: question.questionCategoryId || question.categoryId || null,
             categoryId: question.questionCategoryId || question.categoryId || null,
             mode: isRandomMode ? "random_single" : "single_question",
@@ -131,7 +186,7 @@ export function PracticeDetail() {
       navigate(`/practice/history/${result.recordId}`);
     } catch (error) {
       if (!handleLoginRequiredError(error, "请先登录后再提交答卷")) {
-        toast.error((error as any)?.message || "提交答卷失败");
+        toast.error(error instanceof Error ? error.message : "提交答卷失败");
       }
     } finally {
       setSubmitting(false);
@@ -271,7 +326,7 @@ export function PracticeDetail() {
   );
 }
 
-function buildCampaignSubmitMessage(result: any) {
+function buildCampaignSubmitMessage(result: PracticeSubmitResponse) {
   if (!result?.passed) {
     return `提交完成，得分 ${result?.score || 0}`;
   }

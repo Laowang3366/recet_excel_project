@@ -157,8 +157,8 @@ export function Assistant() {
         requestAnimationFrame(() => scrollToLatestReply("smooth"));
       }
     },
-    onError: (error: any, variables) => {
-      const message = error?.message || "AI 助手暂时不可用";
+    onError: (error: unknown, variables) => {
+      const message = error instanceof Error ? error.message : "AI 助手暂时不可用";
       setChatHistory((prev) => prev.map((item) => item.id === variables?.turnId
         ? {
           ...item,

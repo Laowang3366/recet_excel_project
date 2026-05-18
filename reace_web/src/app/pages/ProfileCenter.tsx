@@ -34,6 +34,50 @@ function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+type ProfileOverviewUser = {
+  id?: number | null;
+  username?: string | null;
+  email?: string | null;
+  bio?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+  website?: string | null;
+  avatar?: string | null;
+  points?: number;
+  exp?: number;
+  level?: number;
+};
+
+type ExperienceProgress = {
+  currentInLevel?: number;
+  totalInLevel?: number;
+  remainingExp?: number;
+  level?: number;
+  levelName?: string | null;
+};
+
+type ProfileOverviewResponse = {
+  user?: ProfileOverviewUser | null;
+  expProgress?: ExperienceProgress;
+};
+
+type CampaignOverviewResponse = {
+  summary?: {
+    clearedLevels?: number;
+    totalStars?: number;
+    currentStreak?: number;
+  };
+};
+
+type CampaignChapter = {
+  totalLevels?: number;
+  completed?: boolean;
+};
+
+type CampaignChaptersResponse = {
+  chapters?: CampaignChapter[];
+};
+
 export function ProfileCenter() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -64,22 +108,22 @@ export function ProfileCenter() {
   const profileQuery = useQuery({
     queryKey: profileKeys.overview(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/users/center/overview", { silent: true }),
+    queryFn: () => api.get<ProfileOverviewResponse>("/api/users/center/overview", { silent: true }),
   });
   const pointsQuery = useQuery({
     queryKey: pointsKeys.overview(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
+    queryFn: () => api.get<ProfileOverviewResponse>("/api/points/overview", { silent: true }),
   });
   const campaignOverviewQuery = useQuery({
     queryKey: practiceKeys.campaignOverview(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/practice/campaign/overview", { silent: true }),
+    queryFn: () => api.get<CampaignOverviewResponse>("/api/practice/campaign/overview", { silent: true }),
   });
   const campaignChaptersQuery = useQuery({
     queryKey: practiceKeys.campaignChapters(),
     enabled: isAuthenticated,
-    queryFn: () => api.get<any>("/api/practice/campaign/chapters", { silent: true }),
+    queryFn: () => api.get<CampaignChaptersResponse>("/api/practice/campaign/chapters", { silent: true }),
   });
 
   const user = profileQuery.data?.user || pointsQuery.data?.user || {};
@@ -161,11 +205,11 @@ export function ProfileCenter() {
   });
 
   const totalLevels = useMemo(
-    () => chapters.reduce((sum: number, chapter: any) => sum + Number(chapter?.totalLevels || 0), 0),
+    () => chapters.reduce((sum, chapter) => sum + Number(chapter?.totalLevels || 0), 0),
     [chapters]
   );
   const clearedLevels = Number(campaignSummary.clearedLevels || 0);
-  const completedChapters = chapters.filter((chapter: any) => chapter.completed).length;
+  const completedChapters = chapters.filter((chapter) => chapter.completed).length;
   const totalChapters = chapters.length;
   const totalStars = Number(campaignSummary.totalStars || 0);
   const levelProgressPercent = resolveProgressPercent(

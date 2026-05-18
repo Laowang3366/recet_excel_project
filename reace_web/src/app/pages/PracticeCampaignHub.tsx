@@ -29,6 +29,35 @@ import {
 import { startCampaignLevel } from "../lib/practice-campaign";
 import { practiceKeys } from "../lib/query-keys";
 
+type CampaignChapter = {
+  id: number | string;
+  name?: string | null;
+  description?: string | null;
+  completed?: boolean;
+  unlocked?: boolean;
+  progress?: number;
+  totalLevels?: number;
+  totalStars?: number;
+};
+
+type CampaignLevel = {
+  id: number | string;
+  title?: string | null;
+  summary?: string | null;
+  status?: string | null;
+  questionId?: number | null;
+  rewardExp?: number;
+  rewardPoints?: number;
+};
+
+type CampaignChaptersResponse = {
+  chapters?: CampaignChapter[];
+};
+
+type CampaignChapterDetailResponse = {
+  levels?: CampaignLevel[];
+};
+
 export function PracticeCampaignHub() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -37,18 +66,18 @@ export function PracticeCampaignHub() {
   const [startingLevelId, setStartingLevelId] = useState<number | string | null>(null);
   const chaptersQuery = useQuery({
     queryKey: practiceKeys.campaignChapters(),
-    queryFn: () => api.get<any>("/api/practice/campaign/chapters", { silent: true }),
+    queryFn: () => api.get<CampaignChaptersResponse>("/api/practice/campaign/chapters", { silent: true }),
     refetchOnMount: "always",
   });
   const chapterDetailQuery = useQuery({
     queryKey: practiceKeys.campaignChapter(expandedChapterId || "none"),
     enabled: Boolean(expandedChapterId),
-    queryFn: () => api.get<any>(`/api/practice/campaign/chapters/${expandedChapterId}`, { silent: true }),
+    queryFn: () => api.get<CampaignChapterDetailResponse>(`/api/practice/campaign/chapters/${expandedChapterId}`, { silent: true }),
     refetchOnMount: "always",
   });
 
   const chapters = chaptersQuery.data?.chapters || [];
-  const expandedChapter = chapters.find((chapter: any) => String(chapter.id) === String(expandedChapterId)) || null;
+  const expandedChapter = chapters.find((chapter) => String(chapter.id) === String(expandedChapterId)) || null;
   const expandedLevels = chapterDetailQuery.data?.levels || [];
 
   useEffect(() => {
@@ -57,14 +86,14 @@ export function PracticeCampaignHub() {
     }
   }, [routeChapterId]);
 
-  const handleToggleQuestions = (chapter: any) => {
+  const handleToggleQuestions = (chapter: CampaignChapter) => {
     if (!canExpandChapterQuestions(chapter)) {
       return;
     }
     setExpandedChapterId((current) => (String(current) === String(chapter.id) ? null : chapter.id));
   };
 
-  const handleStartLevel = async (level: any, chapter: any) => {
+  const handleStartLevel = async (level: CampaignLevel, chapter: CampaignChapter) => {
     if (!level || level.status === "locked") {
       return;
     }
@@ -79,9 +108,9 @@ export function PracticeCampaignHub() {
           campaignAttemptId: result.attemptId,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!handleLoginRequiredError(error, "请先登录后再开始答题")) {
-        toast.error(error?.message || "开始答题失败");
+        toast.error(error instanceof Error ? error.message : "开始答题失败");
       }
     } finally {
       setStartingLevelId(null);
@@ -136,7 +165,7 @@ export function PracticeCampaignHub() {
               </div>
 
               <div className="divide-y divide-white/10">
-                {chapters.map((chapter: any, index: number) => {
+                {chapters.map((chapter, index) => {
                   const isCompleted = Boolean(chapter.completed);
                   const isUnlocked = Boolean(chapter.unlocked);
                   const isExpanded = String(expandedChapterId) === String(chapter.id);
@@ -257,12 +286,12 @@ function ChapterQuestionList({
   startingLevelId,
   onStartLevel,
 }: {
-  chapter: any;
-  levels: any[];
+  chapter: CampaignChapter;
+  levels: CampaignLevel[];
   isLoading: boolean;
   isError: boolean;
   startingLevelId: number | string | null;
-  onStartLevel: (level: any, chapter: any) => Promise<void>;
+  onStartLevel: (level: CampaignLevel, chapter: CampaignChapter) => Promise<void>;
 }) {
   if (isLoading) {
     return (
@@ -301,7 +330,7 @@ function ChapterQuestionList({
         <span className="text-right">操作</span>
       </div>
       <div className="divide-y divide-white/10">
-        {levels.map((level: any, index: number) => {
+        {levels.map((level, index) => {
           const isLocked = level.status === "locked";
           const isPending = String(startingLevelId) === String(level.id);
           const statusLabel = getCampaignLevelStatusLabel(level.status);

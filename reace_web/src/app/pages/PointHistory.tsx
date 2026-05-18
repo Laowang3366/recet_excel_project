@@ -7,17 +7,36 @@ import { api } from "../lib/api";
 import { formatDateTime, formatNumber } from "../lib/format";
 import { pointsKeys } from "../lib/query-keys";
 
+type PointsOverviewResponse = {
+  user?: {
+    points?: number;
+  };
+};
+
+type PointTransaction = {
+  id: number | string;
+  change?: number;
+  ruleName?: string | null;
+  description?: string | null;
+  createTime?: string | null;
+};
+
+type PointRecordsPage = {
+  records?: PointTransaction[];
+  pages?: number;
+};
+
 export function PointHistory() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState("all");
   const overviewQuery = useQuery({
     queryKey: pointsKeys.overview(),
-    queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
+    queryFn: () => api.get<PointsOverviewResponse>("/api/points/overview", { silent: true }),
   });
   const recordsQuery = useInfiniteQuery({
     queryKey: pointsKeys.records(),
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.get<any>(`/api/points/records?page=${pageParam}&size=20`, { silent: true }),
+    queryFn: ({ pageParam }) => api.get<PointRecordsPage>(`/api/points/records?page=${pageParam}&size=20`, { silent: true }),
     getNextPageParam: (lastPage, allPages) => (allPages.length < (lastPage.pages || 1) ? allPages.length + 1 : undefined),
   });
   const overview = overviewQuery.data;

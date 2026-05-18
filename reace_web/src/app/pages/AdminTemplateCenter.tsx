@@ -31,7 +31,34 @@ import {
 } from "../lib/template-center";
 import { useSession } from "../lib/session";
 
-const defaultForm = {
+type TemplateForm = {
+  title: string;
+  industryCategory: string;
+  useScenario: string;
+  previewImageUrl: string;
+  templateDescription: string;
+  functionsUsedText: string;
+  difficultyLevel: string;
+  downloadCostPoints: number;
+  templateFileUrl: string;
+  sortOrder: number;
+  enabled: boolean;
+};
+
+type TemplateRecord = Omit<TemplateForm, "functionsUsedText"> & {
+  id: number;
+  functionsUsed?: string[];
+  downloadCount?: number;
+  updateTime?: string | null;
+};
+
+type AdminTemplatesResponse = {
+  records?: TemplateRecord[];
+  industryCategories?: string[];
+  difficultyLevels?: string[];
+};
+
+const defaultForm: TemplateForm = {
   title: "",
   industryCategory: TEMPLATE_INDUSTRY_CATEGORIES[0],
   useScenario: "",
@@ -54,8 +81,8 @@ export function AdminTemplateCenter() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [filterCategory, setFilterCategory] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [form, setForm] = useState<any>(defaultForm);
+  const [editingItem, setEditingItem] = useState<TemplateRecord | null>(null);
+  const [form, setForm] = useState<TemplateForm>(defaultForm);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
@@ -65,7 +92,7 @@ export function AdminTemplateCenter() {
     queryFn: async () => {
       try {
         const suffix = filterCategory ? `?industryCategory=${encodeURIComponent(filterCategory)}` : "";
-        return await api.get<any>(`/api/admin/templates${suffix}`, { silent: true });
+        return await api.get<AdminTemplatesResponse>(`/api/admin/templates${suffix}`, { silent: true });
       } catch (error) {
         handleAdminError(error, navigate);
         return { records: [] };
@@ -101,7 +128,7 @@ export function AdminTemplateCenter() {
     setDialogOpen(true);
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: TemplateRecord) => {
     setEditingItem(item);
     setForm({
       title: item.title || "",
@@ -151,7 +178,7 @@ export function AdminTemplateCenter() {
     }
   };
 
-  const deleteTemplate = async (item: any) => {
+  const deleteTemplate = async (item: TemplateRecord) => {
     if (!window.confirm(`确认删除模板“${item.title}”？`)) {
       return;
     }
@@ -175,9 +202,9 @@ export function AdminTemplateCenter() {
     try {
       const result = await api.post<{ url: string }>("/api/upload", formData);
       if (kind === "preview") {
-        setForm((prev: any) => ({ ...prev, previewImageUrl: result.url }));
+        setForm((prev) => ({ ...prev, previewImageUrl: result.url }));
       } else {
-        setForm((prev: any) => ({ ...prev, templateFileUrl: result.url }));
+        setForm((prev) => ({ ...prev, templateFileUrl: result.url }));
       }
       toast.success(kind === "preview" ? "预览图上传成功" : "模板文件上传成功");
     } catch (error) {
@@ -221,7 +248,7 @@ export function AdminTemplateCenter() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((item: any) => (
+              {records.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -304,10 +331,10 @@ export function AdminTemplateCenter() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="模板标题">
-            <input value={form.title} onChange={(e) => setForm((prev: any) => ({ ...prev, title: e.target.value }))} className={inputClassName()} />
+            <input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="行业分类">
-            <select value={form.industryCategory} onChange={(e) => setForm((prev: any) => ({ ...prev, industryCategory: e.target.value }))} className={inputClassName()}>
+            <select value={form.industryCategory} onChange={(e) => setForm((prev) => ({ ...prev, industryCategory: e.target.value }))} className={inputClassName()}>
               {categoryOptions.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
@@ -317,32 +344,32 @@ export function AdminTemplateCenter() {
 
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="难度等级">
-            <select value={form.difficultyLevel} onChange={(e) => setForm((prev: any) => ({ ...prev, difficultyLevel: e.target.value }))} className={inputClassName()}>
+            <select value={form.difficultyLevel} onChange={(e) => setForm((prev) => ({ ...prev, difficultyLevel: e.target.value }))} className={inputClassName()}>
               {difficultyOptions.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </select>
           </Field>
           <Field label="下载消耗积分">
-            <input type="number" min="0" value={form.downloadCostPoints} onChange={(e) => setForm((prev: any) => ({ ...prev, downloadCostPoints: Number(e.target.value || 0) }))} className={inputClassName()} />
+            <input type="number" min="0" value={form.downloadCostPoints} onChange={(e) => setForm((prev) => ({ ...prev, downloadCostPoints: Number(e.target.value || 0) }))} className={inputClassName()} />
           </Field>
           <Field label="排序">
-            <input type="number" value={form.sortOrder} onChange={(e) => setForm((prev: any) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
+            <input type="number" value={form.sortOrder} onChange={(e) => setForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
           </Field>
         </div>
 
         <Field label="使用场景">
-          <textarea value={form.useScenario} onChange={(e) => setForm((prev: any) => ({ ...prev, useScenario: e.target.value }))} className={textareaClassName()} />
+          <textarea value={form.useScenario} onChange={(e) => setForm((prev) => ({ ...prev, useScenario: e.target.value }))} className={textareaClassName()} />
         </Field>
 
         <Field label="模板说明">
-          <textarea value={form.templateDescription} onChange={(e) => setForm((prev: any) => ({ ...prev, templateDescription: e.target.value }))} className={`${textareaClassName()} min-h-[160px]`} />
+          <textarea value={form.templateDescription} onChange={(e) => setForm((prev) => ({ ...prev, templateDescription: e.target.value }))} className={`${textareaClassName()} min-h-[160px]`} />
         </Field>
 
         <Field label="使用到的函数">
           <textarea
             value={form.functionsUsedText}
-            onChange={(e) => setForm((prev: any) => ({ ...prev, functionsUsedText: e.target.value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, functionsUsedText: e.target.value }))}
             className={textareaClassName()}
             placeholder="多个函数可用中文逗号、英文逗号或换行分隔"
           />
@@ -352,7 +379,7 @@ export function AdminTemplateCenter() {
           <Field label="预览图">
             <div className="space-y-3">
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <input value={form.previewImageUrl} onChange={(e) => setForm((prev: any) => ({ ...prev, previewImageUrl: e.target.value }))} className={inputClassName()} placeholder="/uploads/preview.png" />
+                <input value={form.previewImageUrl} onChange={(e) => setForm((prev) => ({ ...prev, previewImageUrl: e.target.value }))} className={inputClassName()} placeholder="/uploads/preview.png" />
                 <UploadActionButton
                   icon={ImagePlus}
                   loading={uploadingPreview}
@@ -382,7 +409,7 @@ export function AdminTemplateCenter() {
           <Field label="模板文件">
             <div className="space-y-3">
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <input value={form.templateFileUrl} onChange={(e) => setForm((prev: any) => ({ ...prev, templateFileUrl: e.target.value }))} className={inputClassName()} placeholder="/uploads/template.xlsx" />
+                <input value={form.templateFileUrl} onChange={(e) => setForm((prev) => ({ ...prev, templateFileUrl: e.target.value }))} className={inputClassName()} placeholder="/uploads/template.xlsx" />
                 <UploadActionButton
                   icon={UploadCloud}
                   loading={uploadingFile}
@@ -413,7 +440,7 @@ export function AdminTemplateCenter() {
         <AdminFormSwitch
           label="启用该模板"
           checked={Boolean(form.enabled)}
-          onCheckedChange={(next) => setForm((prev: any) => ({ ...prev, enabled: next }))}
+          onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
         />
       </FormDialog>
     </AdminPageShell>

@@ -19,13 +19,33 @@ import { api } from "../lib/api";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { practiceKeys } from "../lib/query-keys";
 
+type PracticeHistoryRecord = {
+  id: number | string;
+  accuracy?: number;
+  durationSeconds?: number;
+  categoryName?: string | null;
+  questionCategoryName?: string | null;
+  submitTime?: string | null;
+  questionTitle?: string | null;
+  correctCount?: number;
+  questionCount?: number;
+  score?: number;
+  rewardGranted?: boolean;
+  rewardPoints?: number;
+};
+
+type PracticeHistoryPage = {
+  records?: PracticeHistoryRecord[];
+  pages?: number;
+};
+
 export function PracticeHistory() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const historyQuery = useInfiniteQuery({
     queryKey: practiceKeys.history(),
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => api.get<any>(`/api/practice/history?page=${pageParam}&size=20`, { silent: true }),
+    queryFn: ({ pageParam }) => api.get<PracticeHistoryPage>(`/api/practice/history?page=${pageParam}&size=20`, { silent: true }),
     getNextPageParam: (lastPage, allPages) => (allPages.length < (lastPage.pages || 1) ? allPages.length + 1 : undefined),
   });
   const historyRecords = historyQuery.data?.pages.flatMap((page) => page.records || []) || [];

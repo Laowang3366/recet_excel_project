@@ -12,10 +12,19 @@ function formatFileType(value: string) {
   return value || "-";
 }
 
+type ToolHistoryRecord = {
+  id: number | string;
+  sourceFileName?: string | null;
+  sourceType?: string;
+  targetType?: string;
+  createTime?: string | null;
+  resultUrl?: string | null;
+};
+
 export function ToolsHistory() {
   const historyQuery = useQuery({
     queryKey: ["tools", "history"],
-    queryFn: () => api.get<{ records: any[] }>("/api/tools/history", { silent: true }),
+    queryFn: () => api.get<{ records?: ToolHistoryRecord[] }>("/api/tools/history", { silent: true }),
   });
   const historyRecords = historyQuery.data?.records || [];
 

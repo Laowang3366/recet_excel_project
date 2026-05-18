@@ -10,42 +10,70 @@ import { normalizeAvatarUrl, normalizeImageUrl } from "../lib/mappers";
 import { applyThemePreference } from "../lib/theme";
 import { useSession } from "../lib/session";
 
+type SettingsProfile = {
+  id?: number;
+  username: string;
+  bio: string;
+  jobTitle: string;
+  location: string;
+  website: string;
+  avatar: string;
+  coverImage: string;
+  expertise: string;
+  themePreference: string;
+  notificationEmailEnabled: boolean;
+  notificationPushEnabled: boolean;
+  email: string;
+};
+
+type SettingsOverviewResponse = {
+  user?: Partial<SettingsProfile> | null;
+};
+
+type PrivacySettings = Record<string, boolean | string | number | null | undefined>;
+
+const defaultProfile: SettingsProfile = {
+  username: "",
+  bio: "",
+  jobTitle: "",
+  location: "",
+  website: "",
+  avatar: "",
+  coverImage: "",
+  expertise: "",
+  themePreference: "light",
+  notificationEmailEnabled: true,
+  notificationPushEnabled: true,
+  email: "",
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function Settings() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("notifications");
   const [isSaving, setIsSaving] = useState(false);
-  const [privacy, setPrivacy] = useState<any>({});
-  const [profile, setProfile] = useState<any>({
-    username: "",
-    bio: "",
-    jobTitle: "",
-    location: "",
-    website: "",
-    avatar: "",
-    coverImage: "",
-    expertise: "",
-    themePreference: "light",
-    notificationEmailEnabled: true,
-    notificationPushEnabled: true,
-    email: "",
-  });
+  const [privacy, setPrivacy] = useState<PrivacySettings>({});
+  const [profile, setProfile] = useState<SettingsProfile>(defaultProfile);
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
   const { refreshUser, user, setUser } = useSession();
   const [themeSaving, setThemeSaving] = useState(false);
   const overviewQuery = useQuery({
     queryKey: settingsKeys.overview(),
-    queryFn: () => api.get<any>("/api/users/center/overview", { silent: true }),
+    queryFn: () => api.get<SettingsOverviewResponse>("/api/users/center/overview", { silent: true }),
   });
   const privacyQuery = useQuery({
     queryKey: settingsKeys.privacy(),
-    queryFn: () => api.get<any>("/api/users/privacy", { silent: true }),
+    queryFn: () => api.get<PrivacySettings>("/api/users/privacy", { silent: true }),
   });
 
   useEffect(() => {
     const user = overviewQuery.data?.user;
     if (!user) return;
-    setProfile((prev: any) => ({
+    setProfile((prev) => ({
       ...prev,
       ...user,
       themePreference: user.themePreference || "light",
@@ -109,7 +137,7 @@ export function Settings() {
     if (!profile.id || profile.themePreference === nextTheme || themeSaving) return;
     const previousTheme = profile.themePreference || "light";
 
-    setProfile((prev: any) => ({ ...prev, themePreference: nextTheme }));
+    setProfile((prev) => ({ ...prev, themePreference: nextTheme }));
     if (user) {
       setUser({ ...user, themePreference: nextTheme });
     }
@@ -124,13 +152,13 @@ export function Settings() {
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
       ]);
       toast.success("主题已更新");
-    } catch (error: any) {
-      setProfile((prev: any) => ({ ...prev, themePreference: previousTheme }));
+    } catch (error: unknown) {
+      setProfile((prev) => ({ ...prev, themePreference: previousTheme }));
       if (user) {
         setUser({ ...user, themePreference: previousTheme });
       }
       applyThemePreference(previousTheme);
-      toast.error(error?.message || "主题保存失败");
+      toast.error(getErrorMessage(error, "主题保存失败"));
     } finally {
       setThemeSaving(false);
     }
@@ -188,13 +216,13 @@ export function Settings() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                      <div className="md:col-span-2"><label className={labelClass}>显示名称</label><input type="text" value={profile.username || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, username: e.target.value }))} className={inputClass} /></div>
-                      <div className="md:col-span-2"><label className={labelClass}>一句话简介</label><textarea rows={3} value={profile.bio || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, bio: e.target.value }))} className={`${inputClass} resize-none leading-relaxed`} /></div>
-                      <div><label className={labelClass}>头衔 / 职位</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Briefcase size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="text" value={profile.jobTitle || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, jobTitle: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
-                      <div><label className={labelClass}>所在地</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><MapPin size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="text" value={profile.location || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, location: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
-                      <div className="md:col-span-2"><label className={labelClass}>个人网站 / 博客</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Globe size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="url" value={profile.website || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, website: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
-                      <div className="md:col-span-2"><label className={labelClass}>头像地址</label><input type="text" value={profile.avatar || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, avatar: e.target.value }))} className={inputClass} /></div>
-                      <div className="md:col-span-2"><label className={labelClass}>封面地址</label><input type="text" value={profile.coverImage || ""} onChange={(e) => setProfile((prev: any) => ({ ...prev, coverImage: e.target.value }))} className={inputClass} /></div>
+                      <div className="md:col-span-2"><label className={labelClass}>显示名称</label><input type="text" value={profile.username || ""} onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))} className={inputClass} /></div>
+                      <div className="md:col-span-2"><label className={labelClass}>一句话简介</label><textarea rows={3} value={profile.bio || ""} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} className={`${inputClass} resize-none leading-relaxed`} /></div>
+                      <div><label className={labelClass}>头衔 / 职位</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Briefcase size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="text" value={profile.jobTitle || ""} onChange={(e) => setProfile((prev) => ({ ...prev, jobTitle: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
+                      <div><label className={labelClass}>所在地</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><MapPin size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="text" value={profile.location || ""} onChange={(e) => setProfile((prev) => ({ ...prev, location: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
+                      <div className="md:col-span-2"><label className={labelClass}>个人网站 / 博客</label><div className="relative"><div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Globe size={18} className="text-slate-400" strokeWidth={1.5} /></div><input type="url" value={profile.website || ""} onChange={(e) => setProfile((prev) => ({ ...prev, website: e.target.value }))} className={`${inputClass} pl-11`} /></div></div>
+                      <div className="md:col-span-2"><label className={labelClass}>头像地址</label><input type="text" value={profile.avatar || ""} onChange={(e) => setProfile((prev) => ({ ...prev, avatar: e.target.value }))} className={inputClass} /></div>
+                      <div className="md:col-span-2"><label className={labelClass}>封面地址</label><input type="text" value={profile.coverImage || ""} onChange={(e) => setProfile((prev) => ({ ...prev, coverImage: e.target.value }))} className={inputClass} /></div>
                     </div>
                   </div>
                 </section>
@@ -247,7 +275,7 @@ export function Settings() {
                         const password = await openGlobalPrompt({ title: "修改邮箱", label: "密码确认", placeholder: "请输入密码确认", inputType: "password", required: true });
                         if (!password) return;
                         await api.put("/api/auth/email", { newEmail, password });
-                        setProfile((prev: any) => ({ ...prev, email: newEmail }));
+                        setProfile((prev) => ({ ...prev, email: newEmail }));
                         await Promise.all([
                           queryClient.invalidateQueries({ queryKey: settingsKeys.overview() }),
                           queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
@@ -267,9 +295,9 @@ export function Settings() {
                 <section className="bg-white rounded-3xl shadow-sm border border-slate-200/60 overflow-hidden p-8">
                   <div className="flex items-center gap-3 mb-8"><div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100"><Bell className="text-slate-800" size={20} strokeWidth={2} /></div><div><h2 className="text-lg font-bold text-slate-800">通知偏好</h2><p className="text-[13px] font-medium text-slate-500 mt-0.5">定制您希望接收消息的方式与类型</p></div></div>
                   <div className="space-y-8">
-                    <div className="flex items-center justify-between"><div><h3 className="font-bold text-[15px] text-slate-800">系统推送通知</h3><p className="text-[13px] font-medium text-slate-500 mt-1">在浏览器中接收实时消息推送和互动提醒</p></div><button onClick={() => setProfile((prev: any) => ({ ...prev, notificationPushEnabled: !prev.notificationPushEnabled }))} className={`w-12 h-6 rounded-full transition-colors relative ${profile.notificationPushEnabled ? "bg-slate-800" : "bg-slate-200"}`}><motion.div layout className="w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm" initial={false} animate={{ x: profile.notificationPushEnabled ? 24 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} /></button></div>
+                    <div className="flex items-center justify-between"><div><h3 className="font-bold text-[15px] text-slate-800">系统推送通知</h3><p className="text-[13px] font-medium text-slate-500 mt-1">在浏览器中接收实时消息推送和互动提醒</p></div><button onClick={() => setProfile((prev) => ({ ...prev, notificationPushEnabled: !prev.notificationPushEnabled }))} className={`w-12 h-6 rounded-full transition-colors relative ${profile.notificationPushEnabled ? "bg-slate-800" : "bg-slate-200"}`}><motion.div layout className="w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm" initial={false} animate={{ x: profile.notificationPushEnabled ? 24 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} /></button></div>
                     <div className="w-full h-px bg-slate-100"></div>
-                    <div className="flex items-center justify-between"><div><h3 className="font-bold text-[15px] text-slate-800">每周动态邮件</h3><p className="text-[13px] font-medium text-slate-500 mt-1">接收学习进度、练习提醒与系统公告汇总</p></div><button onClick={() => setProfile((prev: any) => ({ ...prev, notificationEmailEnabled: !prev.notificationEmailEnabled }))} className={`w-12 h-6 rounded-full transition-colors relative ${profile.notificationEmailEnabled ? "bg-slate-800" : "bg-slate-200"}`}><motion.div layout className="w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm" initial={false} animate={{ x: profile.notificationEmailEnabled ? 24 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} /></button></div>
+                    <div className="flex items-center justify-between"><div><h3 className="font-bold text-[15px] text-slate-800">每周动态邮件</h3><p className="text-[13px] font-medium text-slate-500 mt-1">接收学习进度、练习提醒与系统公告汇总</p></div><button onClick={() => setProfile((prev) => ({ ...prev, notificationEmailEnabled: !prev.notificationEmailEnabled }))} className={`w-12 h-6 rounded-full transition-colors relative ${profile.notificationEmailEnabled ? "bg-slate-800" : "bg-slate-200"}`}><motion.div layout className="w-5 h-5 bg-white rounded-full absolute top-0.5 shadow-sm" initial={false} animate={{ x: profile.notificationEmailEnabled ? 24 : 2 }} transition={{ type: "spring", stiffness: 500, damping: 30 }} /></button></div>
                   </div>
                 </section>
               </motion.div>

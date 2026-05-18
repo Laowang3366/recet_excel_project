@@ -32,6 +32,41 @@ import {
   shouldRenderTutorialReaderOverlay,
 } from "../lib/tutorial-display";
 
+type TutorialRelatedItem = {
+  id: number;
+  title?: string | null;
+  name?: string | null;
+};
+
+type TutorialArticle = {
+  id: number;
+  title: string;
+  summary?: string | null;
+  oneLineUsage?: string | null;
+  content?: string | null;
+  contentLoading?: boolean;
+  audienceTrack?: string | null;
+  difficulty?: string | null;
+  functionTags?: string | string[] | null;
+  relatedQuestions?: TutorialRelatedItem[];
+  relatedChapters?: TutorialRelatedItem[];
+};
+
+type TutorialCategory = {
+  id: number;
+  name: string;
+  description?: string | null;
+  articles?: TutorialArticle[];
+};
+
+type TutorialHomeResponse = {
+  categories?: TutorialCategory[];
+};
+
+type TutorialArticleResponse = {
+  article?: TutorialArticle;
+};
+
 export function TutorialCenter() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -39,7 +74,7 @@ export function TutorialCenter() {
   const routeKeyword = searchParams.get("search") || searchParams.get("q") || "";
   const tutorialsQuery = useQuery({
     queryKey: tutorialKeys.home(),
-    queryFn: () => api.get<any>("/api/tutorials/home", { silent: true }),
+    queryFn: () => api.get<TutorialHomeResponse>("/api/tutorials/home", { silent: true }),
   });
 
   const categories = tutorialsQuery.data?.categories || [];
@@ -60,11 +95,11 @@ export function TutorialCenter() {
     }
 
     return categories
-      .map((category: any) => {
+      .map((category) => {
         const categoryMatched = [category.name, category.description]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(keyword));
-        const articles = (category.articles || []).filter((article: any) => {
+        const articles = (category.articles || []).filter((article) => {
           const tags = Array.isArray(article.functionTags) ? article.functionTags : [article.functionTags];
           return [article.title, article.summary, article.oneLineUsage, ...tags]
             .filter(Boolean)
@@ -78,7 +113,7 @@ export function TutorialCenter() {
         }
         return { ...category, articles };
       })
-      .filter(Boolean);
+      .filter((category): category is TutorialCategory => Boolean(category));
   }, [categories, searchKeyword]);
 
   useEffect(() => {
@@ -87,11 +122,11 @@ export function TutorialCenter() {
       setActiveArticleId(null);
       return;
     }
-    const nextCategoryId = activeCategoryId && visibleCategories.some((item: any) => item.id === activeCategoryId)
+    const nextCategoryId = activeCategoryId && visibleCategories.some((item) => item.id === activeCategoryId)
       ? activeCategoryId
       : visibleCategories[0].id;
-    const matchedCategory = visibleCategories.find((item: any) => item.id === nextCategoryId) || visibleCategories[0];
-    const nextArticleId = activeArticleId && matchedCategory.articles?.some((item: any) => item.id === activeArticleId)
+    const matchedCategory = visibleCategories.find((item) => item.id === nextCategoryId) || visibleCategories[0];
+    const nextArticleId = activeArticleId && matchedCategory.articles?.some((item) => item.id === activeArticleId)
       ? activeArticleId
       : matchedCategory.articles?.[0]?.id || null;
     setActiveCategoryId(nextCategoryId);
@@ -99,27 +134,27 @@ export function TutorialCenter() {
   }, [visibleCategories, activeArticleId, activeCategoryId]);
 
   const activeCategory = useMemo(
-    () => visibleCategories.find((item: any) => item.id === activeCategoryId) || visibleCategories[0] || null,
+    () => visibleCategories.find((item) => item.id === activeCategoryId) || visibleCategories[0] || null,
     [visibleCategories, activeCategoryId]
   );
   const activeArticle = useMemo(
-    () => activeCategory?.articles?.find((item: any) => item.id === activeArticleId) || activeCategory?.articles?.[0] || null,
+    () => activeCategory?.articles?.find((item) => item.id === activeArticleId) || activeCategory?.articles?.[0] || null,
     [activeArticleId, activeCategory]
   );
-  const activeArticleIndex = activeCategory?.articles?.findIndex((item: any) => item.id === activeArticle?.id) ?? -1;
+  const activeArticleIndex = activeCategory?.articles?.findIndex((item) => item.id === activeArticle?.id) ?? -1;
   const activeArticles = activeCategory?.articles || [];
   const previousArticle = activeArticleIndex > 0 ? activeArticles[activeArticleIndex - 1] : null;
   const nextArticle = activeArticleIndex >= 0 && activeArticleIndex < activeArticles.length - 1
     ? activeArticles[activeArticleIndex + 1]
     : null;
   const mobileReaderCategory = mobileReaderArticleId
-    ? visibleCategories.find((category: any) =>
-        (category.articles || []).some((article: any) => article.id === mobileReaderArticleId)
+    ? visibleCategories.find((category) =>
+        (category.articles || []).some((article) => article.id === mobileReaderArticleId)
       ) || null
     : null;
-  const mobileReaderArticle = mobileReaderCategory?.articles?.find((article: any) => article.id === mobileReaderArticleId) || null;
+  const mobileReaderArticle = mobileReaderCategory?.articles?.find((article) => article.id === mobileReaderArticleId) || null;
   const mobileReaderArticles = mobileReaderCategory?.articles || [];
-  const mobileReaderArticleIndex = mobileReaderArticles.findIndex((article: any) => article.id === mobileReaderArticle?.id);
+  const mobileReaderArticleIndex = mobileReaderArticles.findIndex((article) => article.id === mobileReaderArticle?.id);
   const mobileReaderPreviousArticle = mobileReaderArticleIndex > 0 ? mobileReaderArticles[mobileReaderArticleIndex - 1] : null;
   const mobileReaderNextArticle = mobileReaderArticleIndex >= 0 && mobileReaderArticleIndex < mobileReaderArticles.length - 1
     ? mobileReaderArticles[mobileReaderArticleIndex + 1]
@@ -127,7 +162,7 @@ export function TutorialCenter() {
   const requestedArticleId = mobileReaderArticle?.id || activeArticle?.id || null;
   const articleDetailQuery = useQuery({
     queryKey: tutorialKeys.article(requestedArticleId || "none"),
-    queryFn: () => api.get<any>(`/api/tutorials/articles/${requestedArticleId}`, { silent: true }),
+    queryFn: () => api.get<TutorialArticleResponse>(`/api/tutorials/articles/${requestedArticleId}`, { silent: true }),
     enabled: Boolean(requestedArticleId),
   });
   const articleDetail = articleDetailQuery.data?.article || null;
@@ -154,11 +189,11 @@ export function TutorialCenter() {
   const shouldShowTutorialCatalog = shouldRenderTutorialCatalog({ isMobile, readerOpen: mobileReaderOpen });
   const readerScrollTargetSelector = getTutorialReaderScrollTargetSelector(mobileReaderOpen);
   const relatedFunctionArticles = useMemo(
-    () => activeArticles.filter((item: any) => item.id !== activeArticle?.id).slice(0, 6),
+    () => activeArticles.filter((item) => item.id !== activeArticle?.id).slice(0, 6),
     [activeArticle?.id, activeArticles]
   );
 
-  const selectArticle = (category: any, article: any) => {
+  const selectArticle = (category: TutorialCategory, article: TutorialArticle) => {
     setActiveCategoryId(category.id);
     setActiveArticleId(article.id);
     if (isMobile) {
@@ -168,8 +203,8 @@ export function TutorialCenter() {
 
   useEffect(() => {
     if (!mobileReaderArticleId) return;
-    const readerArticleStillVisible = visibleCategories.some((category: any) =>
-      (category.articles || []).some((article: any) => article.id === mobileReaderArticleId)
+    const readerArticleStillVisible = visibleCategories.some((category) =>
+      (category.articles || []).some((article) => article.id === mobileReaderArticleId)
     );
     if (!readerArticleStillVisible) {
       setMobileReaderArticleId(null);
@@ -231,12 +266,12 @@ export function TutorialCenter() {
     onNext,
     headingClassName,
   }: {
-    article: any;
-    category: any;
+    article: TutorialArticle | null;
+    category: TutorialCategory | null;
     articleIndex: number;
-    articles: any[];
-    previous: any | null;
-    next: any | null;
+    articles: TutorialArticle[];
+    previous: TutorialArticle | null;
+    next: TutorialArticle | null;
     onPrevious: () => void;
     onNext: () => void;
     headingClassName: string;
@@ -309,7 +344,7 @@ export function TutorialCenter() {
                   教程目录
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {visibleCategories.map((category: any) => {
+                  {visibleCategories.map((category) => {
                     const isExpanded = category.id === expandedMobileCategoryId;
                     return (
                       <div key={`mobile-category-${category.id}`}>
@@ -329,7 +364,7 @@ export function TutorialCenter() {
                         </button>
                         {isExpanded ? (
                           <div className="bg-slate-50 px-3 pb-3">
-                            {(category.articles || []).map((article: any) => (
+                            {(category.articles || []).map((article) => (
                               <button
                                 key={`mobile-article-${article.id}`}
                                 type="button"
@@ -501,13 +536,13 @@ function TutorialArticleReader({
   onNext,
   headingClassName,
 }: {
-  article: any;
-  category: any;
+  article: TutorialArticle | null;
+  category: TutorialCategory | null;
   articleIndex: number;
-  articles: any[];
+  articles: TutorialArticle[];
   sections: TutorialSection[];
-  previous: any | null;
-  next: any | null;
+  previous: TutorialArticle | null;
+  next: TutorialArticle | null;
   onPrevious: () => void;
   onNext: () => void;
   headingClassName: string;
@@ -569,8 +604,8 @@ function TutorialHero({
   category,
   titleClassName,
 }: {
-  article: any;
-  category: any;
+  article: TutorialArticle | null;
+  category: TutorialCategory | null;
   titleClassName: string;
 }) {
   const heroTags = buildHeroTags(article, category);
@@ -670,16 +705,16 @@ function FunctionSidebar({
   onSelectCategory,
   onSelectArticle,
 }: {
-  categories: any[];
-  activeCategory: any;
-  activeArticle: any;
+  categories: TutorialCategory[];
+  activeCategory: TutorialCategory | null;
+  activeArticle: TutorialArticle | null;
   loading: boolean;
-  onSelectCategory: (category: any) => void;
-  onSelectArticle: (category: any, article: any) => void;
+  onSelectCategory: (category: TutorialCategory) => void;
+  onSelectArticle: (category: TutorialCategory, article: TutorialArticle) => void;
 }) {
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Record<string, boolean>>({});
 
-  const toggleCategory = (category: any) => {
+  const toggleCategory = (category: TutorialCategory) => {
     if (category.id !== activeCategory?.id) {
       onSelectCategory(category);
     }
@@ -697,7 +732,7 @@ function FunctionSidebar({
           函数目录
         </div>
         <div className="max-h-[calc(100vh-112px)] overflow-y-auto p-3">
-          {categories.map((category: any) => {
+          {categories.map((category) => {
             const isActiveCategory = category.id === activeCategory?.id;
             const isExpanded = Boolean(expandedCategoryIds[category.id]);
             return (
@@ -718,7 +753,7 @@ function FunctionSidebar({
                 </button>
                 {isExpanded ? (
                   <div className="space-y-1">
-                    {(category.articles || []).map((article: any) => {
+                    {(category.articles || []).map((article) => {
                       const isActiveArticle = article.id === activeArticle?.id;
                       return (
                         <button
@@ -760,13 +795,13 @@ function TutorialAside({
   onSelectSection,
   onSelectRelated,
 }: {
-  article: any;
+  article: TutorialArticle | null;
   sections: TutorialSection[];
   activeSectionId: string;
-  relatedArticles: any[];
+  relatedArticles: TutorialArticle[];
   onStartPractice: () => void;
   onSelectSection: (sectionId: string) => void;
-  onSelectRelated: (article: any) => void;
+  onSelectRelated: (article: TutorialArticle) => void;
 }) {
   const relatedQuestionCount = article?.relatedQuestions?.length || 0;
   const hasPractice = relatedQuestionCount > 0 || (article?.relatedChapters?.length || 0) > 0;
@@ -824,7 +859,7 @@ function TutorialAside({
       <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h3 className="text-sm font-black text-slate-950">相关函数</h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          {relatedArticles.map((item: any) => (
+          {relatedArticles.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -1101,7 +1136,7 @@ async function copyTextToClipboard(value: string) {
   textarea.remove();
 }
 
-function buildHeroTags(article: any, category: any) {
+function buildHeroTags(article: TutorialArticle | null, category: TutorialCategory | null) {
   const tags = [
     category?.name,
     article?.audienceTrack ? trackLabel[article.audienceTrack] || "通用轨道" : null,
@@ -1116,13 +1151,13 @@ function estimateReadingMinutes(content: string) {
   return Math.max(3, Math.ceil(text.length / 420));
 }
 
-function getArticleFunctionName(article: any) {
+function getArticleFunctionName(article: TutorialArticle | null) {
   const title = String(article?.title || "Excel 函数").trim();
   if (/^[a-z0-9_.]+$/i.test(title)) return `${title.toUpperCase()} 函数`;
   return title;
 }
 
-function getFunctionDisplayName(article: any) {
+function getFunctionDisplayName(article: TutorialArticle | null) {
   const title = String(article?.title || "").trim();
   return title.replace(/\s*函数(?:教程|详解|说明)?$/i, "") || title;
 }

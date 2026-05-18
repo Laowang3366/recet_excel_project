@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarCheck, CheckCircle2, Gift, Zap, Star, ThumbsUp } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { pointsKeys } from "../lib/query-keys";
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   daily_checkin: CalendarCheck,
   daily_practice: ThumbsUp,
   first_practice: Star,
@@ -14,17 +15,39 @@ const iconMap: Record<string, any> = {
 
 const activeTaskKeys = new Set(["daily_checkin", "daily_practice", "first_practice"]);
 
+type PointsTask = {
+  id: number | string;
+  taskKey?: string | null;
+  type?: string | null;
+  name?: string | null;
+  description?: string | null;
+  points?: number;
+  completed?: boolean;
+  statusText?: string | null;
+  actionPath?: string | null;
+};
+
+type PointsTasksResponse = {
+  tasks?: PointsTask[];
+};
+
+type PointsOverviewResponse = {
+  user?: {
+    points?: number;
+  };
+};
+
 export function TaskCenter() {
   const navigate = useNavigate();
   const tasksQuery = useQuery({
     queryKey: pointsKeys.tasks(),
-    queryFn: () => api.get<any>("/api/points/tasks", { silent: true }),
+    queryFn: () => api.get<PointsTasksResponse>("/api/points/tasks", { silent: true }),
   });
   const overviewQuery = useQuery({
     queryKey: pointsKeys.overview(),
-    queryFn: () => api.get<any>("/api/points/overview", { silent: true }),
+    queryFn: () => api.get<PointsOverviewResponse>("/api/points/overview", { silent: true }),
   });
-  const tasks = (tasksQuery.data?.tasks || []).filter((item: any) => activeTaskKeys.has(item.taskKey));
+  const tasks = (tasksQuery.data?.tasks || []).filter((item) => activeTaskKeys.has(item.taskKey || ""));
   const overview = overviewQuery.data;
 
   const groupedTasks = useMemo(() => ({
@@ -33,7 +56,7 @@ export function TaskCenter() {
     growth: tasks.filter((item) => !["daily", "once"].includes(item.type)),
   }), [tasks]);
 
-  const renderTaskGroup = (title: string, items: any[]) => {
+  const renderTaskGroup = (title: string, items: PointsTask[]) => {
     if (items.length === 0) return null;
     return (
       <div className="mb-10 last:mb-0">

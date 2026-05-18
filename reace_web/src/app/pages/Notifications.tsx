@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  type LucideIcon,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
@@ -33,7 +34,17 @@ import {
 
 const PAGE_SIZE = 7;
 
-const typeConfig: Record<string, { icon: any; label: string; color: string; bg: string }> = {
+type NotificationItem = {
+  id: number;
+  type: string;
+  title?: string | null;
+  content?: string | null;
+  isRead?: boolean;
+  relatedId?: number | string | null;
+  createTime?: string | null;
+};
+
+const typeConfig: Record<string, { icon: LucideIcon; label: string; color: string; bg: string }> = {
   system: { icon: Gift, label: "积分通知", color: "text-amber-600", bg: "bg-amber-50 border-amber-100" },
   site_notification: { icon: Radio, label: "系统公告", color: "text-slate-600", bg: "bg-slate-50 border-slate-100" },
   feedback_result: { icon: Bell, label: "反馈处理", color: "text-teal-600", bg: "bg-teal-50 border-teal-100" },
@@ -43,7 +54,7 @@ function getTypeConfig(type: string) {
   return typeConfig[type] || { icon: Bell, label: "通知", color: "text-slate-600", bg: "bg-slate-50 border-slate-100" };
 }
 
-function hasLink(notification: any): boolean {
+function hasLink(notification: NotificationItem): boolean {
   if (notification.type === "site_notification" && notification.relatedId) return true;
   return false;
 }
@@ -99,7 +110,7 @@ export function Notifications() {
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (typeFilter) params.set("type", typeFilter);
-      return api.get<{ notifications: any[]; total: number }>(`/api/notifications?${params}`, { silent: true });
+      return api.get<{ notifications: NotificationItem[]; total: number }>(`/api/notifications?${params}`, { silent: true });
     },
   });
 
@@ -214,7 +225,7 @@ export function Notifications() {
     await batchDeleteMutation.mutateAsync(Array.from(selectedIds));
   };
 
-  const resolveNotificationLink = (notification: any) => {
+  const resolveNotificationLink = (notification: NotificationItem) => {
     switch (notification.type) {
       case "site_notification":
         return notification.relatedId ? `/notification/${notification.relatedId}` : null;
@@ -223,7 +234,7 @@ export function Notifications() {
     }
   };
 
-  const handleClick = async (notification: any) => {
+  const handleClick = async (notification: NotificationItem) => {
     if (!notification.isRead) {
       await markReadMutation.mutateAsync(notification.id);
     }
