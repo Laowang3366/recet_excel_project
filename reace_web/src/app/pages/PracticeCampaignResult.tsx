@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Award, CheckCircle2, ChevronRight, Clock3, FileCode2, Lightbulb, RotateCcw, Sparkles, Target, XCircle } from "lucide-react";
-import { motion } from "motion/react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
-import { formatDateTime, formatDuration } from "../lib/format";
+import { formatDuration } from "../lib/format";
 import { startCampaignLevel } from "../lib/practice-campaign";
 import { getCampaignResultAnswerReviews } from "../lib/practice-campaign-result-ui";
 import { practiceKeys } from "../lib/query-keys";

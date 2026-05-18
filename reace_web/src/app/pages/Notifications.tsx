@@ -19,7 +19,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { formatRelativeTime, formatDateTime } from "../lib/format";
-import { normalizeImageUrl } from "../lib/mappers";
 import { notificationKeys } from "../lib/query-keys";
 import { openGlobalConfirm } from "../components/GlobalConfirmPromptDialog";
 import {

@@ -64,10 +64,6 @@ function isSameSelection(
     && left.endCol === right.endCol;
 }
 
-function createSheetId(index: number) {
-  return `sheet-${index + 1}`;
-}
-
 function createWorkbookId() {
   return "excel-practice-workbook";
 }

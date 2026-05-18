@@ -50,7 +50,7 @@ import {
   shouldRenderCompactHeaderAccountAction,
   shouldRenderCompactHeaderNotificationAction,
 } from "../lib/layout-display";
-import { normalizeAvatarUrl, normalizeImageUrl } from "../lib/mappers";
+import { normalizeAvatarUrl } from "../lib/mappers";
 import { homeKeys, mallKeys, notificationKeys, pointsKeys, profileKeys } from "../lib/query-keys";
 import { preloadPublicRoute } from "../lib/route-preload";
 import { useSession } from "../lib/session";
@@ -618,12 +618,6 @@ export function Layout() {
     ["mall", "tools", "templates"].includes(item.key)
   );
   const activePublicNav = resolveActiveNavItem(location.pathname);
-  const activeLiteModule = activePublicNav
-    ? {
-        ...activePublicNav,
-        icon: navIconMap[activePublicNav.key],
-      }
-    : null;
   const mobileDrawerNavItems: Array<{ name: string; path: string; icon: React.ReactNode }> =
     liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }));
   const mobileBottomNavItems = liteMobileBottomNavItems.map((item) => ({
@@ -893,14 +887,6 @@ export function Layout() {
   const assistantPanelArrowClassName = assistantPanelOpensLeft
     ? "-right-3 border-r border-t"
     : "-left-3 border-b border-l";
-  const openFeedbackDialog = () => {
-    if (!isAuthenticated) {
-      navigate("/auth");
-      return;
-    }
-    setFeedbackOpen(true);
-  };
-
   const openPropsDialog = () => {
     if (!isAuthenticated) {
       navigate("/auth");

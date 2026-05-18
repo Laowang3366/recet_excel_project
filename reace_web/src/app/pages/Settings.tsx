@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { User, Bell, Shield, Key, Monitor, Moon, Sun, Save, Camera, Globe, Briefcase, MapPin, Hash, Plus, X, Image as ImageIcon } from "lucide-react";
+import { Bell, Shield, Key, Monitor, Moon, Sun, Save, Camera, Globe, Briefcase, MapPin, Hash, Plus, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { openGlobalPrompt } from "../components/GlobalConfirmPromptDialog";

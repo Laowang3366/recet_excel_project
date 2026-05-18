@@ -1,9 +1,8 @@
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import {
   ArrowLeft,
-  BookMarked,
   CalendarCheck,
   CheckCircle2,
   Edit3,
@@ -46,7 +45,6 @@ import {
   selectionToRangeRef,
   toCellRef,
 } from "../lib/excel";
-import { normalizeImageUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
 import {
@@ -66,7 +64,6 @@ import {
   AdminEmptyState,
   AdminPageShell,
   AdminPagination,
-  AdminPermissionNotice,
   AdminSection,
   AdminStatCard,
   AdminStatGrid,
@@ -76,12 +73,10 @@ import {
   formatAdminRole,
   formatAdminStatus,
   formatExperienceBizType,
-  formatFeedbackType,
   formatRoleList,
   formatNotificationTarget,
   formatNotificationType,
   EXPERIENCE_BIZ_TYPE_OPTIONS,
-  FEEDBACK_TYPE_OPTIONS,
   NOTIFICATION_TARGET_OPTIONS,
   NOTIFICATION_TYPE_OPTIONS,
   formatPointsTaskKey,
@@ -3876,11 +3871,6 @@ function formatAdminEntityMessage(entity: string, value: unknown, suffix: string
   return text ? `${entity}《${text}》${suffix}` : `${entity}${suffix}`;
 }
 
-function findAdminRecordTitle(records: any[], id: number) {
-  const item = records.find((record) => record.id === id);
-  return item?.title || item?.name || item?.username || "";
-}
-
 function useAdminRole() {
   const { user } = useSession();
   return hasAdminConsoleAccess(user?.role) ? (user?.role as AdminRole) : null;
@@ -4106,10 +4096,6 @@ function defaultPointsRuleForm(defaultType = "daily") {
 
 function defaultPointsOptionForm(kind: "type" | "task_key") {
   return { kind, value: "", label: "", sortOrder: 0 };
-}
-
-function defaultPostFilters() {
-  return { keyword: "", username: "", status: "active", categoryId: "", startDate: "", endDate: "" };
 }
 
 function buildAdminOptionChoices(
