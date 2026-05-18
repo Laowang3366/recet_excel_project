@@ -9,6 +9,7 @@ import com.excel.forum.util.JwtUtil;
 import com.excel.forum.util.PasswordPolicy;
 import com.excel.forum.util.UsernamePolicy;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -24,6 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
     private static final String EMAIL_REGEX = "^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\\.[A-Za-z]{2,63}$";
     private static final String DUMMY_BCRYPT_HASH = "$2a$10$7EqJtq98hPqEX7fNZaFWoOHi5M1QwzKzbwQ6vurIWBLL8GMDIS9xC";
@@ -308,7 +310,7 @@ public class AuthController {
     private void applyLoginFailureDelay() {
         try {
             Thread.sleep(ThreadLocalRandom.current().nextLong(180, 320));
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
     }
@@ -328,7 +330,8 @@ public class AuthController {
                 return ResponseEntity.status(429).body(Map.of("message", limitedMessage));
             }
             return null;
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Redis rate limit unavailable, falling back to local limiter for key {}", key, exception);
             long now = System.currentTimeMillis();
             LocalRateLimitState state = LOCAL_RATE_LIMITS.compute(key, (currentKey, currentState) -> {
                 if (currentState == null || currentState.expireAtMillis <= now) {

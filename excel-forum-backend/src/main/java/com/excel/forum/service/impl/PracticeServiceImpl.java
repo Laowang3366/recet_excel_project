@@ -33,6 +33,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -54,6 +55,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PracticeServiceImpl implements PracticeService {
     private static final String TASK_PRACTICE_QUESTION_PASS = "practice_question_pass";
     private static final String UNCATEGORIZED_LABEL = "未分类";
@@ -810,7 +812,8 @@ public class PracticeServiceImpl implements PracticeService {
         try {
             JsonNode dynamicArrayRules = objectMapper.readTree(gradingRuleJson).path("dynamicArrayRules");
             return dynamicArrayRules.isArray() && dynamicArrayRules.size() > 0;
-        } catch (JsonProcessingException ignored) {
+        } catch (JsonProcessingException exception) {
+            log.debug("Invalid grading rule JSON while detecting dynamic array rules", exception);
             return false;
         }
     }
@@ -846,7 +849,8 @@ public class PracticeServiceImpl implements PracticeService {
         }
         try {
             return objectMapper.readValue(options, new TypeReference<List<String>>() {});
-        } catch (JsonProcessingException ignored) {
+        } catch (JsonProcessingException exception) {
+            log.debug("Invalid question options JSON, using empty options", exception);
             return List.of();
         }
     }
@@ -964,7 +968,8 @@ public class PracticeServiceImpl implements PracticeService {
                             items.add(normalized);
                         }
                     }
-                } catch (JsonProcessingException ignored) {
+                } catch (JsonProcessingException exception) {
+                    log.debug("Multiple-choice answer is not JSON array, falling back to split text: {}", trimmed, exception);
                     splitChoiceText(trimmed).forEach(item -> {
                         String normalized = normalizeChoiceToken(item);
                         if (!normalized.isBlank()) {
@@ -1025,7 +1030,8 @@ public class PracticeServiceImpl implements PracticeService {
     private String toJson(List<String> values) {
         try {
             return objectMapper.writeValueAsString(values);
-        } catch (JsonProcessingException ignored) {
+        } catch (JsonProcessingException exception) {
+            log.warn("Failed to serialize practice answer list", exception);
             return "[]";
         }
     }
@@ -1036,7 +1042,8 @@ public class PracticeServiceImpl implements PracticeService {
         }
         try {
             return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (JsonProcessingException ignored) {
+        } catch (JsonProcessingException exception) {
+            log.debug("Practice answer is not a JSON object, returning raw value", exception);
             return json;
         }
     }
@@ -1044,7 +1051,8 @@ public class PracticeServiceImpl implements PracticeService {
     private String toJsonObject(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException ignored) {
+        } catch (JsonProcessingException exception) {
+            log.warn("Failed to serialize practice answer object", exception);
             return null;
         }
     }

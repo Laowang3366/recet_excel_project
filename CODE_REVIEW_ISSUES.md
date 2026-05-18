@@ -9,38 +9,17 @@
 - 后台前端已从单体 `AdminConsole.tsx` 拆成 lazy 页面。
 - 本轮 P1：新增 `QueryPageUtils`，将闯关、商城、每日挑战相关 `limit 1/5` 查询收敛到分页 API，避免继续使用 SQL suffix 拼接模式。
 - 本轮 P2：将 `AdminConsoleShared.tsx` 从 897 行拆成 5 个小模块，当前 barrel 文件只保留 5 行导出。
+- 2026-05-18 P1 收口：后端主代码 `.last(...)` 已清零，`catch (... ignored)` 已清零。
+- 2026-05-18 P1 收口：`PracticeCampaignServiceImpl` 拆出 `PracticeCampaignCatalogSyncService` 和 `PracticeCampaignRewardService`，`MallServiceImpl` 拆出 `MallResponseAssembler`。
 
 ## 剩余 P1
 
-### 1. 后端 `.last("LIMIT ...")` 尚未完全清零
+无。当前 P1 清单已执行完：
 
-当前仍有 11 处 `.last(...)`，集中在较小范围内：
-
-- `AdminPracticeReviewController`
-- `PublicController`
-- `ToolController`
-- `AiAssistantConfigServiceImpl`
-- `ExperienceLevelRuleServiceImpl`
-- `ExperienceRuleServiceImpl`
-- `PointsRuleOptionServiceImpl`
-- `PointsRuleServiceImpl`
-- `UserEntitlementServiceImpl`
-
-建议下一轮继续迁移到 `Page` 或专用 service 方法，优先处理所有请求参数参与排序/分页的读取路径。
-
-### 2. 空 catch 块仍需梳理
-
-当前仍检测到 13 处 `catch (Exception ignored)`。建议按风险分两类：
-
-- 可观测失败：上传、转换、模板、AI prompt 读取等路径至少记录 warn 日志。
-- 可忽略失败：明确加短注释说明为什么允许忽略，避免后续误判。
-
-### 3. 大型 service 仍承担多职责
-
-- `PracticeCampaignServiceImpl` 仍同时负责目录、答题、每日挑战、进度、错题、奖励。
-- `MallServiceImpl` 仍同时负责商品、兑换、权益发放、状态统计。
-
-建议后续拆分为 facade + domain service，先从每日挑战、用户进度、权益发放这些边界清晰的职责下手。
+- `.last(...)`：0 处。
+- `catch (... ignored)`：0 处。
+- `PracticeCampaignServiceImpl`：拆分后 717 行，目录同步与奖励职责已移出。
+- `MallServiceImpl`：拆分后 625 行，商城响应组装职责已移出。
 
 ## 剩余 P2
 
@@ -77,3 +56,5 @@
 - `cd excel-forum-backend; mvn test`
 - `cd reace_web; npm run typecheck`
 - `cd reace_web; npm run build`
+- `Get-ChildItem ... | Select-String -Pattern '\.last\('`：0 处
+- `Get-ChildItem ... | Select-String -Pattern 'catch \([^)]* ignored\)'`：0 处

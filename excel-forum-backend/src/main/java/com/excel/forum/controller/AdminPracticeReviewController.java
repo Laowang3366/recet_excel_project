@@ -28,6 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @RestController
 @RequestMapping("/api/admin/practice-submissions")
 @RequiredArgsConstructor
@@ -123,9 +125,9 @@ public class AdminPracticeReviewController {
     }
 
     private QuestionCategory ensureUserSubmissionQuestionCategory() {
-        QuestionCategory category = questionCategoryService.getOne(new QueryWrapper<QuestionCategory>()
+        QuestionCategory category = first(questionCategoryService, new QueryWrapper<QuestionCategory>()
                 .eq("name", USER_SUBMISSION_CATEGORY_NAME)
-                .last("LIMIT 1"), false);
+                .orderByAsc("id"));
         if (category != null) {
             return category;
         }

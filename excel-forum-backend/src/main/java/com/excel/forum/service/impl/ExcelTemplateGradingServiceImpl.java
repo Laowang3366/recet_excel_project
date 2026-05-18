@@ -11,6 +11,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.formula.FormulaParseException;
 import org.apache.poi.ss.formula.eval.NotImplementedException;
 import org.apache.poi.ss.usermodel.Cell;
@@ -40,6 +41,7 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingService {
     private static final double EPSILON = 0.000001d;
 
@@ -457,7 +459,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                 applySubmissionToWorkbook(workbook, safeSubmission);
                 workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
                 return toWorkbookSnapshot(workbook);
-            } catch (FormulaParseException | NotImplementedException | IllegalArgumentException ignored) {
+            } catch (FormulaParseException | NotImplementedException | IllegalArgumentException exception) {
+                log.trace("Materializing workbook formulas failed, falling back to submitted snapshot", exception);
                 // Apache POI does not fully support newer Excel dynamic-array functions.
                 // Fall back to the client-captured workbook snapshot so grading can still
                 // use submitted values/formulas instead of failing the whole request.
@@ -738,7 +741,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                     }
                     try {
                         cellSnapshot.setDisplay(formatter.formatCellValue(cell, evaluator));
-                    } catch (FormulaParseException | NotImplementedException | IllegalArgumentException ignored) {
+                    } catch (FormulaParseException | NotImplementedException | IllegalArgumentException exception) {
+                        log.trace("Display formatting failed at {}", cell.getAddress(), exception);
                         cellSnapshot.setDisplay(cellSnapshot.getValue() == null ? "" : String.valueOf(cellSnapshot.getValue()));
                     }
                     sheetSnapshot.getCells().put(cell.getAddress().formatAsString(), cellSnapshot);
@@ -886,7 +890,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                 case BLANK -> "";
                 default -> cell.toString();
             };
-        } catch (FormulaParseException | NotImplementedException | IllegalArgumentException ignored) {
+        } catch (FormulaParseException | NotImplementedException | IllegalArgumentException exception) {
+            log.trace("Formula evaluation failed, falling back to cached value at {}", cell.getAddress(), exception);
             return readCachedFormulaCellValue(cell);
         }
     }
@@ -900,7 +905,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                 case BLANK -> "";
                 default -> cell.toString();
             };
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.trace("Cached formula value read failed at {}", cell.getAddress(), exception);
             return cell.toString();
         }
     }
@@ -910,7 +916,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         if (decimal.scale() <= 0) {
             try {
                 return decimal.longValueExact();
-            } catch (ArithmeticException ignored) {
+            } catch (ArithmeticException exception) {
                 return decimal.doubleValue();
             }
         }
@@ -1139,7 +1145,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         }
         try {
             return Double.parseDouble(String.valueOf(value).trim());
-        } catch (Exception ignored) {
+        } catch (NumberFormatException exception) {
             return null;
         }
     }

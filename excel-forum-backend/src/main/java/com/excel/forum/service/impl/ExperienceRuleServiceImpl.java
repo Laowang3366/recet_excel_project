@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 public class ExperienceRuleServiceImpl extends ServiceImpl<ExperienceRuleMapper, ExperienceRule> implements ExperienceRuleService {
 
@@ -20,7 +22,9 @@ public class ExperienceRuleServiceImpl extends ServiceImpl<ExperienceRuleMapper,
 
     @Override
     public ExperienceRule getByRuleKey(String ruleKey) {
-        return getOne(new QueryWrapper<ExperienceRule>().eq("rule_key", ruleKey).last("LIMIT 1"));
+        return first(this, new QueryWrapper<ExperienceRule>()
+                .eq("rule_key", ruleKey)
+                .orderByAsc("id"));
     }
 
     @Override

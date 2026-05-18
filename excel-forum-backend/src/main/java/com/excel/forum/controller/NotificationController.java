@@ -239,7 +239,7 @@ public class NotificationController {
                     }
                     ids.add(id);
                     continue;
-                } catch (NumberFormatException ignored) {
+                } catch (NumberFormatException exception) {
                     return null;
                 }
             }

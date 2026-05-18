@@ -3,6 +3,7 @@ package com.excel.forum.service.impl;
 import com.excel.forum.config.FileStorageConfig;
 import com.excel.forum.service.DocumentConversionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -37,6 +38,7 @@ import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentConversionServiceImpl implements DocumentConversionService {
     private static final long MAX_FILE_SIZE = 25L * 1024 * 1024;
     private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -196,7 +198,8 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
                 if (exitCode == 0) {
                     return candidate;
                 }
-            } catch (Exception ignored) {
+            } catch (Exception exception) {
+                log.debug("Office executable candidate is unavailable: {}", candidate, exception);
             }
         }
         return null;
@@ -221,10 +224,12 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
             paths.sorted(Comparator.reverseOrder()).forEach(item -> {
                 try {
                     Files.deleteIfExists(item);
-                } catch (IOException ignored) {
+                } catch (IOException exception) {
+                    log.debug("Failed to delete conversion temp path: {}", item, exception);
                 }
             });
-        } catch (IOException ignored) {
+        } catch (IOException exception) {
+            log.debug("Failed to walk conversion temp directory: {}", path, exception);
         }
     }
 

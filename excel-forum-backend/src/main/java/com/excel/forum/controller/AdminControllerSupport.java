@@ -40,7 +40,7 @@ final class AdminControllerSupport {
         if (value instanceof String text && !text.isBlank()) {
             try {
                 return Integer.parseInt(text.trim());
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException exception) {
                 return null;
             }
         }
@@ -59,7 +59,7 @@ final class AdminControllerSupport {
         if (value instanceof String text && !text.isBlank()) {
             try {
                 return Long.parseLong(text.trim());
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException exception) {
                 return null;
             }
         }
@@ -73,7 +73,7 @@ final class AdminControllerSupport {
         if (value instanceof String text && !text.isBlank()) {
             try {
                 return LocalDate.parse(text.trim());
-            } catch (Exception ignored) {
+            } catch (RuntimeException exception) {
                 return null;
             }
         }

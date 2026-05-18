@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@Slf4j
 public class JwtUtil {
     private static final int MIN_SECRET_BYTES = 64;
     private static final ConcurrentHashMap<String, Long> LOCAL_BLACKLIST = new ConcurrentHashMap<>();
@@ -109,7 +111,8 @@ public class JwtUtil {
             long ttl = Math.max(claims.getExpiration().getTime() - System.currentTimeMillis(), 0L);
             LOCAL_BLACKLIST.put(buildBlacklistKey(token), System.currentTimeMillis() + ttl);
             redisTemplate.opsForValue().set(buildBlacklistKey(token), "1", ttl, TimeUnit.MILLISECONDS);
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Failed to invalidate JWT token", exception);
         }
     }
 
@@ -123,9 +126,11 @@ public class JwtUtil {
         try {
             Boolean exists = redisTemplate.hasKey(key);
             return Boolean.TRUE.equals(exists);
-        } catch (RedisConnectionFailureException ignored) {
+        } catch (RedisConnectionFailureException exception) {
+            log.debug("Redis unavailable while checking token blacklist", exception);
             return false;
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Token blacklist lookup failed", exception);
             return false;
         }
     }

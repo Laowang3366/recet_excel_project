@@ -4,6 +4,7 @@ import com.excel.forum.entity.dto.AssistantChatRequest;
 import com.excel.forum.service.AssistantService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping("/api/assistant")
 @RequiredArgsConstructor
+@Slf4j
 public class AssistantController {
     private static final ConcurrentHashMap<String, LocalRateLimitState> LOCAL_RATE_LIMITS = new ConcurrentHashMap<>();
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.BASIC_ISO_DATE;
@@ -55,7 +57,8 @@ public class AssistantController {
                 return ResponseEntity.status(429).body(Map.of("message", limitedMessage));
             }
             return null;
-        } catch (RedisConnectionFailureException ignored) {
+        } catch (RedisConnectionFailureException exception) {
+            log.debug("Redis rate limit unavailable, falling back to local limiter for key {}", key, exception);
             long now = System.currentTimeMillis();
             LocalRateLimitState state = LOCAL_RATE_LIMITS.compute(key, (currentKey, currentState) -> {
                 if (currentState == null || currentState.expireAtMillis <= now) {

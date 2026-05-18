@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.excel.forum.util.QueryPageUtils.limit;
+
 @RestController
 @RequestMapping("/api/tools")
 @RequiredArgsConstructor
@@ -120,10 +122,9 @@ public class ToolController {
 
     @GetMapping("/history")
     public ResponseEntity<?> getConversionHistory(@RequestAttribute Long userId) {
-        List<Map<String, Object>> records = documentConversionRecordService.list(new QueryWrapper<DocumentConversionRecord>()
+        List<Map<String, Object>> records = limit(documentConversionRecordService, new QueryWrapper<DocumentConversionRecord>()
                         .eq("user_id", userId)
-                        .orderByDesc("create_time")
-                        .last("LIMIT 12"))
+                        .orderByDesc("create_time"), 12)
                 .stream()
                 .map(item -> {
                     Map<String, Object> record = new HashMap<>();

@@ -14,6 +14,7 @@ import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExpLog> implements ExperienceService {
     private final ExperienceProperties experienceProperties;
     private final UserService userService;
@@ -70,15 +72,16 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
         int afterExp = beforeExp + amount;
         int afterLevel = resolveLevel(afterExp);
 
-        UserExpLog log = new UserExpLog();
-        log.setUserId(userId);
-        log.setBizType(bizType);
-        log.setBizId(bizId);
-        log.setExpChange(amount);
-        log.setReason(reason);
+        UserExpLog expLog = new UserExpLog();
+        expLog.setUserId(userId);
+        expLog.setBizType(bizType);
+        expLog.setBizId(bizId);
+        expLog.setExpChange(amount);
+        expLog.setReason(reason);
         try {
-            save(log);
-        } catch (DuplicateKeyException ignored) {
+            save(expLog);
+        } catch (DuplicateKeyException exception) {
+            log.debug("Duplicate experience award skipped: userId={}, bizType={}, bizId={}", userId, bizType, bizId, exception);
             return false;
         }
 

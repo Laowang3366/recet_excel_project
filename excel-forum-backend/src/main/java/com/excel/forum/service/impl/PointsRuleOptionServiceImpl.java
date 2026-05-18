@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 public class PointsRuleOptionServiceImpl extends ServiceImpl<PointsRuleOptionMapper, PointsRuleOption> implements PointsRuleOptionService {
     @Override
@@ -28,7 +30,7 @@ public class PointsRuleOptionServiceImpl extends ServiceImpl<PointsRuleOptionMap
         QueryWrapper<PointsRuleOption> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("kind", kind)
                 .eq("option_value", optionValue)
-                .last("LIMIT 1");
-        return getOne(queryWrapper, false);
+                .orderByAsc("id");
+        return first(this, queryWrapper);
     }
 }

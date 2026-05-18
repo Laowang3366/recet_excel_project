@@ -11,6 +11,7 @@ import com.excel.forum.service.PointsTaskService;
 import com.excel.forum.service.UserEntitlementService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CheckinServiceImpl implements CheckinService {
     public static final int MIN_EXP = 1;
     public static final int MAX_EXP = 20;
@@ -100,7 +102,7 @@ public class CheckinServiceImpl implements CheckinService {
         record.setGainedExp(gainedExp);
         try {
             checkinRecordMapper.insert(record);
-        } catch (DuplicateKeyException ignored) {
+        } catch (DuplicateKeyException exception) {
             throw new IllegalStateException("今天已经签到过了");
         }
 
@@ -156,7 +158,7 @@ public class CheckinServiceImpl implements CheckinService {
         record.setGainedExp(gainedExp);
         try {
             checkinRecordMapper.insert(record);
-        } catch (DuplicateKeyException ignored) {
+        } catch (DuplicateKeyException exception) {
             throw new IllegalStateException("目标日期已签到");
         }
 
@@ -290,7 +292,8 @@ public class CheckinServiceImpl implements CheckinService {
         }
         try {
             return YearMonth.parse(month, DateTimeFormatter.ofPattern("yyyy-MM"));
-        } catch (DateTimeParseException ignored) {
+        } catch (DateTimeParseException exception) {
+            log.debug("Invalid checkin month parameter, using current month: {}", month, exception);
             return YearMonth.now();
         }
     }

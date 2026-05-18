@@ -102,7 +102,7 @@ public class PointsController {
         }
         try {
             return Integer.parseInt(value.toString());
-        } catch (NumberFormatException ignored) {
+        } catch (NumberFormatException exception) {
             return 0;
         }
     }

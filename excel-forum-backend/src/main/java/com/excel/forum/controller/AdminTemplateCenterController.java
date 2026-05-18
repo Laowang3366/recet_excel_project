@@ -11,6 +11,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +32,7 @@ import java.util.Objects;
 @RestController
 @RequestMapping("/api/admin/templates")
 @RequiredArgsConstructor
+@Slf4j
 public class AdminTemplateCenterController {
     private final TemplateCenterItemService templateCenterItemService;
     private final TemplateDownloadRecordService templateDownloadRecordService;
@@ -147,7 +149,8 @@ public class AdminTemplateCenterController {
         }
         try {
             return objectMapper.readValue(value, new TypeReference<List<String>>() {});
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Template functions metadata is not JSON, fallback to raw value: {}", value, exception);
             return List.of(value);
         }
     }

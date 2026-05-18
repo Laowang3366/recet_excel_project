@@ -53,6 +53,7 @@ public class MallServiceImpl implements MallService {
     private final UserEntitlementService userEntitlementService;
     private final PointsRecordMapper pointsRecordMapper;
     private final UserMapper userMapper;
+    private final MallResponseAssembler responseAssembler;
 
     @Override
     public Map<String, Object> getOverview(Long userId) {
@@ -76,7 +77,7 @@ public class MallServiceImpl implements MallService {
                 recentRedemptions.stream().map(MallRedemption::getId).filter(Objects::nonNull).toList()
         );
         response.put("recentRedemptions", recentRedemptions.stream()
-                .map(redemption -> toRedemptionResponse(redemption, null, null, entitlementMap.get(redemption.getId())))
+                .map(redemption -> responseAssembler.toRedemptionResponse(redemption, null, null, entitlementMap.get(redemption.getId())))
                 .toList());
         response.put("totalRedemptions", countUserActiveRedemptions(userId));
         response.put("pendingRedemptions", countUserRedemptionsByStatus(userId, REDEMPTION_STATUS_PENDING));
@@ -107,19 +108,19 @@ public class MallServiceImpl implements MallService {
         LocalDateTime now = LocalDateTime.now();
 
         List<Map<String, Object>> items = mallItemMapper.selectList(queryWrapper).stream()
-                .map(item -> toItemResponse(item, typeMap.get(item.getType()), currentPoints, userRedemptionCountMap, now))
+                .map(item -> responseAssembler.toItemResponse(item, typeMap.get(item.getType()), currentPoints, userRedemptionCountMap, now))
                 .toList();
 
         return Map.of(
                 "items", items,
-                "types", enabledTypes.stream().map(this::toItemTypeResponse).toList(),
+                "types", enabledTypes.stream().map(responseAssembler::toItemTypeResponse).toList(),
                 "total", items.size()
         );
     }
 
     @Override
     public Map<String, Object> getItemTypes() {
-        return Map.of("types", listVisibleTypes().stream().map(this::toItemTypeResponse).toList());
+        return Map.of("types", listVisibleTypes().stream().map(responseAssembler::toItemTypeResponse).toList());
     }
 
     @Override
@@ -135,7 +136,7 @@ public class MallServiceImpl implements MallService {
             throw new IllegalArgumentException("商品不存在");
         }
 
-        String unavailableReason = resolveUnavailableReason(item, user, countUserRedemption(itemId, userId), LocalDateTime.now());
+        String unavailableReason = responseAssembler.resolveUnavailableReason(item, user, countUserRedemption(itemId, userId), LocalDateTime.now());
         if (unavailableReason != null) {
             throw new IllegalStateException(unavailableReason);
         }
@@ -177,7 +178,7 @@ public class MallServiceImpl implements MallService {
         MallItemType itemType = getItemType(item.getType());
         return Map.of(
                 "message", "兑换成功",
-                "redemption", toRedemptionResponse(redemption, updatedUser, itemType, entitlement),
+                "redemption", responseAssembler.toRedemptionResponse(redemption, updatedUser, itemType, entitlement),
                 "points", updatedUser == null ? 0 : safeInt(updatedUser.getPoints())
         );
     }
@@ -196,7 +197,7 @@ public class MallServiceImpl implements MallService {
         );
 
         return Map.of(
-                "records", result.getRecords().stream().map(item -> toRedemptionResponse(item, user, typeMap.get(item.getItemType()), entitlementMap.get(item.getId()))).toList(),
+                "records", result.getRecords().stream().map(item -> responseAssembler.toRedemptionResponse(item, user, typeMap.get(item.getItemType()), entitlementMap.get(item.getId()))).toList(),
                 "total", result.getTotal(),
                 "current", result.getCurrent(),
                 "size", result.getSize(),
@@ -247,7 +248,7 @@ public class MallServiceImpl implements MallService {
         LocalDateTime now = LocalDateTime.now();
 
         return Map.of(
-                "records", result.getRecords().stream().map(item -> toAdminItemResponse(item, typeMap.get(item.getType()), now)).toList(),
+                "records", result.getRecords().stream().map(item -> responseAssembler.toAdminItemResponse(item, typeMap.get(item.getType()), now)).toList(),
                 "total", result.getTotal(),
                 "current", result.getCurrent(),
                 "size", result.getSize(),
@@ -263,7 +264,7 @@ public class MallServiceImpl implements MallService {
                 .collect(Collectors.groupingBy(MallItem::getType, Collectors.counting()));
         return Map.of(
                 "records", records.stream().map(item -> {
-                    Map<String, Object> response = toItemTypeResponse(item);
+                    Map<String, Object> response = responseAssembler.toItemTypeResponse(item);
                     response.put("usageCount", usageMap.getOrDefault(item.getTypeValue(), 0L));
                     return response;
                 }).toList()
@@ -277,7 +278,7 @@ public class MallServiceImpl implements MallService {
         validateMallItem(item, null);
         item.setRedeemedCount(0);
         mallItemMapper.insert(item);
-        return toAdminItemResponse(item, getItemType(item.getType()), LocalDateTime.now());
+        return responseAssembler.toAdminItemResponse(item, getItemType(item.getType()), LocalDateTime.now());
     }
 
     @Override
@@ -293,7 +294,7 @@ public class MallServiceImpl implements MallService {
         item.setRedeemedCount(existing.getRedeemedCount());
         mallItemMapper.updateById(item);
         MallItem latest = mallItemMapper.selectById(id);
-        return toAdminItemResponse(latest, getItemType(latest.getType()), LocalDateTime.now());
+        return responseAssembler.toAdminItemResponse(latest, getItemType(latest.getType()), LocalDateTime.now());
     }
 
     @Override
@@ -308,7 +309,7 @@ public class MallServiceImpl implements MallService {
         update.setEnabled(enabled == null || enabled);
         mallItemMapper.updateById(update);
         MallItem latest = mallItemMapper.selectById(id);
-        return toAdminItemResponse(latest, getItemType(latest.getType()), LocalDateTime.now());
+        return responseAssembler.toAdminItemResponse(latest, getItemType(latest.getType()), LocalDateTime.now());
     }
 
     @Override
@@ -330,7 +331,7 @@ public class MallServiceImpl implements MallService {
         normalizeItemType(itemType, null);
         validateItemType(itemType, null);
         mallItemTypeMapper.insert(itemType);
-        return toItemTypeResponse(itemType);
+        return responseAssembler.toItemTypeResponse(itemType);
     }
 
     @Override
@@ -344,7 +345,7 @@ public class MallServiceImpl implements MallService {
         validateItemType(itemType, id);
         itemType.setId(id);
         mallItemTypeMapper.updateById(itemType);
-        return toItemTypeResponse(itemType);
+        return responseAssembler.toItemTypeResponse(itemType);
     }
 
     @Override
@@ -406,7 +407,7 @@ public class MallServiceImpl implements MallService {
                 result.getRecords().stream().map(MallRedemption::getId).filter(Objects::nonNull).toList()
         );
         List<Map<String, Object>> records = result.getRecords().stream().map(item -> {
-            Map<String, Object> response = toRedemptionResponse(item, userMap.get(item.getUserId()), typeMap.get(item.getItemType()), entitlementMap.get(item.getId()));
+            Map<String, Object> response = responseAssembler.toRedemptionResponse(item, userMap.get(item.getUserId()), typeMap.get(item.getItemType()), entitlementMap.get(item.getId()));
             if (item.getProcessedBy() != null && processedMap.containsKey(item.getProcessedBy())) {
                 User processedUser = processedMap.get(item.getProcessedBy());
                 response.put("processedByUser", Map.of("id", processedUser.getId(), "username", processedUser.getUsername()));
@@ -463,7 +464,7 @@ public class MallServiceImpl implements MallService {
         UserEntitlement entitlement = REDEMPTION_STATUS_FULFILLED.equals(nextStatus)
                 ? userEntitlementService.activateForRedemption(existing.getId())
                 : userEntitlementService.getByRedemptionIds(List.of(existing.getId())).get(existing.getId());
-        return toRedemptionResponse(existing, userService.getById(existing.getUserId()), getItemType(existing.getItemType()), entitlement);
+        return responseAssembler.toRedemptionResponse(existing, userService.getById(existing.getUserId()), getItemType(existing.getItemType()), entitlement);
     }
 
     private void validateMallItem(MallItem item, Long currentId) {
@@ -660,127 +661,6 @@ public class MallServiceImpl implements MallService {
                         .select("item_id"))
                 .stream()
                 .collect(Collectors.groupingBy(MallRedemption::getItemId, Collectors.counting()));
-    }
-
-    private Map<String, Object> toItemTypeResponse(MallItemType itemType) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", itemType.getId());
-        response.put("value", itemType.getTypeValue());
-        response.put("label", itemType.getLabel());
-        response.put("enabled", itemType.getEnabled() == null || itemType.getEnabled());
-        response.put("sortOrder", safeInt(itemType.getSortOrder()));
-        return response;
-    }
-
-    private Map<String, Object> toItemResponse(MallItem item, MallItemType itemType, int currentPoints, Map<Long, Long> userRedemptionCountMap, LocalDateTime now) {
-        String typeLabel = itemType == null ? item.getType() : itemType.getLabel();
-        long userRedemptionCount = userRedemptionCountMap.getOrDefault(item.getId(), 0L);
-        String unavailableReason = resolveUnavailableReason(item, currentPoints, userRedemptionCount, now);
-
-        Map<String, Object> response = baseItemResponse(item, typeLabel);
-        response.put("canRedeem", unavailableReason == null);
-        response.put("exchangeState", unavailableReason == null ? "available" : mapUnavailableCode(item, currentPoints, userRedemptionCount, now));
-        response.put("exchangeMessage", unavailableReason == null ? "可立即兑换" : unavailableReason);
-        return response;
-    }
-
-    private Map<String, Object> toAdminItemResponse(MallItem item, MallItemType itemType, LocalDateTime now) {
-        Map<String, Object> response = baseItemResponse(item, itemType == null ? item.getType() : itemType.getLabel());
-        response.put("statusText", resolveItemWindowStatus(item, now));
-        return response;
-    }
-
-    private Map<String, Object> baseItemResponse(MallItem item, String typeLabel) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", item.getId());
-        response.put("name", item.getName());
-        response.put("type", item.getType());
-        response.put("typeLabel", typeLabel);
-        response.put("price", safeInt(item.getPrice()));
-        response.put("description", item.getDescription());
-        response.put("coverImage", item.getCoverImage());
-        response.put("iconKey", item.getIconKey());
-        response.put("themeColor", item.getThemeColor());
-        response.put("enabled", item.getEnabled() == null || item.getEnabled());
-        response.put("sortOrder", safeInt(item.getSortOrder()));
-        response.put("stock", item.getStock());
-        response.put("redeemedCount", safeInt(item.getRedeemedCount()));
-        response.put("perUserLimit", item.getPerUserLimit());
-        response.put("totalLimit", item.getTotalLimit());
-        response.put("exchangeNotice", item.getExchangeNotice());
-        response.put("availableFrom", item.getAvailableFrom());
-        response.put("availableUntil", item.getAvailableUntil());
-        response.put("deliveryType", item.getDeliveryType());
-        return response;
-    }
-
-    private Map<String, Object> toRedemptionResponse(MallRedemption redemption, User user, MallItemType itemType, UserEntitlement entitlement) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", redemption.getId());
-        response.put("itemId", redemption.getItemId());
-        response.put("itemName", redemption.getItemName());
-        response.put("itemType", redemption.getItemType());
-        response.put("itemTypeLabel", itemType == null ? redemption.getItemType() : itemType.getLabel());
-        response.put("price", safeInt(redemption.getPrice()));
-        response.put("status", redemption.getStatus());
-        response.put("statusLabel", mapRedemptionStatus(redemption.getStatus()));
-        response.put("remark", redemption.getRemark());
-        response.put("processedBy", redemption.getProcessedBy());
-        response.put("processedTime", redemption.getProcessedTime());
-        response.put("createTime", redemption.getCreateTime());
-        if (entitlement != null) {
-            response.put("entitlementStatus", entitlement.getStatus());
-            response.put("entitlementType", entitlement.getEntitlementType());
-        }
-        if (user != null) {
-            Map<String, Object> userPayload = new HashMap<>();
-            userPayload.put("id", user.getId());
-            userPayload.put("username", user.getUsername());
-            userPayload.put("avatar", user.getAvatar());
-            response.put("user", userPayload);
-        }
-        return response;
-    }
-
-    private String resolveUnavailableReason(MallItem item, User user, long userRedemptionCount, LocalDateTime now) {
-        return resolveUnavailableReason(item, user == null ? 0 : safeInt(user.getPoints()), userRedemptionCount, now);
-    }
-
-    private String resolveUnavailableReason(MallItem item, int currentPoints, long userRedemptionCount, LocalDateTime now) {
-        if (!Boolean.TRUE.equals(item.getEnabled())) return "商品已下架";
-        if (item.getAvailableFrom() != null && now.isBefore(item.getAvailableFrom())) return "兑换活动尚未开始";
-        if (item.getAvailableUntil() != null && now.isAfter(item.getAvailableUntil())) return "兑换活动已结束";
-        if (item.getStock() != null && item.getStock() <= 0) return "商品已售罄";
-        if (item.getTotalLimit() != null && safeInt(item.getRedeemedCount()) >= item.getTotalLimit()) return "商品已达到总兑换上限";
-        if (item.getPerUserLimit() != null && userRedemptionCount >= item.getPerUserLimit()) return "你已达到该商品的个人限兑次数";
-        if (currentPoints > 0 && currentPoints < safeInt(item.getPrice())) return "积分不足";
-        return null;
-    }
-
-    private String mapUnavailableCode(MallItem item, int currentPoints, long userRedemptionCount, LocalDateTime now) {
-        if (!Boolean.TRUE.equals(item.getEnabled())) return "disabled";
-        if (item.getAvailableFrom() != null && now.isBefore(item.getAvailableFrom())) return "not_started";
-        if (item.getAvailableUntil() != null && now.isAfter(item.getAvailableUntil())) return "ended";
-        if (item.getStock() != null && item.getStock() <= 0) return "sold_out";
-        if (item.getTotalLimit() != null && safeInt(item.getRedeemedCount()) >= item.getTotalLimit()) return "total_limit";
-        if (item.getPerUserLimit() != null && userRedemptionCount >= item.getPerUserLimit()) return "user_limit";
-        if (currentPoints > 0 && currentPoints < safeInt(item.getPrice())) return "points_insufficient";
-        return "available";
-    }
-
-    private String resolveItemWindowStatus(MallItem item, LocalDateTime now) {
-        if (!Boolean.TRUE.equals(item.getEnabled())) return "已下架";
-        if (item.getAvailableFrom() != null && now.isBefore(item.getAvailableFrom())) return "未开始";
-        if (item.getAvailableUntil() != null && now.isAfter(item.getAvailableUntil())) return "已结束";
-        if (item.getStock() != null && item.getStock() <= 0) return "已售罄";
-        return "可兑换";
-    }
-
-    private String mapRedemptionStatus(String status) {
-        if (REDEMPTION_STATUS_PENDING.equals(status)) return "待处理";
-        if (REDEMPTION_STATUS_FULFILLED.equals(status)) return "已发放";
-        if (REDEMPTION_STATUS_CANCELLED.equals(status)) return "已取消";
-        return status;
     }
 
     private boolean isManualReview(MallItem item) {

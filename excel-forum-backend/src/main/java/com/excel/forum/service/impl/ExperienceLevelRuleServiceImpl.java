@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 public class ExperienceLevelRuleServiceImpl extends ServiceImpl<ExperienceLevelRuleMapper, ExperienceLevelRule> implements ExperienceLevelRuleService {
 
@@ -32,8 +34,8 @@ public class ExperienceLevelRuleServiceImpl extends ServiceImpl<ExperienceLevelR
     @Override
     public ExperienceLevelRule getByLevel(Integer level) {
         if (level == null) return null;
-        return getOne(new QueryWrapper<ExperienceLevelRule>()
+        return first(this, new QueryWrapper<ExperienceLevelRule>()
                 .eq("level", level)
-                .last("LIMIT 1"), false);
+                .orderByAsc("id"));
     }
 }

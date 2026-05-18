@@ -10,6 +10,7 @@ import com.excel.forum.service.UserEntitlementService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -21,8 +22,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMapper, UserEntitlement> implements UserEntitlementService {
     public static final String STATUS_PENDING = "pending";
     public static final String STATUS_ACTIVE = "active";
@@ -37,9 +41,9 @@ public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMappe
         if (userId == null || item == null || redemption == null) {
             return null;
         }
-        UserEntitlement entitlement = getOne(new QueryWrapper<UserEntitlement>()
+        UserEntitlement entitlement = first(this, new QueryWrapper<UserEntitlement>()
                 .eq("source_redemption_id", redemption.getId())
-                .last("LIMIT 1"), false);
+                .orderByAsc("id"));
         if (entitlement == null) {
             entitlement = new UserEntitlement();
             entitlement.setUserId(userId);
@@ -62,9 +66,9 @@ public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMappe
         if (redemptionId == null) {
             return null;
         }
-        UserEntitlement entitlement = getOne(new QueryWrapper<UserEntitlement>()
+        UserEntitlement entitlement = first(this, new QueryWrapper<UserEntitlement>()
                 .eq("source_redemption_id", redemptionId)
-                .last("LIMIT 1"), false);
+                .orderByAsc("id"));
         if (entitlement == null) {
             return null;
         }
@@ -81,9 +85,9 @@ public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMappe
         if (redemptionId == null) {
             return;
         }
-        UserEntitlement entitlement = getOne(new QueryWrapper<UserEntitlement>()
+        UserEntitlement entitlement = first(this, new QueryWrapper<UserEntitlement>()
                 .eq("source_redemption_id", redemptionId)
-                .last("LIMIT 1"), false);
+                .orderByAsc("id"));
         if (entitlement == null) {
             return;
         }
@@ -317,7 +321,8 @@ public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMappe
         }
         try {
             return objectMapper.readValue(payloadJson, new TypeReference<LinkedHashMap<String, Object>>() {});
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Failed to parse user entitlement payload, using empty payload", exception);
             return new LinkedHashMap<>();
         }
     }
@@ -325,7 +330,8 @@ public class UserEntitlementServiceImpl extends ServiceImpl<UserEntitlementMappe
     private String writePayload(Map<String, Object> payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.warn("Failed to serialize user entitlement payload, using empty JSON", exception);
             return "{}";
         }
     }

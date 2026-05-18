@@ -15,6 +15,7 @@ import com.excel.forum.util.TemplateCenterCatalog;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/templates")
 @RequiredArgsConstructor
+@Slf4j
 public class TemplateCenterController {
     private final TemplateCenterItemService templateCenterItemService;
     private final TemplateDownloadRecordService templateDownloadRecordService;
@@ -273,7 +275,8 @@ public class TemplateCenterController {
         }
         try {
             return objectMapper.readValue(value, new TypeReference<List<String>>() {});
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Template functions metadata is not JSON, fallback to raw value: {}", value, exception);
             return List.of(value);
         }
     }
@@ -339,7 +342,8 @@ public class TemplateCenterController {
         if (value.startsWith("http://") || value.startsWith("https://")) {
             try {
                 return URI.create(value).getPath();
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException exception) {
+                log.debug("Invalid template file URL: {}", value, exception);
                 return null;
             }
         }
@@ -371,7 +375,8 @@ public class TemplateCenterController {
     private long safeFileSize(Path filePath) {
         try {
             return Files.size(filePath);
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            log.debug("Failed to read template file size: {}", filePath, exception);
             return -1;
         }
     }

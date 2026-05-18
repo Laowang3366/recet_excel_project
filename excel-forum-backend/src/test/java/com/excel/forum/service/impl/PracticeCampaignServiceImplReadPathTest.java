@@ -68,6 +68,10 @@ class PracticeCampaignServiceImplReadPathTest {
     private PointsRecordService pointsRecordService;
     @Mock
     private ExperienceService experienceService;
+    @Mock
+    private PracticeCampaignCatalogSyncService catalogSyncService;
+    @Mock
+    private PracticeCampaignRewardService rewardService;
 
     @InjectMocks
     private PracticeCampaignServiceImpl service;

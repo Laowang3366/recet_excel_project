@@ -1,11 +1,9 @@
 package com.excel.forum.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.excel.forum.config.GlobalExceptionHandler;
 import com.excel.forum.config.ExperienceProperties;
 import com.excel.forum.config.PublicJsonCache;
 import com.excel.forum.config.PublicReadCache;
-import com.excel.forum.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
@@ -79,8 +77,6 @@ class PublicControllerTest {
     void publicRootReturnsOverviewPayload() throws Exception {
         when(userService.count(any())).thenReturn(1L);
         when(questionService.count(any())).thenReturn(5L);
-        when(userService.list(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.excel.forum.entity.User>>any()))
-                .thenReturn(List.of());
 
         mockMvc.perform(get("/api/public"))
                 .andExpect(status().isOk())
@@ -95,8 +91,6 @@ class PublicControllerTest {
         when(questionService.count(any())).thenReturn(5L);
         when(practiceAnswerMapper.selectCount(any())).thenReturn(10L, 7L);
         when(practiceRecordMapper.selectObjs(any())).thenReturn(List.of(11L, 12L, 13L));
-        when(userService.list(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.excel.forum.entity.User>>any()))
-                .thenReturn(List.of());
 
         mockMvc.perform(get("/api/public/home-overview"))
                 .andExpect(status().isOk())
@@ -120,8 +114,6 @@ class PublicControllerTest {
         when(questionService.count(any())).thenReturn(5L);
         when(practiceAnswerMapper.selectCount(any())).thenReturn(10L, 7L);
         when(practiceRecordMapper.selectObjs(any())).thenReturn(List.of(11L, 12L, 13L));
-        when(userService.list(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.excel.forum.entity.User>>any()))
-                .thenReturn(List.of());
 
         mockMvc.perform(get("/api/public/home-overview"))
                 .andExpect(status().isOk())
@@ -136,7 +128,7 @@ class PublicControllerTest {
         verify(questionService, times(1)).count(any());
         verify(practiceAnswerMapper, times(2)).selectCount(any());
         verify(practiceRecordMapper, times(1)).selectObjs(any());
-        verify(userService, times(1)).list(org.mockito.ArgumentMatchers.<QueryWrapper<User>>any());
+        verify(userService, times(1)).page(any(), any());
     }
 
     @Test

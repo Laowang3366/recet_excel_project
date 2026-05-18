@@ -200,7 +200,8 @@ public class AiAssistantPromptProvider {
         try {
             Path fileName = Path.of(location).getFileName();
             return fileName == null ? location : fileName.toString();
-        } catch (Exception ignored) {
+        } catch (RuntimeException exception) {
+            log.debug("Failed to resolve prompt display file name: {}", location, exception);
             return location;
         }
     }

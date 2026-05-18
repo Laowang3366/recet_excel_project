@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
 
+import static com.excel.forum.util.QueryPageUtils.limit;
+
 @RestController
 @RequestMapping("/api/public")
 @RequiredArgsConstructor
@@ -65,8 +67,7 @@ public class PublicController {
         QueryWrapper<User> topUserQuery = new QueryWrapper<>();
         topUserQuery.eq("status", 0)
                 .select("id", "username", "avatar", "bio", "level", "points", "role")
-                .orderByDesc("points")
-                .last("LIMIT 5");
+                .orderByDesc("points");
 
         QueryWrapper<Question> enabledQuestionQuery = new QueryWrapper<>();
         enabledQuestionQuery.eq("enabled", true).eq("type", "excel_template");
@@ -89,7 +90,7 @@ public class PublicController {
         int passRate = totalPracticeAnswers == 0 ? 0 : Math.round((passedAnswerCount * 100f) / totalPracticeAnswers);
         long activePracticeUserCount = practiceRecordMapper.selectObjs(recentPracticeQuery).size();
 
-        List<User> topUsers = userService.list(topUserQuery);
+        List<User> topUsers = limit(userService, topUserQuery, 5);
         return Map.of(
                 "stats", Map.of(
                         "questionCount", questionCount,

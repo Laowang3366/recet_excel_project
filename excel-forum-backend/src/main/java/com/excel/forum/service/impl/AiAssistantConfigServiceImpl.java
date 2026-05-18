@@ -28,6 +28,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -52,12 +54,11 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
     @Override
     public AiAssistantConfig getActiveConfig() {
         ensureDefaultConfig();
-        return getOne(new QueryWrapper<AiAssistantConfig>()
+        return first(this, new QueryWrapper<AiAssistantConfig>()
                 .eq("active", true)
                 .eq("enabled", true)
                 .orderByAsc("sort_order")
-                .orderByDesc("id")
-                .last("LIMIT 1"));
+                .orderByDesc("id"));
     }
 
     @Override

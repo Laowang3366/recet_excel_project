@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import static com.excel.forum.util.QueryPageUtils.first;
+
 @Service
 public class PointsRuleServiceImpl extends ServiceImpl<PointsRuleMapper, PointsRule> implements PointsRuleService {
     
@@ -39,7 +41,7 @@ public class PointsRuleServiceImpl extends ServiceImpl<PointsRuleMapper, PointsR
         QueryWrapper<PointsRule> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("task_key", taskKey)
                 .eq("enabled", true)
-                .last("LIMIT 1");
-        return getOne(queryWrapper, false);
+                .orderByAsc("id");
+        return first(this, queryWrapper);
     }
 }
