@@ -62,8 +62,8 @@ def build_sync_command(repo_dir, branch):
     quoted_branch = shlex.quote(branch)
     return f"""set -e
 cd {quoted_repo}
-git fetch origin {quoted_branch}
-git merge --ff-only FETCH_HEAD
+git fetch --quiet origin {quoted_branch}
+git merge --quiet --ff-only FETCH_HEAD
 printf 'BRANCH:'
 git branch --show-current
 printf 'HEAD:'
