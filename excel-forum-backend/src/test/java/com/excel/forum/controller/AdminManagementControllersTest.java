@@ -217,6 +217,7 @@ class AdminManagementControllersTest {
                 practiceCampaignService
         );
         AdminNotificationController notificationController = new AdminNotificationController(siteNotificationService, htmlSanitizer);
+        AdminFeedbackController feedbackController = new AdminFeedbackController(userService, feedbackService, notificationService);
         AdminUserController userController = new AdminUserController(userService, passwordEncoder);
         mockMvc = MockMvcBuilders.standaloneSetup(
                         overviewController,
@@ -227,6 +228,7 @@ class AdminManagementControllersTest {
                         practiceReviewController,
                         practiceCampaignController,
                         notificationController,
+                        feedbackController,
                         userController
                 )
                 .setControllerAdvice(new GlobalExceptionHandler())
