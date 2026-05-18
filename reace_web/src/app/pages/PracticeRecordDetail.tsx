@@ -187,7 +187,7 @@ export function PracticeRecordDetail() {
   const record = recordQuery.data;
 
   const sidebarQuery = useQuery({
-    queryKey: ["practice", "record-detail-sidebar", "all"],
+    queryKey: practiceKeys.recordDetailSidebar(),
     enabled: Boolean(record),
     queryFn: () =>
       api.get<PracticeQuestionListResponse>(

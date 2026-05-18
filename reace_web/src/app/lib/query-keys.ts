@@ -1,5 +1,4 @@
 export const adminKeys = {
-  all: ["admin"] as const,
   stats: () => ["admin", "stats"] as const,
   tutorialCategories: () => ["admin", "tutorials", "categories"] as const,
   tutorialArticles: (params: Record<string, unknown>) => ["admin", "tutorials", "articles", params] as const,
@@ -27,6 +26,7 @@ export const adminKeys = {
 
 export const notificationKeys = {
   all: ["notifications"] as const,
+  counts: () => ["notifications", "counts"] as const,
   list: (params: Record<string, unknown>) => ["notifications", "list", params] as const,
   detail: (id: number | string) => ["notifications", "detail", id] as const,
 };
@@ -34,13 +34,10 @@ export const notificationKeys = {
 export const profileKeys = {
   overview: () => ["profile", "overview"] as const,
   props: () => ["profile", "props"] as const,
-  tab: (tab: string) => ["profile", "tab", tab] as const,
 };
 
 export const homeKeys = {
-  overview: () => ["home", "overview"] as const,
   checkinStatus: () => ["home", "checkin-status"] as const,
-  levelRules: () => ["home", "level-rules"] as const,
 };
 
 export const tutorialKeys = {
@@ -49,6 +46,7 @@ export const tutorialKeys = {
 };
 
 export const templateKeys = {
+  all: ["templates"] as const,
   list: (category: string) => ["templates", "list", category] as const,
   records: () => ["templates", "records"] as const,
 };
@@ -61,10 +59,11 @@ export const practiceKeys = {
   submissions: (params: Record<string, unknown>) => ["practice", "submissions", params] as const,
   history: () => ["practice", "history"] as const,
   recordDetail: (id: number | string) => ["practice", "record-detail", id] as const,
+  recordDetailSidebar: () => ["practice", "record-detail-sidebar", "all"] as const,
+  campaign: () => ["practice", "campaign"] as const,
   campaignOverview: () => ["practice", "campaign", "overview"] as const,
   campaignChapters: () => ["practice", "campaign", "chapters"] as const,
   campaignChapter: (id: number | string) => ["practice", "campaign", "chapter", id] as const,
-  campaignLevel: (id: number | string) => ["practice", "campaign", "level", id] as const,
   campaignDaily: () => ["practice", "campaign", "daily"] as const,
   campaignWrongs: () => ["practice", "campaign", "wrongs"] as const,
   campaignRankings: (scope: string) => ["practice", "campaign", "rankings", scope] as const,
@@ -83,6 +82,9 @@ export const pointsKeys = {
 
 export const mallKeys = {
   overview: () => ["mall", "overview"] as const,
-  items: () => ["mall", "items"] as const,
-  types: () => ["mall", "types"] as const,
+};
+
+export const toolsKeys = {
+  overview: () => ["tools", "overview"] as const,
+  history: () => ["tools", "history"] as const,
 };

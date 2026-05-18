@@ -69,7 +69,7 @@ function tabTypeFilter(tab: NotificationTabId): string | undefined {
 
 function useNotificationCounts() {
   return useQuery({
-    queryKey: ["notifications", "counts"],
+    queryKey: notificationKeys.counts(),
     queryFn: () => api.get<NotificationCounts>("/api/notifications/counts", { silent: true }),
   });
 }

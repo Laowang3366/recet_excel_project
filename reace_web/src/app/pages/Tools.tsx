@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { LiteHero, LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
 import { api } from "../lib/api";
 import { normalizeResourceUrl } from "../lib/mappers";
+import { pointsKeys, toolsKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
 
 type TargetType = "word" | "excel" | "pdf";
@@ -60,7 +61,7 @@ export function Tools() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [lastResult, setLastResult] = useState<{ fileName: string; url: string } | null>(null);
   const overviewQuery = useQuery({
-    queryKey: ["tools", "overview"],
+    queryKey: toolsKeys.overview(),
     queryFn: () => api.get<{ conversionCostPoints?: number; user?: { points?: number } }>("/api/tools/overview", { silent: true }),
   });
   const conversionCostPoints = Number(overviewQuery.data?.conversionCostPoints || 5);
@@ -80,9 +81,9 @@ export function Tools() {
     onSuccess: (result) => {
       setLastResult({ fileName: result.fileName, url: result.url });
       toast.success("文件转换完成");
-      void queryClient.invalidateQueries({ queryKey: ["tools", "overview"] });
-      void queryClient.invalidateQueries({ queryKey: ["points", "overview"] });
-      void queryClient.invalidateQueries({ queryKey: ["tools", "history"] });
+      void queryClient.invalidateQueries({ queryKey: toolsKeys.overview() });
+      void queryClient.invalidateQueries({ queryKey: pointsKeys.overview() });
+      void queryClient.invalidateQueries({ queryKey: toolsKeys.history() });
     },
     onError: (error: unknown) => {
       toast.error(error instanceof Error ? error.message : "文件转换失败");

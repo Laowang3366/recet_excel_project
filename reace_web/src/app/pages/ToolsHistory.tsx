@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
 import { api } from "../lib/api";
 import { normalizeResourceUrl } from "../lib/mappers";
+import { toolsKeys } from "../lib/query-keys";
 
 function formatFileType(value: string) {
   const normalized = String(value || "").toLowerCase();
@@ -23,7 +24,7 @@ type ToolHistoryRecord = {
 
 export function ToolsHistory() {
   const historyQuery = useQuery({
-    queryKey: ["tools", "history"],
+    queryKey: toolsKeys.history(),
     queryFn: () => api.get<{ records?: ToolHistoryRecord[] }>("/api/tools/history", { silent: true }),
   });
   const historyRecords = historyQuery.data?.records || [];

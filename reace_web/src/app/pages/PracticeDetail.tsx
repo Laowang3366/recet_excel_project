@@ -157,7 +157,7 @@ export function PracticeDetail() {
         queryClient.invalidateQueries({ queryKey: practiceKeys.leaderboard() }),
         queryClient.invalidateQueries({ queryKey: practiceKeys.questionList() }),
         campaignLevel?.id
-          ? queryClient.invalidateQueries({ queryKey: ["practice", "campaign"], refetchType: "all" })
+          ? queryClient.invalidateQueries({ queryKey: practiceKeys.campaign(), refetchType: "all" })
           : Promise.resolve(),
       ]);
       if (campaignLevel?.id) {

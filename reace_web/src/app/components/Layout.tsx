@@ -263,31 +263,32 @@ export function Layout() {
   });
   const usePropMutation = useMutation({
     mutationFn: (entitlementId: number) => api.post<PropActionResponse>(`/api/users/me/props/${entitlementId}/use`, {}),
-    onSuccess: async (result, entitlementId) => {
+    onSuccess: async (result) => {
       toast.success(result?.message || "道具已使用");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: profileKeys.props() }),
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: ["user-profile"] }),
-        queryClient.invalidateQueries({ queryKey: ["home", "checkin-status"] }),
+        queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
       ]);
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, "道具使用失败"));
     },
   });
+  const invalidateCheckinCaches = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
+      queryClient.invalidateQueries({ queryKey: pointsKeys.overview() }),
+      queryClient.invalidateQueries({ queryKey: pointsKeys.records() }),
+      queryClient.invalidateQueries({ queryKey: pointsKeys.tasks() }),
+      queryClient.invalidateQueries({ queryKey: mallKeys.overview() }),
+      queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
+    ]);
   const checkinMutation = useMutation({
     mutationFn: () => api.post<CheckinActionResponse>("/api/checkin", {}),
     onSuccess: async (result) => {
       toast.success(`签到成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.records() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.tasks() }),
-        queryClient.invalidateQueries({ queryKey: mallKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-      ]);
+      await invalidateCheckinCaches();
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, "签到失败"));
@@ -297,14 +298,7 @@ export function Layout() {
     mutationFn: () => api.post<CheckinActionResponse>("/api/checkin/makeup", {}),
     onSuccess: async (result) => {
       toast.success(`补签成功，+${result?.gainedPoints ?? 0} 积分，+${result?.gainedExp ?? 0} 经验`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: homeKeys.checkinStatus() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.records() }),
-        queryClient.invalidateQueries({ queryKey: pointsKeys.tasks() }),
-        queryClient.invalidateQueries({ queryKey: mallKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-      ]);
+      await invalidateCheckinCaches();
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, "补签失败"));

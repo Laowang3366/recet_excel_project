@@ -90,7 +90,7 @@ export function TemplateCenter() {
     },
     onSuccess: async (result) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["templates"] }),
+        queryClient.invalidateQueries({ queryKey: templateKeys.all }),
         queryClient.invalidateQueries({ queryKey: pointsKeys.overview() }),
       ]);
       toast.success(result?.deductedPoints ? `模板下载成功，已扣除 ${result.deductedPoints} 积分` : "模板下载成功");
