@@ -5,18 +5,10 @@ import {
   BookOpen, 
   ShoppingBag, 
   Menu,
-  Bell, 
-  Search,
   User,
-  X,
-  Send,
-  LoaderCircle,
-  Paperclip,
   MoreVertical,
   ChevronDown,
   Activity,
-  Settings,
-  LogOut,
   Lightbulb,
   Wrench,
   Package,
@@ -24,33 +16,26 @@ import {
   Ticket,
   ArrowRightLeft,
   Target as TargetIcon,
-  ClipboardList,
   FolderKanban,
   CalendarCheck,
   Flame
 } from "lucide-react";
 import { startTransition, useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { toast } from "sonner";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
-import { getDefaultAdminPath, hasAdminConsoleAccess } from "../admin/config";
+import { hasAdminConsoleAccess } from "../admin/config";
 import { api } from "../lib/api";
-import { formatRelativeTime } from "../lib/format";
 import {
   getAppShellClassName,
-  getLiteCategorySearchClassName,
   getLitePublicNavigationClassName,
   getMobileBottomNavigationContentClassName,
-  getCompactHeaderAccountButtonClassName,
-  getCompactHeaderNotificationButtonClassName,
   shouldRenderHeaderDrawerTrigger,
   shouldRenderCompactHeaderAccountAction,
   shouldRenderCompactHeaderNotificationAction,
 } from "../lib/layout-display";
-import { normalizeAvatarUrl } from "../lib/mappers";
 import { homeKeys, mallKeys, notificationKeys, pointsKeys, profileKeys } from "../lib/query-keys";
 import { preloadPublicRoute } from "../lib/route-preload";
 import { useSession } from "../lib/session";
@@ -66,54 +51,13 @@ import {
 } from "../lib/site-navigation";
 import { useIsMobile } from "./ui/use-mobile";
 import { ONLINE_LITE_MODE, isLiteAllowedPath } from "../lib/site-mode";
+import { AssistantWidget } from "./layout/AssistantWidget";
+import { AccountMenu } from "./layout/AccountMenu";
+import { CategorySearch } from "./layout/CategorySearch";
+import { MobileBottomNav } from "./layout/MobileBottomNav";
+import { NotificationDropdown, type LayoutNotification } from "./layout/NotificationDropdown";
 
 const OPEN_PROPS_EVENT = "excel-open-props-dialog";
-const ASSISTANT_ENTRY_WIDTH = 104;
-const ASSISTANT_ENTRY_HEIGHT = 132;
-
-type AssistantWidgetResponse = {
-  conversationId: string;
-  answer: string;
-  relatedTutorials: Array<{ id: number; title: string; summary?: string; path: string }>;
-  relatedQuestions: Array<{ id: number; title: string; explanation?: string; path: string }>;
-  model?: string;
-  fallbackUsed?: boolean;
-};
-
-type AssistantWidgetAttachment = {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  content?: string;
-  readable: boolean;
-  imageDataUrl?: string;
-};
-
-type AssistantWidgetTurn = {
-  id: string;
-  question: string;
-  answer: string;
-  relatedTutorials: AssistantWidgetResponse["relatedTutorials"];
-  relatedQuestions: AssistantWidgetResponse["relatedQuestions"];
-  attachments?: AssistantWidgetAttachment[];
-  model?: string;
-  fallbackUsed?: boolean;
-  pending?: boolean;
-  failed?: boolean;
-};
-
-type LayoutNotification = {
-  id: number;
-  type: string;
-  title?: string | null;
-  content?: string | null;
-  detailContent?: string | null;
-  relatedId?: number | null;
-  isRead?: number | boolean | null;
-  announcementType?: string | null;
-  createTime?: string | null;
-};
 
 type UserPropRecord = {
   id: number;
@@ -169,132 +113,12 @@ export function Layout() {
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [popupNotification, setPopupNotification] = useState<LayoutNotification | null>(null);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantMessage, setAssistantMessage] = useState("");
-  const [assistantConversationId, setAssistantConversationId] = useState<string | null>(null);
-  const [assistantHistory, setAssistantHistory] = useState<AssistantWidgetTurn[]>([]);
-  const [assistantAttachments, setAssistantAttachments] = useState<AssistantWidgetAttachment[]>([]);
-  const [assistantDragPosition, setAssistantDragPosition] = useState<{ left: number; top: number } | null>(null);
-  const [assistantDragging, setAssistantDragging] = useState(false);
-  const [assistantShowLatestReply, setAssistantShowLatestReply] = useState(false);
   const [feedbackForm, setFeedbackForm] = useState({
     type: "performance_optimization",
     content: "",
   });
   const notificationRef = useRef<HTMLDivElement>(null);
-  const assistantRef = useRef<HTMLDivElement>(null);
-  const assistantMessagesRef = useRef<HTMLDivElement>(null);
-  const assistantLatestReplyRef = useRef<HTMLDivElement>(null);
-  const assistantFileInputRef = useRef<HTMLInputElement>(null);
-  const assistantDragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    originLeft: number;
-    originTop: number;
-    width: number;
-    height: number;
-    moved: boolean;
-  } | null>(null);
-  const assistantSuppressClickRef = useRef(false);
-  const assistantEntryReturnPositionRef = useRef<{ left: number; top: number } | null>(null);
-  const assistantEntryHadCustomPositionRef = useRef(false);
-  const assistantPanelMovedRef = useRef(false);
-  const assistantShouldScrollLatestRef = useRef(false);
   const popupDismissedIdsRef = useRef<Set<number>>(new Set());
-
-  const clampAssistantPosition = (left: number, top: number, width: number, height: number) => {
-    const padding = 8;
-    const maxLeft = Math.max(padding, window.innerWidth - width - padding);
-    const maxTop = Math.max(padding, window.innerHeight - height - padding);
-    return {
-      left: Math.min(Math.max(padding, left), maxLeft),
-      top: Math.min(Math.max(padding, top), maxTop),
-    };
-  };
-
-  const clampAssistantToViewport = () => {
-    const rect = assistantRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setAssistantDragPosition((current) => {
-      if (!current) return current;
-      const next = clampAssistantPosition(rect.left, rect.top, rect.width, rect.height);
-      if (Math.abs(current.left - next.left) < 0.5 && Math.abs(current.top - next.top) < 0.5) {
-        return current;
-      }
-      return next;
-    });
-  };
-
-  const isAssistantNearLatestReply = () => {
-    const element = assistantMessagesRef.current;
-    if (!element) return true;
-    return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
-  };
-
-  const scrollAssistantToLatestReply = (behavior: ScrollBehavior = "smooth") => {
-    assistantLatestReplyRef.current?.scrollIntoView({ behavior, block: "end" });
-    setAssistantShowLatestReply(false);
-  };
-
-  const beginAssistantDrag = (event: React.PointerEvent<HTMLElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement;
-    if (target.closest("[data-assistant-no-drag='true'], input, textarea, select, a")) return;
-    const rect = assistantRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    assistantDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originLeft: rect.left,
-      originTop: rect.top,
-      width: rect.width,
-      height: rect.height,
-      moved: false,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setAssistantDragging(true);
-  };
-
-  const moveAssistantDrag = (event: React.PointerEvent<HTMLElement>) => {
-    const drag = assistantDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - drag.startX;
-    const deltaY = event.clientY - drag.startY;
-    if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-      drag.moved = true;
-      assistantSuppressClickRef.current = true;
-      if (assistantOpen) {
-        assistantPanelMovedRef.current = true;
-      }
-    }
-    if (!drag.moved) return;
-    event.preventDefault();
-    setAssistantDragPosition(
-      clampAssistantPosition(
-        drag.originLeft + deltaX,
-        drag.originTop + deltaY,
-        drag.width,
-        drag.height,
-      ),
-    );
-  };
-
-  const endAssistantDrag = (event: React.PointerEvent<HTMLElement>) => {
-    const drag = assistantDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    assistantDragRef.current = null;
-    setAssistantDragging(false);
-    if (drag.moved) {
-      window.setTimeout(() => {
-        assistantSuppressClickRef.current = false;
-      }, 0);
-      return;
-    }
-    assistantSuppressClickRef.current = false;
-  };
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -313,49 +137,6 @@ export function Layout() {
       document.removeEventListener("keydown", handleEsc);
     };
   }, [showNotifications]);
-  useEffect(() => {
-    if (!assistantOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (assistantRef.current && !assistantRef.current.contains(event.target as Node)) {
-        closeAssistant();
-      }
-    };
-    const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeAssistant();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEsc);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEsc);
-    };
-  }, [assistantOpen]);
-
-  useEffect(() => {
-    if (!assistantDragPosition) return;
-    const handleViewportChange = () => clampAssistantToViewport();
-    const frameId = window.requestAnimationFrame(handleViewportChange);
-    window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("orientationchange", handleViewportChange);
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("orientationchange", handleViewportChange);
-    };
-  }, [assistantOpen, Boolean(assistantDragPosition)]);
-
-  useEffect(() => {
-    if (!assistantOpen || assistantHistory.length === 0) return;
-    if (!assistantShouldScrollLatestRef.current) return;
-    assistantShouldScrollLatestRef.current = false;
-    requestAnimationFrame(() => scrollAssistantToLatestReply("smooth"));
-  }, [assistantOpen, assistantHistory.length]);
-  const [categorySearchOpen, setCategorySearchOpen] = useState(false);
-  const [categorySearchScope, setCategorySearchScope] = useState<"tutorial" | "question">("tutorial");
-  const [categorySearchKeyword, setCategorySearchKeyword] = useState("");
-  const categorySearchRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const showCompactHeaderAccountAction = shouldRenderCompactHeaderAccountAction({
     onlineLiteMode: ONLINE_LITE_MODE,
@@ -391,16 +172,6 @@ export function Layout() {
       navigate("/", { replace: true });
     }
   }, [location.pathname, navigate]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (categorySearchRef.current && !categorySearchRef.current.contains(event.target as Node)) {
-        setCategorySearchOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const notificationsPreviewQuery = useQuery({
     queryKey: notificationKeys.list({ page: 1, limit: 5, type: visibleNotificationTypeFilter, scope: "layout" }),
@@ -474,65 +245,6 @@ export function Layout() {
     mutationFn: (notificationId: number) => api.put(`/api/notifications/${notificationId}/read`, {}),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-    },
-  });
-  const assistantChatMutation = useMutation({
-    mutationFn: ({
-      message,
-      conversationId,
-      workbookContext,
-      images,
-    }: {
-      message: string;
-      conversationId: string | null;
-      workbookContext?: string;
-      turnId: string;
-      attachments?: AssistantWidgetAttachment[];
-      images?: Array<{ name: string; mimeType: string; size: number; dataUrl?: string }>;
-    }) =>
-      api.post<AssistantWidgetResponse>("/api/assistant/chat", {
-        message,
-        conversationId,
-        workbookContext,
-        images,
-      }),
-    onSuccess: (result, variables) => {
-      const shouldScrollToLatest = !assistantOpen || isAssistantNearLatestReply();
-      assistantShouldScrollLatestRef.current = shouldScrollToLatest;
-      if (!shouldScrollToLatest) {
-        setAssistantShowLatestReply(true);
-      }
-      setAssistantHistory((prev) => prev.map((item) => item.id === variables.turnId
-        ? {
-          ...item,
-          answer: result.answer,
-          relatedTutorials: result.relatedTutorials || [],
-          relatedQuestions: result.relatedQuestions || [],
-          attachments: variables.attachments || [],
-          model: result.model,
-          fallbackUsed: result.fallbackUsed,
-          pending: false,
-          failed: false,
-        }
-        : item));
-      setAssistantConversationId(result.conversationId || null);
-      if (shouldScrollToLatest) {
-        requestAnimationFrame(() => scrollAssistantToLatestReply("smooth"));
-      }
-    },
-    onError: (error: unknown, variables) => {
-      const message = getErrorMessage(error, "AI 助手暂时不可用");
-      setAssistantHistory((prev) => prev.map((item) => item.id === variables?.turnId
-        ? {
-          ...item,
-          answer: message,
-          relatedTutorials: [],
-          relatedQuestions: [],
-          pending: false,
-          failed: true,
-        }
-        : item));
-      toast.error(message);
     },
   });
   const feedbackMutation = useMutation({
@@ -640,17 +352,6 @@ export function Layout() {
     }
   };
 
-  const handleCategorySearch = () => {
-    const keyword = categorySearchKeyword.trim();
-    const query = keyword ? `?search=${encodeURIComponent(keyword)}` : "";
-    setCategorySearchOpen(false);
-    if (categorySearchScope === "tutorial") {
-      navigateToPrefetchedRoute(`/tutorials${query}`);
-      return;
-    }
-    navigateToPrefetchedRoute(`/practice${query}`);
-  };
-
   const navIconMap: Record<string, React.ReactNode> = {
     home: <Home size={18} strokeWidth={1.8} />,
     practice: <TargetIcon size={18} strokeWidth={1.8} />,
@@ -683,266 +384,6 @@ export function Layout() {
         icon: navIconMap[item.key],
       }));
 
-  const showFloatingAssistant = !location.pathname.startsWith("/assistant");
-  const assistantAnimatedAvatarSrc = "/assistant-ikun-animated.webp";
-  const assistantReadableFilePattern = /\.(txt|csv|tsv|json|md|markdown|log|xml|html?|css|js|ts|tsx|sql)$/i;
-  const assistantImageFilePattern = /\.(png|jpe?g|webp|gif)$/i;
-  const assistantMaxAttachmentCount = 3;
-  const assistantMaxImageSize = 5 * 1024 * 1024;
-  const formatAssistantFileSize = (size: number) => {
-    if (size < 1024) return `${size}B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`;
-    return `${(size / 1024 / 1024).toFixed(1)}MB`;
-  };
-  const isAssistantImageFile = (file: File) => file.type.startsWith("image/") || assistantImageFilePattern.test(file.name);
-  const getAssistantImageMimeType = (file: File) => {
-    const type = file.type.toLowerCase();
-    if (type === "image/jpg") return "image/jpeg";
-    if (type.startsWith("image/")) return type;
-    const fileName = file.name.toLowerCase();
-    if (/\.jpe?g$/.test(fileName)) return "image/jpeg";
-    if (/\.webp$/.test(fileName)) return "image/webp";
-    if (/\.gif$/.test(fileName)) return "image/gif";
-    return "image/png";
-  };
-  const normalizeAssistantImageDataUrl = (file: File, dataUrl: string) => {
-    const mimeType = getAssistantImageMimeType(file);
-    if (/^data:image\/jpg;base64,/i.test(dataUrl)) {
-      return dataUrl.replace(/^data:image\/jpg;base64,/i, "data:image/jpeg;base64,");
-    }
-    if (/^data:(?:application\/octet-stream)?;base64,/i.test(dataUrl)) {
-      return dataUrl.replace(/^data:(?:application\/octet-stream)?;base64,/i, `data:${mimeType};base64,`);
-    }
-    return dataUrl;
-  };
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(normalizeAssistantImageDataUrl(file, String(reader.result || "")));
-      reader.onerror = () => reject(reader.error || new Error("file read failed"));
-      reader.readAsDataURL(file);
-    });
-  const readAssistantAttachment = async (file: File): Promise<AssistantWidgetAttachment> => {
-    if (isAssistantImageFile(file)) {
-      if (file.size > assistantMaxImageSize) {
-        throw new Error(`图片 ${file.name || "clipboard-image"} 超过 5MB`);
-      }
-      return {
-        id: `${file.name || "clipboard-image"}-${file.lastModified}-${file.size}`,
-        name: file.name || "clipboard-image.png",
-        size: file.size,
-        type: getAssistantImageMimeType(file),
-        readable: true,
-        imageDataUrl: await readFileAsDataUrl(file),
-      };
-    }
-    const readable = file.type.startsWith("text/") || assistantReadableFilePattern.test(file.name);
-    if (!readable) {
-      return {
-        id: `${file.name}-${file.lastModified}-${file.size}`,
-        name: file.name,
-        size: file.size,
-        type: file.type || "unknown",
-        readable: false,
-      };
-    }
-    const text = await file.text();
-    const clipped = text.length > 12000 ? `${text.slice(0, 12000)}\n\n[内容较长，已截取前 12000 字符]` : text;
-    return {
-      id: `${file.name}-${file.lastModified}-${file.size}`,
-      name: file.name,
-      size: file.size,
-      type: file.type || "text/plain",
-      content: clipped,
-      readable: true,
-    };
-  };
-  const handleAssistantFiles = async (files: FileList | File[] | null) => {
-    if (!files?.length) return;
-    const incomingFiles = Array.from(files);
-    const remainingSlots = Math.max(0, assistantMaxAttachmentCount - assistantAttachments.length);
-    if (remainingSlots <= 0) {
-      toast.info(`一次最多发送 ${assistantMaxAttachmentCount} 个附件`);
-      return;
-    }
-    const picked = incomingFiles.slice(0, remainingSlots);
-    try {
-      const nextAttachments = await Promise.all(picked.map(readAssistantAttachment));
-      setAssistantAttachments((prev) => [...prev, ...nextAttachments]);
-      if (picked.length < incomingFiles.length) {
-        toast.info(`一次最多发送 ${assistantMaxAttachmentCount} 个附件，已保留前 ${assistantMaxAttachmentCount} 个`);
-      }
-      const imageCount = nextAttachments.filter((item) => item.imageDataUrl).length;
-      if (imageCount > 0) {
-        toast.success(`已添加 ${imageCount} 张图片`);
-      }
-      const unreadableCount = nextAttachments.filter((item) => !item.readable && !item.imageDataUrl).length;
-      if (unreadableCount > 0) {
-        toast.info("部分附件无法在浏览器内读取内容，将只发送文件名和大小");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "附件读取失败，请换一个文件重试");
-    } finally {
-      if (assistantFileInputRef.current) {
-        assistantFileInputRef.current.value = "";
-      }
-    }
-  };
-  const removeAssistantAttachment = (id: string) => {
-    setAssistantAttachments((prev) => prev.filter((item) => item.id !== id));
-  };
-  const buildAssistantAttachmentContext = () => {
-    if (assistantAttachments.length === 0) return "";
-    return assistantAttachments
-      .map((item, index) => {
-        const header = `附件 ${index + 1}: ${item.name} (${formatAssistantFileSize(item.size)}, ${item.type || "unknown"})`;
-        if (item.imageDataUrl) {
-          return `${header}\n说明：该附件是图片，已作为图片发送给 AI 助手。`;
-        }
-        return item.readable && item.content
-          ? `${header}\n内容：\n${item.content}`
-          : `${header}\n说明：该附件已选择，但当前浏览器端无法直接读取二进制内容。`;
-      })
-      .join("\n\n");
-  };
-  const buildAssistantImagePayload = () =>
-    assistantAttachments
-      .filter((item) => item.imageDataUrl)
-      .map((item) => ({
-        name: item.name,
-        mimeType: item.type || "image/png",
-        size: item.size,
-        dataUrl: item.imageDataUrl,
-      }));
-  const handleAssistantPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(event.clipboardData?.items || [])
-      .filter((item) => item.kind === "file")
-      .map((item) => item.getAsFile())
-      .filter((file): file is File => Boolean(file && isAssistantImageFile(file)));
-    if (files.length === 0) return;
-    event.preventDefault();
-    void handleAssistantFiles(files);
-  };
-  const handleAssistantMessagesScroll = () => {
-    if (isAssistantNearLatestReply()) {
-      setAssistantShowLatestReply(false);
-    }
-  };
-  const openAssistant = () => {
-    const rect = assistantRef.current?.getBoundingClientRect();
-    if (rect) {
-      const entryPosition = clampAssistantPosition(rect.left, rect.top, rect.width, rect.height);
-      assistantEntryReturnPositionRef.current = entryPosition;
-      assistantEntryHadCustomPositionRef.current = assistantDragPosition !== null;
-      assistantPanelMovedRef.current = false;
-      if (assistantDragPosition) {
-        setAssistantDragPosition(
-          clampAssistantPosition(
-            entryPosition.left,
-            entryPosition.top,
-            ASSISTANT_ENTRY_WIDTH,
-            ASSISTANT_ENTRY_HEIGHT,
-          ),
-        );
-      }
-    }
-    assistantShouldScrollLatestRef.current = true;
-    setAssistantShowLatestReply(false);
-    setAssistantOpen(true);
-    setShowNotifications(false);
-    window.sessionStorage.setItem(
-      "excelAssistantReturnPath",
-      `${location.pathname}${location.search}${location.hash}`,
-    );
-  };
-  const closeAssistant = () => {
-    if (!assistantPanelMovedRef.current && assistantEntryReturnPositionRef.current) {
-      if (assistantEntryHadCustomPositionRef.current) {
-        setAssistantDragPosition(
-          clampAssistantPosition(
-            assistantEntryReturnPositionRef.current.left,
-            assistantEntryReturnPositionRef.current.top,
-            ASSISTANT_ENTRY_WIDTH,
-            ASSISTANT_ENTRY_HEIGHT,
-          ),
-        );
-      } else {
-        setAssistantDragPosition(null);
-      }
-    }
-    assistantEntryReturnPositionRef.current = null;
-    assistantEntryHadCustomPositionRef.current = false;
-    assistantPanelMovedRef.current = false;
-    setAssistantOpen(false);
-  };
-  const submitAssistantMessage = async (text?: string) => {
-    const content = (text ?? assistantMessage).trim();
-    if (assistantChatMutation.isPending) return;
-    if (!isAuthenticated) {
-      toast.info("请先登录后再使用 AI 助手");
-      navigate("/auth");
-      return;
-    }
-    if (!content && assistantAttachments.length === 0) {
-      toast.info("请先输入你的 Excel 问题");
-      return;
-    }
-    const question = content || "请分析我发送的附件内容";
-    const attachments = assistantAttachments;
-    const workbookContext = buildAssistantAttachmentContext();
-    const images = buildAssistantImagePayload();
-    const turnId = `${Date.now()}`;
-    const shouldScrollToLatest = !assistantOpen || isAssistantNearLatestReply();
-    assistantShouldScrollLatestRef.current = shouldScrollToLatest;
-    if (!shouldScrollToLatest) {
-      setAssistantShowLatestReply(true);
-    }
-    setAssistantHistory((prev) => [
-      ...prev,
-      {
-        id: turnId,
-        question,
-        answer: "",
-        relatedTutorials: [],
-        relatedQuestions: [],
-        attachments,
-        pending: true,
-      },
-    ]);
-    setAssistantMessage("");
-    setAssistantAttachments([]);
-    try {
-      await assistantChatMutation.mutateAsync({
-        turnId,
-        message: question,
-        conversationId: assistantConversationId,
-        workbookContext,
-        images,
-        attachments,
-      });
-    } catch {
-      // error state is rendered by the mutation handler
-    }
-  };
-  const assistantPromptSnippets = [
-    "VLOOKUP 为什么会返回 #N/A？",
-    "帮我写一个按部门汇总销售额的 SUMIFS 公式",
-    "FILTER 和 SORTBY 怎么组合做排名？",
-  ];
-  const assistantCanSubmit = (assistantMessage.trim().length > 0 || assistantAttachments.length > 0) && !assistantChatMutation.isPending;
-  const assistantFloatingClassName = assistantDragPosition
-    ? "fixed z-50 h-[132px] w-[104px]"
-    : "fixed right-3 top-1/2 z-50 h-[132px] w-[104px] -translate-y-1/2 md:right-5";
-  const assistantFloatingStyle = assistantDragPosition
-    ? { left: assistantDragPosition.left, top: assistantDragPosition.top }
-    : undefined;
-  const assistantPanelOpensLeft = !assistantDragPosition || assistantDragPosition.left > window.innerWidth / 2;
-  const assistantPanelPositionClassName = assistantPanelOpensLeft
-    ? "right-[88px] origin-bottom-right"
-    : "left-[88px] origin-bottom-left";
-  const assistantPanelArrowClassName = assistantPanelOpensLeft
-    ? "-right-3 border-r border-t"
-    : "-left-3 border-b border-l";
   const openPropsDialog = () => {
     if (!isAuthenticated) {
       navigate("/auth");
@@ -976,16 +417,6 @@ export function Layout() {
     },
   ];
   const moreLiteActive = moreLiteNavItems.some((item) => item.active);
-  const accountMenuPanelClassName = ONLINE_LITE_MODE
-    ? "w-44 rounded-2xl border border-white/10 bg-[#06251a]/96 p-1.5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.30)] backdrop-blur-xl"
-    : "w-44 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.14)]";
-  const accountMenuItemClassName = ONLINE_LITE_MODE
-    ? "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/74 transition hover:bg-white/10 hover:text-white"
-    : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950";
-  const accountMenuDangerClassName = ONLINE_LITE_MODE
-    ? "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black text-rose-200 transition hover:bg-rose-500/14 hover:text-rose-100"
-    : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black text-rose-600 transition hover:bg-rose-50";
-
   useEffect(() => {
     const handleOpenProps = () => {
       openPropsDialog();
@@ -1255,68 +686,7 @@ export function Layout() {
                     </HoverCardContent>
                   </HoverCard>
                 </nav>
-                <div className={getLiteCategorySearchClassName()} ref={categorySearchRef}>
-                  <button
-                    type="button"
-                    onClick={() => setCategorySearchOpen((open) => !open)}
-                    className="inline-flex h-11 items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 text-sm font-bold text-white/82 transition hover:bg-white/14 hover:text-white xl:px-4"
-                  >
-                    <Search size={17} className="text-[#7cffb2]" />
-                    <span className="whitespace-nowrap">分类搜索</span>
-                  </button>
-                  <AnimatePresence>
-                    {categorySearchOpen ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                        transition={{ duration: 0.16 }}
-                        className="absolute left-0 top-full z-50 mt-3 w-[360px] overflow-hidden rounded-[26px] border border-white/12 bg-[#06251a]/96 p-4 shadow-[0_24px_64px_rgba(0,0,0,0.34)] backdrop-blur-xl"
-                      >
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { key: "tutorial", label: "教程" },
-                            { key: "question", label: "题型" },
-                          ].map((scope) => (
-                            <button
-                              key={scope.key}
-                              type="button"
-                              onClick={() => setCategorySearchScope(scope.key as "tutorial" | "question")}
-                              className={`h-10 rounded-2xl text-sm font-black transition ${
-                                categorySearchScope === scope.key
-                                  ? "bg-[#7cffb2] text-[#00140d]"
-                                  : "bg-white/8 text-white/62 hover:bg-white/12 hover:text-white"
-                              }`}
-                            >
-                              {scope.label}
-                            </button>
-                          ))}
-                        </div>
-                        <label className="mt-3 flex h-12 items-center gap-3 rounded-2xl border border-white/10 bg-white/8 px-4">
-                          <Search size={18} className="text-white/42" />
-                          <input
-                            value={categorySearchKeyword}
-                            onChange={(event) => setCategorySearchKeyword(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                handleCategorySearch();
-                              }
-                            }}
-                            placeholder={categorySearchScope === "tutorial" ? "搜索函数、教程主题..." : "搜索章节、题型..."}
-                            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/36"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleCategorySearch}
-                          className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#00b050] text-sm font-black text-white transition hover:bg-[#0ac45d]"
-                        >
-                          进入搜索
-                        </button>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
+                <CategorySearch onNavigate={navigateToPrefetchedRoute} />
               </div>
             ) : null}
           </div>
@@ -1338,380 +708,37 @@ export function Layout() {
               </button>
             ) : null}
 
-            {showCompactHeaderNotificationAction ? (
-              <div className="relative shrink-0" ref={notificationRef}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isAuthenticated) {
-                      navigate("/auth");
-                      return;
-                    }
-                    setShowNotifications(!showNotifications);
-                  }}
-                  className={getCompactHeaderNotificationButtonClassName()}
-                  title={isAuthenticated ? "通知" : "登录后查看通知"}
-                  aria-label={isAuthenticated ? "打开通知" : "登录后查看通知"}
-                >
-                  <Bell size={18} strokeWidth={1.8} />
-                  {isAuthenticated ? renderCountBadge(unreadNotificationCount, "rose") : null}
-                </button>
+            <NotificationDropdown
+              compact={showCompactHeaderNotificationAction}
+              isAuthenticated={isAuthenticated}
+              open={showNotifications}
+              unreadCount={unreadNotificationCount}
+              items={notificationItems}
+              rootRef={notificationRef}
+              onOpenChange={setShowNotifications}
+              onNavigate={navigate}
+              onMarkAllRead={async () => {
+                await markAllNotificationsReadMutation.mutateAsync();
+              }}
+              onMarkRead={async (id) => {
+                await markNotificationReadMutation.mutateAsync(id);
+              }}
+              resolveNotificationLink={resolveNotificationLink}
+            />
 
-                <AnimatePresence>
-                  {isAuthenticated && showNotifications && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 15, scale: 0.95, filter: "blur(4px)" }}
-                      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95, filter: "blur(2px)" }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-gray-100 bg-white/95 text-slate-900 shadow-[0_18px_50px_rgba(15,23,42,0.20)] backdrop-blur-xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between border-b border-gray-50 p-4">
-                        <h3 className="font-semibold text-slate-800">通知</h3>
-                        <button
-                          onClick={async () => {
-                            await markAllNotificationsReadMutation.mutateAsync();
-                          }}
-                          className="text-xs text-teal-600 hover:text-teal-700"
-                        >
-                          全部已读
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 border-b border-gray-50 bg-slate-50/70 px-3 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowNotifications(false);
-                            navigate("/notifications?tab=points");
-                          }}
-                          className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-50"
-                        >
-                          积分通知
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowNotifications(false);
-                            navigate("/notifications?tab=announcements");
-                          }}
-                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
-                        >
-                          网站公告
-                        </button>
-                      </div>
-                      <div className="max-h-80 overflow-y-auto">
-                        {notificationItems.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={async () => {
-                              if (!item.isRead) {
-                                await markNotificationReadMutation.mutateAsync(item.id);
-                              }
-                              setShowNotifications(false);
-                              navigate(resolveNotificationLink(item));
-                            }}
-                            className="flex cursor-pointer gap-3 border-b border-gray-50/50 p-4 hover:bg-gray-50"
-                          >
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-600">
-                              <Bell size={18} />
-                            </div>
-                            <div>
-                              <p className="text-sm text-slate-700">{item.content}</p>
-                              <p className="mt-1 text-xs text-slate-400">{formatRelativeTime(item.createTime)}</p>
-                            </div>
-                          </div>
-                        ))}
-                        {notificationItems.length === 0 && (
-                          <div className="p-6 text-center text-sm text-slate-400">暂无通知</div>
-                        )}
-                      </div>
-                      <div className="border-t border-gray-50 bg-slate-50 p-3 text-center">
-                        <Link
-                          to="/notifications"
-                          onClick={() => setShowNotifications(false)}
-                          className="text-[13px] font-bold text-slate-600 transition-colors hover:text-slate-900"
-                        >
-                          查看全部通知
-                        </Link>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            ) : isAuthenticated ? (
-              <>
-                <div className="relative" ref={notificationRef}>
-                  <button 
-                    onClick={() => setShowNotifications(!showNotifications)}
-                    className="p-2 text-slate-500 hover:bg-gray-100 rounded-full transition-colors relative"
-                    title="通知"
-                  >
-                    <Bell size={20} />
-                    {renderCountBadge(unreadNotificationCount, "rose")}
-                  </button>
-
-                  <AnimatePresence>
-                    {showNotifications && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 15, scale: 0.95, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95, filter: "blur(2px)" }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className="absolute right-0 mt-2 w-80 bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden z-50"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="p-4 border-b border-gray-50 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-800">通知</h3>
-                      <button
-                        onClick={async () => {
-                          await markAllNotificationsReadMutation.mutateAsync();
-                        }}
-                        className="text-xs text-teal-600 hover:text-teal-700"
-                      >
-                        全部已读
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 border-b border-gray-50 bg-slate-50/70 px-3 py-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowNotifications(false);
-                          navigate("/notifications?tab=points");
-                        }}
-                        className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-50"
-                      >
-                        积分通知
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowNotifications(false);
-                          navigate("/notifications?tab=announcements");
-                        }}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
-                      >
-                        网站公告
-                      </button>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notificationItems.map((item) => (
-                        <div 
-                          key={item.id}
-                          onClick={async () => {
-                            if (!item.isRead) {
-                              await markNotificationReadMutation.mutateAsync(item.id);
-                            }
-                            setShowNotifications(false);
-                            navigate(resolveNotificationLink(item));
-                          }}
-                          className="p-4 border-b border-gray-50/50 hover:bg-gray-50 flex gap-3 cursor-pointer"
-                        >
-                          <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center shrink-0">
-                            <Bell size={18} />
-                          </div>
-                          <div>
-                            <p className="text-sm text-slate-700">{item.content}</p>
-                            <p className="text-xs text-slate-400 mt-1">{formatRelativeTime(item.createTime)}</p>
-                          </div>
-                        </div>
-                      ))}
-                      {notificationItems.length === 0 && (
-                        <div className="p-6 text-sm text-slate-400 text-center">暂无通知</div>
-                      )}
-                    </div>
-                    <div className="p-3 border-t border-gray-50 bg-slate-50 text-center">
-                      <Link 
-                        to="/notifications" 
-                        onClick={() => setShowNotifications(false)}
-                        className="text-[13px] font-bold text-slate-600 hover:text-slate-900 transition-colors"
-                      >
-                        查看全部通知
-                      </Link>
-                    </div>
-                  </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </>
-            ) : null}
-
-            <div
-              className={`${
-                showCompactHeaderAccountAction ? "shrink-0" : isMobile ? "" : ONLINE_LITE_MODE ? "pl-4 border-l border-white/10" : "pl-4 border-l border-gray-200"
-              } flex items-center gap-2`}
-            >
-              {isAuthenticated && !showCompactHeaderAccountAction ? (
-                <HoverCard openDelay={120} closeDelay={80}>
-                  <HoverCardTrigger asChild>
-                    <button type="button" className="flex items-center gap-2 cursor-pointer group">
-                      <img
-                        src={normalizeAvatarUrl(user?.avatar, user?.username)}
-                        alt="Profile"
-                        className={`w-8 h-8 rounded-full object-cover transition-colors ${
-                          ONLINE_LITE_MODE
-                            ? "border border-white/20 group-hover:border-white/60"
-                            : "border border-gray-200 group-hover:border-teal-400"
-                        }`}
-                      />
-                      <span
-                        className={`text-sm font-medium ${
-                          ONLINE_LITE_MODE
-                            ? "text-white/82 group-hover:text-white"
-                            : "text-slate-700 group-hover:text-slate-900"
-                        }`}
-                      >
-                        {user?.username || "去登录"}
-                      </span>
-                    </button>
-                  </HoverCardTrigger>
-                  <HoverCardContent align="end" sideOffset={12} className={accountMenuPanelClassName}>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/profile")}
-                      className={accountMenuItemClassName}
-                    >
-                      <User size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
-                      个人中心
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/settings")}
-                      className={accountMenuItemClassName}
-                    >
-                      <Settings size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
-                      设置
-                    </button>
-                    {canAccessAdmin ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(getDefaultAdminPath(user?.role))}
-                        className={accountMenuItemClassName}
-                      >
-                        <ClipboardList size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
-                        管理后台
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await logout();
-                        toast.success("已退出登录");
-                        navigate("/auth");
-                      }}
-                      className={accountMenuDangerClassName}
-                    >
-                      <LogOut size={16} className={ONLINE_LITE_MODE ? "text-rose-300" : "text-rose-500"} />
-                      退出登录
-                    </button>
-                  </HoverCardContent>
-                </HoverCard>
-              ) : isAuthenticated && showCompactHeaderAccountAction ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button type="button" className={getCompactHeaderAccountButtonClassName()}>
-                      <img 
-                        src={normalizeAvatarUrl(user?.avatar, user?.username)} 
-                        alt="Profile" 
-                        className="h-8 w-8 rounded-full object-cover"
-                      />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64 rounded-2xl p-2">
-                    <DropdownMenuItem onClick={() => navigate("/profile")}>个人中心</DropdownMenuItem>
-                    {ONLINE_LITE_MODE ? (
-                      <>
-                        <DropdownMenuItem onClick={openCheckinDialog}>
-                          {checkinStatus?.hasCheckedInToday ? "今日已签到" : "每日签到"}
-                        </DropdownMenuItem>
-                        {accountLiteNavItems.map((item) => (
-                          <DropdownMenuItem key={`mobile-account-${item.key}`} onClick={() => navigateToPrefetchedRoute(item.path)}>
-                            {item.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </>
-                    ) : null}
-                    <DropdownMenuItem onClick={() => navigate("/settings")}>设置</DropdownMenuItem>
-                    {canAccessAdmin && <DropdownMenuItem onClick={() => navigate(getDefaultAdminPath(user?.role))}>进入管理后台</DropdownMenuItem>}
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        await logout();
-                        toast.success("已退出登录");
-                        navigate("/auth");
-                      }}
-                    >
-                      退出登录
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : showCompactHeaderAccountAction ? (
-                <Link
-                  to="/auth"
-                  className={getCompactHeaderAccountButtonClassName()}
-                  aria-label="登录或注册"
-                >
-                  <img
-                    src={normalizeAvatarUrl("", "登录")}
-                    alt="登录或注册"
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                </Link>
-              ) : (
-                ONLINE_LITE_MODE ? (
-                  <div className="hidden items-center gap-2 sm:flex">
-                    <Link
-                      to="/auth"
-                      className="inline-flex h-10 items-center rounded-full px-4 text-sm font-bold text-white/84 transition hover:bg-white/10 hover:text-white"
-                    >
-                      登录
-                    </Link>
-                    <Link
-                      to="/auth"
-                      className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-black text-[#00140d] transition hover:bg-[#ccfff1]"
-                    >
-                      注册
-                    </Link>
-                  </div>
-                ) : (
-                  <Link to="/auth" className="flex items-center gap-2 cursor-pointer group">
-                    <img
-                      src={normalizeAvatarUrl(user?.avatar, user?.username)}
-                      alt="Profile"
-                      className="w-8 h-8 rounded-full border border-gray-200 group-hover:border-teal-400 transition-colors object-cover"
-                    />
-                    <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{user?.username || "去登录"}</span>
-                  </Link>
-                )
-              )}
-              {isAuthenticated && !ONLINE_LITE_MODE ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/settings")}
-                    className={`inline-flex h-10 items-center gap-2 rounded-2xl border px-3 text-sm font-semibold transition ${
-                      ONLINE_LITE_MODE
-                        ? "border-white/12 bg-white/10 text-white/78 hover:bg-white/16 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                    }`}
-                  >
-                    <Settings size={16} className={ONLINE_LITE_MODE ? "text-white/58" : "text-slate-400"} />
-                    {!isMobile ? <span>设置</span> : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await logout();
-                      toast.success("已退出登录");
-                      navigate("/auth");
-                    }}
-                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-100"
-                  >
-                    <LogOut size={16} className="text-rose-500" />
-                    {!isMobile ? <span>退出登录</span> : null}
-                  </button>
-                </>
-              ) : null}
-            </div>
+            <AccountMenu
+              user={user}
+              isAuthenticated={isAuthenticated}
+              compact={showCompactHeaderAccountAction}
+              isMobile={isMobile}
+              canAccessAdmin={canAccessAdmin}
+              hasCheckedInToday={checkinStatus?.hasCheckedInToday}
+              accountNavItems={accountLiteNavItems}
+              onNavigate={navigate}
+              onPrefetchedNavigate={navigateToPrefetchedRoute}
+              onOpenCheckin={openCheckinDialog}
+              onLogout={logout}
+            />
           </div>
         </header>
 
@@ -1728,32 +755,12 @@ export function Layout() {
           </motion.div>
         </main>
 
-        {isMobile ? (
-          <>
-            <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
-            <div className="grid grid-cols-4 gap-1">
-              {mobileBottomNavItems.map((item) => {
-                const isActive = location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path));
-                return (
-                  <button
-                    key={`mobile-nav-${item.key}`}
-                    type="button"
-                    onClick={() => navigateToPrefetchedRoute(item.path)}
-                    className={`relative flex min-h-[58px] min-w-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold transition ${
-                      isActive
-                        ? "bg-teal-50 text-teal-700"
-                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                    }`}
-                    >
-                      <span className={isActive ? "text-teal-600" : "text-slate-400"}>{item.icon}</span>
-                      <span className="leading-tight">{item.name}</span>
-                    </button>
-                );
-              })}
-            </div>
-          </nav>
-          </>
-        ) : null}
+        <MobileBottomNav
+          isMobile={isMobile}
+          items={mobileBottomNavItems}
+          pathname={location.pathname}
+          onNavigate={navigateToPrefetchedRoute}
+        />
       </div>
 
       <Dialog open={propsOpen} onOpenChange={setPropsOpen}>
@@ -1942,252 +949,7 @@ export function Layout() {
         </DialogContent>
       </Dialog>
 
-      {showFloatingAssistant && (
-        <div ref={assistantRef} className={assistantFloatingClassName} style={assistantFloatingStyle}>
-          <>
-            {assistantOpen && (
-              <div
-                className={`absolute bottom-6 z-10 w-[min(24rem,calc(100vw-7rem))] max-h-[min(76vh,620px)] animate-in fade-in-0 zoom-in-95 slide-in-from-right-4 duration-200 ${assistantPanelPositionClassName}`}
-              >
-                <div className="relative">
-                  <span className={`pointer-events-none absolute bottom-12 h-7 w-7 rotate-45 rounded-[7px] border-slate-200 bg-white shadow-[12px_12px_34px_rgba(15,23,42,0.12)] ${assistantPanelArrowClassName}`} />
-                  <div className="relative z-10 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
-                  <div
-                    className={`relative touch-none select-none bg-[#0f91dd] px-5 pb-5 pt-6 text-white shadow-[0_10px_22px_rgba(15,145,221,0.25)] ${
-                      assistantDragging ? "cursor-grabbing" : "cursor-grab"
-                    }`}
-                    onPointerDown={beginAssistantDrag}
-                    onPointerMove={moveAssistantDrag}
-                    onPointerUp={endAssistantDrag}
-                    onPointerCancel={endAssistantDrag}
-                  >
-                    <button
-                      type="button"
-                      onClick={closeAssistant}
-                      data-assistant-no-drag="true"
-                      className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-white/76 transition hover:bg-white/12 hover:text-white"
-                      aria-label="关闭 AI 助手"
-                    >
-                      <X size={18} strokeWidth={2.2} />
-                    </button>
-                    <div className="pr-8">
-                      <div>
-                        <div className="text-xl font-black leading-none">欢迎</div>
-                        <div className="mt-2 text-sm font-bold leading-6 text-white/90">
-                          您好，我是 AI 助手，直接发送消息即可。
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <div
-                      ref={assistantMessagesRef}
-                      onScroll={handleAssistantMessagesScroll}
-                      className="max-h-[min(46vh,360px)] min-h-[270px] overflow-y-auto bg-white px-4 py-4"
-                    >
-                    {assistantHistory.length === 0 ? (
-                      <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center">
-                        <div className="flex flex-wrap justify-center gap-2">
-                          {assistantPromptSnippets.map((item) => (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setAssistantMessage(item)}
-                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:border-[#0f91dd]/40 hover:bg-[#0f91dd]/8 hover:text-[#0f91dd]"
-                            >
-                              {item}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {assistantHistory.map((item, index) => (
-                          <div key={item.id} className="space-y-3">
-                            <div className="flex justify-end">
-                              <div className="min-w-0 max-w-[86%] rounded-2xl rounded-br-md bg-[#0f91dd] px-3.5 py-2.5 text-sm leading-6 text-white shadow-sm">
-                                <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.question}</div>
-                                {item.attachments && item.attachments.length > 0 && (
-                                  <div className="mt-2 flex flex-wrap gap-1.5 border-t border-white/20 pt-2">
-                                    {item.attachments.map((attachment) => (
-                                      <span key={attachment.id} className="inline-flex items-center gap-1 rounded-full bg-white/16 px-2 py-1 text-[11px] font-bold text-white/88">
-                                        {attachment.imageDataUrl ? <img src={attachment.imageDataUrl} alt="" className="h-5 w-5 rounded object-cover" /> : <Paperclip size={12} />}
-                                        {attachment.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div ref={index === assistantHistory.length - 1 ? assistantLatestReplyRef : undefined} className="flex justify-start">
-                              <div className={`min-w-0 max-w-[90%] rounded-2xl rounded-bl-md border px-3.5 py-3 text-sm leading-6 shadow-sm ${
-                                item.failed
-                                  ? "border-rose-200 bg-rose-50 text-rose-700"
-                                  : "border-slate-200 bg-slate-50 text-slate-700"
-                              }`}>
-                                <div className="mb-2 flex items-center gap-2 text-xs font-black text-[#0f91dd]">
-                                  AI助手
-                                </div>
-                                {item.pending ? (
-                                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-black text-slate-500">
-                                    <LoaderCircle size={15} className="animate-spin text-[#0f91dd]" />
-                                    正在思考中...
-                                  </div>
-                                ) : (
-                                  <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.answer}</div>
-                                )}
-                                {!item.pending && item.relatedQuestions.length > 0 && (
-                                  <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
-                                    {item.relatedQuestions.map((question) => (
-                                      <button
-                                        key={`question-${question.id}`}
-                                        type="button"
-                                        onClick={() => {
-                                          closeAssistant();
-                                          navigate(question.path);
-                                        }}
-                                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-500 transition hover:border-[#0f91dd]/40 hover:text-[#0f91dd]"
-                                      >
-                                        {question.title}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    </div>
-                    {assistantShowLatestReply && assistantHistory.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => scrollAssistantToLatestReply()}
-                      data-assistant-no-drag="true"
-                      className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#0f91dd] px-3 py-1.5 text-xs font-black text-white shadow-[0_10px_24px_rgba(15,145,221,0.28)] transition hover:bg-[#0b82c9]"
-                    >
-                      <ChevronDown size={14} strokeWidth={2.4} />
-                      最新回复
-                    </button>
-                    ) : null}
-                  </div>
-
-                  <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
-                    <input
-                      ref={assistantFileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*,.txt,.csv,.tsv,.json,.md,.markdown,.log,.xml,.html,.htm,.css,.js,.ts,.tsx,.sql,.xls,.xlsx"
-                      onChange={(event) => void handleAssistantFiles(event.target.files)}
-                      className="hidden"
-                    />
-                    {assistantAttachments.length > 0 && (
-                      <div className="mb-2 flex flex-wrap gap-2">
-                        {assistantAttachments.map((attachment) => (
-                          <span
-                            key={attachment.id}
-                            className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                              attachment.readable
-                                ? "border-[#0f91dd]/20 bg-[#0f91dd]/8 text-[#0f91dd]"
-                                : "border-amber-200 bg-amber-50 text-amber-700"
-                            }`}
-                          >
-                            {attachment.imageDataUrl ? (
-                              <img src={attachment.imageDataUrl} alt="" className="h-7 w-7 rounded object-cover" />
-                            ) : (
-                              <Paperclip size={13} />
-                            )}
-                            <span className="max-w-[180px] truncate">{attachment.name}</span>
-                            <span className="text-[10px] opacity-70">{formatAssistantFileSize(attachment.size)}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeAssistantAttachment(attachment.id)}
-                              className="ml-0.5 rounded-full p-0.5 transition hover:bg-black/5"
-                              aria-label={`移除 ${attachment.name}`}
-                            >
-                              <X size={12} />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-end gap-2 rounded-[18px] border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                      <textarea
-                        value={assistantMessage}
-                        onChange={(event) => setAssistantMessage(event.target.value)}
-                        onPaste={handleAssistantPaste}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            void submitAssistantMessage();
-                          }
-                        }}
-                        rows={1}
-                        placeholder="输入消息..."
-                        className="min-h-10 flex-1 resize-none bg-transparent py-2 text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => assistantFileInputRef.current?.click()}
-                        className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-[#0f91dd]"
-                        aria-label="添加附件"
-                      >
-                        <Paperclip size={19} strokeWidth={1.8} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void submitAssistantMessage()}
-                        disabled={!assistantCanSubmit}
-                        className="mb-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0f91dd] text-white shadow-sm transition hover:bg-[#0b82c9] disabled:cursor-not-allowed disabled:bg-slate-300"
-                        aria-label="发送"
-                      >
-                        {assistantChatMutation.isPending ? <LoaderCircle size={17} className="animate-spin" /> : <Send size={17} />}
-                      </button>
-                    </div>
-                  </div>
-                  </div>
-                </div>
-              </div>
-            )}
-              <button
-                type="button"
-                onClick={(event) => {
-                  if (assistantSuppressClickRef.current) {
-                    event.preventDefault();
-                    return;
-                  }
-                  if (assistantOpen) {
-                    closeAssistant();
-                  } else {
-                    openAssistant();
-                  }
-                }}
-                onPointerDown={beginAssistantDrag}
-                onPointerMove={moveAssistantDrag}
-                onPointerUp={endAssistantDrag}
-                onPointerCancel={endAssistantDrag}
-                onPointerEnter={() => preloadNavigationTarget("/assistant")}
-                onFocus={() => preloadNavigationTarget("/assistant")}
-                onTouchStart={() => preloadNavigationTarget("/assistant")}
-                className={`group absolute inset-0 z-20 inline-flex h-[132px] w-[104px] touch-none select-none items-end justify-center rounded-[32px] p-3 -m-3 ${
-                  assistantDragging ? "cursor-grabbing" : "cursor-grab"
-                }`}
-                aria-label={assistantOpen ? "关闭 AI 助手" : "打开 AI 助手"}
-                aria-expanded={assistantOpen}
-              >
-                <span className="absolute -top-3 left-1/2 z-10 inline-flex h-10 -translate-x-1/2 items-center whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 text-sm font-black text-[#0f91dd] shadow-[0_10px_28px_rgba(15,23,42,0.14)] transition group-hover:border-[#0f91dd]/30 group-hover:bg-[#f1f9ff]">
-                  AI助手
-                </span>
-                <span className="relative inline-flex h-[86px] w-[78px] items-center justify-center transition group-hover:scale-[1.04]">
-                  <img src={assistantAnimatedAvatarSrc} alt="" draggable={false} className="h-[82px] w-[82px] -scale-x-100 select-none object-contain drop-shadow-[0_13px_16px_rgba(0,55,84,0.30)]" />
-                  <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-[#16c784] ring-2 ring-white" />
-                </span>
-              </button>
-          </>
-        </div>
-      )}
+      <AssistantWidget onOpen={() => setShowNotifications(false)} />
 
       <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
         <DialogContent className="sm:max-w-lg">
@@ -2257,18 +1019,5 @@ export function Layout() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function renderCountBadge(count: number, tone: "teal" | "rose") {
-  if (count <= 0) return null;
-  const label = count > 99 ? "99+" : String(count);
-  const toneClassName = tone === "teal"
-    ? "bg-teal-500 text-white"
-    : "bg-rose-500 text-white";
-  return (
-    <span className={`absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white px-1 text-[10px] font-black leading-none shadow-sm ${toneClassName}`}>
-      {label}
-    </span>
   );
 }
