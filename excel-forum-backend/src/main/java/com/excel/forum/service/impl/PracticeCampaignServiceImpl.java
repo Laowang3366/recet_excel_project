@@ -73,7 +73,7 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
     private final ExperienceService experienceService;
 
     @Override
-    public void syncCampaignCatalog() {
+    public synchronized void syncCampaignCatalog() {
         Long worldId = ensurePracticeWorldId();
         List<Question> campaignQuestions = questionService.list(new QueryWrapper<Question>()
                 .eq("type", "excel_template"));
@@ -192,7 +192,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getCampaignOverview(Long userId) {
-        syncCampaignCatalog();
         List<PracticeChapter> chapters = listEnabledChapters();
         Map<Long, List<PracticeLevel>> levelsByChapterId = listEnabledLevelsByChapterId();
         Map<Long, UserLevelProgress> progressMap = findUserLevelProgressMap(userId);
@@ -233,7 +232,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getCampaignChapters(Long userId) {
-        syncCampaignCatalog();
         List<PracticeChapter> chapters = listEnabledChapters();
         Map<Long, List<PracticeLevel>> levelsByChapterId = listEnabledLevelsByChapterId();
         Map<Long, UserLevelProgress> progressMap = findUserLevelProgressMap(userId);
@@ -246,7 +244,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getCampaignChapterDetail(Long chapterId, Long userId) {
-        syncCampaignCatalog();
         PracticeChapter chapter = practiceChapterMapper.selectById(chapterId);
         if (chapter == null || !Boolean.TRUE.equals(chapter.getEnabled())) {
             throw new IllegalArgumentException("章节不存在");
@@ -271,7 +268,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getCampaignLevelDetail(Long levelId, Long userId) {
-        syncCampaignCatalog();
         PracticeLevel level = practiceLevelMapper.selectById(levelId);
         if (level == null || !Boolean.TRUE.equals(level.getEnabled())) {
             throw new IllegalArgumentException("关卡不存在");
@@ -311,7 +307,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getDailyChallenge(Long userId) {
-        syncCampaignCatalog();
         Map<String, Object> payload = buildDailyChallengePayload(userId);
         if (payload == null) {
             Map<Long, UserLevelProgress> progressMap = findUserLevelProgressMap(userId);
@@ -394,7 +389,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     @Override
     public Map<String, Object> getCampaignRankings(String scope) {
-        syncCampaignCatalog();
         String normalizedScope = scope == null || scope.isBlank() ? "all" : scope.trim().toLowerCase();
         if ("all".equals(normalizedScope)) {
             QueryWrapper<UserLevelProgress> queryWrapper = new QueryWrapper<>();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Activity, Mail, Lock, User, ArrowRight, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, type Variants } from "motion/react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { api } from "../lib/api";
@@ -113,7 +113,7 @@ export function Auth() {
     }
   };
 
-  const formVariants = {
+  const formVariants: Variants = {
     hidden: { opacity: 0, x: isLogin ? 50 : -50 },
     visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" } },
     exit: { opacity: 0, x: isLogin ? -50 : 50, transition: { duration: 0.3 } }

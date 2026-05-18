@@ -3,12 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import {
   ArrowLeft,
-  BellRing,
   BookMarked,
+  CalendarCheck,
   CheckCircle2,
   Edit3,
-  Eye,
-  ExternalLink,
   FileSpreadsheet,
   LoaderCircle,
   Lock,
@@ -19,10 +17,8 @@ import {
   RefreshCcw,
   Send,
   ShieldAlert,
-  ShoppingBag,
   Sparkles,
   Trash2,
-  Unlock,
   UploadCloud,
   UserCog,
   Users,
@@ -330,7 +326,7 @@ export function AdminOverview() {
     { label: "今日新增用户", value: overviewStats.todayNewUsers ?? 0, hint: `锁定 ${userStats.locked ?? 0} · 禁言 ${userStats.muted ?? 0}`, icon: UserCog, tone: "blue" },
     { label: "今日签到", value: overviewStats.todayCheckins ?? 0, hint: `练习记录 ${practiceStats.practiceRecords ?? 0}`, icon: CalendarCheck, tone: "amber" },
     { label: "待处理事项", value: (moderationStats.pendingFeedback ?? 0) + (moderationStats.pendingPracticeSubmissions ?? 0), hint: `反馈 ${moderationStats.pendingFeedback ?? 0} · 试题投稿 ${moderationStats.pendingPracticeSubmissions ?? 0}`, icon: ShieldAlert, tone: "rose" },
-  ];
+  ] as const;
 
   return (
     <AdminPageShell title="后台总览" description="集中查看本站核心数据、业务状态和待处理事项。">

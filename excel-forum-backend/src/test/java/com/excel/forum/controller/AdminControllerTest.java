@@ -6,7 +6,6 @@ import com.excel.forum.config.GlobalExceptionHandler;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
-import com.excel.forum.mapper.AdminLogMapper;
 import com.excel.forum.mapper.CheckinRecordMapper;
 import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
@@ -22,7 +21,6 @@ import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.FeedbackService;
-import com.excel.forum.service.MallService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsTaskService;
 import com.excel.forum.service.PointsRecordService;
@@ -65,6 +63,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -114,9 +113,6 @@ class AdminControllerTest {
     private SiteNotificationService siteNotificationService;
 
     @Mock
-    private MallService mallService;
-
-    @Mock
     private ExperienceService experienceService;
 
     @Mock
@@ -153,9 +149,6 @@ class AdminControllerTest {
     private CheckinRecordMapper checkinRecordMapper;
 
     @Mock
-    private AdminLogMapper adminLogMapper;
-
-    @Mock
     private HtmlSanitizer htmlSanitizer;
 
     @Captor
@@ -169,7 +162,6 @@ class AdminControllerTest {
         AdminController controller = new AdminController(
                 userService,
                 feedbackService,
-                passwordEncoder,
                 notificationService,
                 pointsRuleService,
                 pointsRuleOptionService,
@@ -180,7 +172,6 @@ class AdminControllerTest {
                 questionExcelTemplateService,
                 practiceQuestionSubmissionService,
                 siteNotificationService,
-                mallService,
                 experienceService,
                 experienceProperties,
                 experienceRuleService,
@@ -193,11 +184,11 @@ class AdminControllerTest {
                 practiceRecordMapper,
                 practiceAnswerMapper,
                 checkinRecordMapper,
-                adminLogMapper,
                 htmlSanitizer,
                 practiceCampaignService
         );
-        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+        AdminUserController userController = new AdminUserController(userService, passwordEncoder);
+        mockMvc = MockMvcBuilders.standaloneSetup(controller, userController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -226,6 +217,80 @@ class AdminControllerTest {
         assertThat(savedNotification.getTargetRoles()).isEqualTo("user,admin");
         assertThat(savedNotification.getCreatedBy()).isEqualTo(3L);
         assertThat(savedNotification.getStatus()).isEqualTo("draft");
+    }
+
+    @Test
+    void createUserRejectsInvalidRole() throws Exception {
+        mockMvc.perform(post("/api/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"new_user","email":"new_user@example.com","password":"Abc12345","role":"owner","status":0}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("用户角色不正确"));
+
+        verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateUserRejectsInvalidStatusType() throws Exception {
+        User user = new User();
+        user.setId(12L);
+        user.setUsername("editor");
+        user.setEmail("editor@example.com");
+        user.setRole("user");
+        user.setStatus(0);
+        when(userService.getById(12L)).thenReturn(user);
+
+        mockMvc.perform(put("/api/admin/users/12")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"editor@example.com","role":"user","status":"locked"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("用户状态不正确"));
+
+        verify(userService, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void deleteUserRejectsCurrentAdmin() throws Exception {
+        User user = new User();
+        user.setId(5L);
+        user.setUsername("admin");
+        user.setStatus(0);
+        user.setTokenVersion(2);
+        when(userService.getById(5L)).thenReturn(user);
+
+        mockMvc.perform(delete("/api/admin/users/5").requestAttr("userId", 5L))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("不能停用当前登录账号"));
+
+        verify(userService, never()).removeById(5L);
+        verify(userService, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void deleteUserDisablesAccountWithoutPhysicalDelete() throws Exception {
+        User user = new User();
+        user.setId(6L);
+        user.setUsername("target");
+        user.setStatus(0);
+        user.setTokenVersion(3);
+        user.setIsOnline(true);
+        when(userService.getById(6L)).thenReturn(user);
+
+        mockMvc.perform(delete("/api/admin/users/6").requestAttr("userId", 5L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("用户已停用"));
+
+        verify(userService, never()).removeById(6L);
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userService).updateById(userCaptor.capture());
+        User updated = userCaptor.getValue();
+        assertThat(updated.getStatus()).isEqualTo(1);
+        assertThat(updated.getIsOnline()).isFalse();
+        assertThat(updated.getTokenVersion()).isEqualTo(4);
     }
 
     @Test

@@ -1,4 +1,4 @@
-import type { IWorkbookData } from "@univerjs/preset-sheets-core";
+import type { IWorkbookData } from "@univerjs/core";
 import { columnIndexToLabel, columnLabelToIndex, parseCellRef, toCellRef, type ExcelWorkbookSnapshot } from "./excel";
 
 type UniverCellData = {
@@ -294,7 +294,7 @@ export function mergeFacadeValuesIntoWorkbookSnapshot(
           nextCell.value = displayValue;
         }
         if (displayValue !== undefined) {
-          nextCell.display = displayValue;
+          nextCell.display = displayValue == null ? "" : String(displayValue);
         }
         if (existing && hasText(formulaValue)) {
           nextCell.formula = normalizeFormula(formulaValue);

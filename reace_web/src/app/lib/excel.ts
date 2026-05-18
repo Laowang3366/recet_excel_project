@@ -630,7 +630,7 @@ function formatEvaluatedValue(value: unknown) {
 
 function buildFormulaFunctions() {
   return {
-    SUM: (...args: unknown[]) => flattenFormulaArgs(args).reduce((sum, item) => sum + toNumber(item), 0),
+    SUM: (...args: unknown[]) => flattenFormulaArgs(args).reduce<number>((sum, item) => sum + toNumber(item), 0),
     AVERAGE: (...args: unknown[]) => {
       const values = flattenFormulaArgs(args).map(toNumber);
       return values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0;

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.entity.Notification;
 import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.NotificationBatchDeleteRequest;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.SiteNotificationService;
 import com.excel.forum.service.UserService;
@@ -189,7 +190,9 @@ public class NotificationController {
     @PutMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@RequestAttribute Long userId, @PathVariable Long id) {
         Notification notification = notificationService.getById(id);
-        if (notification != null && notification.getUserId().equals(userId)) {
+        if (notification != null
+                && notification.getUserId().equals(userId)
+                && CURRENT_NOTIFICATION_TYPES.contains(notification.getType())) {
             notificationService.markAsRead(userId, id);
 
             // 如果是站内公告，递增 readCount
@@ -213,13 +216,38 @@ public class NotificationController {
     }
 
     @DeleteMapping("/batch")
-    public ResponseEntity<?> deleteBatch(@RequestAttribute Long userId, @RequestBody Map<String, Object> body) {
-        @SuppressWarnings("unchecked")
-        java.util.List<Integer> ids = (java.util.List<Integer>) body.get("ids");
-        if (ids != null && !ids.isEmpty()) {
-            notificationService.deleteBatch(userId, ids.stream().map(id -> Long.valueOf(id.longValue())).collect(java.util.stream.Collectors.toList()));
+    public ResponseEntity<?> deleteBatch(@RequestAttribute Long userId, @RequestBody NotificationBatchDeleteRequest body) {
+        List<Long> ids = parseNotificationIds(body == null ? null : body.getIds());
+        if (ids == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "通知ID格式不正确"));
+        }
+        if (!ids.isEmpty()) {
+            notificationService.deleteBatch(userId, ids);
         }
         return ResponseEntity.ok(Map.of("message", "删除成功"));
+    }
+
+    private List<Long> parseNotificationIds(List<Object> rawIds) {
+        if (rawIds == null) {
+            return List.of();
+        }
+        java.util.ArrayList<Long> ids = new java.util.ArrayList<>();
+        for (Object rawId : rawIds) {
+            if (rawId instanceof Number number) {
+                ids.add(number.longValue());
+                continue;
+            }
+            if (rawId instanceof String text && !text.isBlank()) {
+                try {
+                    ids.add(Long.parseLong(text.trim()));
+                    continue;
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        return ids;
     }
 
     private String buildNotificationTitle(Notification notification) {

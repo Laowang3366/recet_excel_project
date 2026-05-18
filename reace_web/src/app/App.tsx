@@ -38,14 +38,7 @@ export default function App() {
         <Toaster position="top-center" />
         <GlobalFeedbackDialog />
         <GlobalConfirmPromptDialog />
-        <RouterProvider
-          router={router}
-          fallbackElement={
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm font-medium text-slate-400">
-              页面加载中...
-            </div>
-          }
-        />
+        <RouterProvider router={router} />
       </SessionProvider>
     </QueryClientProvider>
   );

@@ -33,7 +33,7 @@ function normalizeErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function apiRequest<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
   return apiRequestInternal<T>(path, options, 0);
 }
 
@@ -82,7 +82,7 @@ export async function downloadFile(path: string, fallbackFileName = "download", 
   triggerBrowserDownload(blob, fileName);
 }
 
-async function apiRequestInternal<T>(path: string, options: RequestOptions, retryCount: number): Promise<T> {
+async function apiRequestInternal<T = any>(path: string, options: RequestOptions, retryCount: number): Promise<T> {
   const { method = "GET", body, headers = {}, auth = true, silent = false } = options;
   const token = auth ? getStoredToken() : null;
   const requestHeaders = new Headers(headers);
@@ -185,13 +185,13 @@ function delay(ms: number) {
 }
 
 export const api = {
-  get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
+  get: <T = any>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     apiRequest<T>(path, { ...options, method: "GET" }),
-  post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+  post: <T = any>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     apiRequest<T>(path, { ...options, method: "POST", body }),
-  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+  put: <T = any>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     apiRequest<T>(path, { ...options, method: "PUT", body }),
-  delete: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+  delete: <T = any>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     apiRequest<T>(path, { ...options, method: "DELETE", body }),
   download: downloadFile,
 };

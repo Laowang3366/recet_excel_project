@@ -71,7 +71,8 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         UpdateWrapper<Notification> updateWrapper = new UpdateWrapper<>();
         updateWrapper.set("is_read", 1)
                     .eq("id", notificationId)
-                    .eq("user_id", userId);
+                    .eq("user_id", userId)
+                    .in("type", CURRENT_NOTIFICATION_TYPES);
         update(updateWrapper);
     }
 
@@ -80,7 +81,8 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         UpdateWrapper<Notification> updateWrapper = new UpdateWrapper<>();
         updateWrapper.set("is_read", 1)
                     .eq("user_id", userId)
-                    .eq("is_read", 0);
+                    .eq("is_read", 0)
+                    .in("type", CURRENT_NOTIFICATION_TYPES);
         update(updateWrapper);
     }
 
@@ -89,10 +91,14 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         if (userId == null || type == null || type.isBlank()) {
             return;
         }
+        String normalizedType = type.trim();
+        if (!CURRENT_NOTIFICATION_TYPES.contains(normalizedType)) {
+            return;
+        }
 
         Notification notification = new Notification();
         notification.setUserId(userId);
-        notification.setType(type);
+        notification.setType(normalizedType);
         notification.setContent(content);
         notification.setRelatedId(relatedId);
         notification.setIsRead(0);
@@ -140,7 +146,9 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     @Override
     public void deleteNotification(Long userId, Long notificationId) {
         QueryWrapper<Notification> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("id", notificationId).eq("user_id", userId);
+        queryWrapper.eq("id", notificationId)
+                .eq("user_id", userId)
+                .in("type", CURRENT_NOTIFICATION_TYPES);
         remove(queryWrapper);
     }
 
@@ -148,7 +156,9 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
     public void deleteBatch(Long userId, List<Long> ids) {
         if (ids == null || ids.isEmpty()) return;
         QueryWrapper<Notification> queryWrapper = new QueryWrapper<>();
-        queryWrapper.in("id", ids).eq("user_id", userId);
+        queryWrapper.in("id", ids)
+                .eq("user_id", userId)
+                .in("type", CURRENT_NOTIFICATION_TYPES);
         remove(queryWrapper);
     }
 

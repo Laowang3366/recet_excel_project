@@ -37,7 +37,7 @@ export function parseAttachments(value: unknown): AttachmentItem[] {
   const parsed = typeof value === "string" ? parseJsonText<unknown>(value, []) : value;
   if (!Array.isArray(parsed)) return [];
   return parsed
-    .map((item) => {
+    .map((item): AttachmentItem | null => {
       if (typeof item === "string") return { url: item };
       if (item && typeof item === "object") {
         const record = item as Record<string, unknown>;

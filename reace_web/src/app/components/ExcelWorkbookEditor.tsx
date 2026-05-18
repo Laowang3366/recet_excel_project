@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
-import type { FWorkbook, IWorkbookData } from "@univerjs/preset-sheets-core";
+import type { IWorkbookData } from "@univerjs/core";
+import type { FWorkbook } from "@univerjs/preset-sheets-core";
 import "@univerjs/preset-sheets-core/lib/index.css";
 import { Expand, Minimize2 } from "lucide-react";
 import {

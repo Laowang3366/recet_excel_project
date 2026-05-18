@@ -2,7 +2,6 @@ package com.excel.forum.controller;
 
 import com.excel.forum.config.ExperienceProperties;
 import com.excel.forum.config.GlobalExceptionHandler;
-import com.excel.forum.mapper.AdminLogMapper;
 import com.excel.forum.mapper.CheckinRecordMapper;
 import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
@@ -14,7 +13,6 @@ import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.FeedbackService;
-import com.excel.forum.service.MallService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.PointsRuleOptionService;
@@ -35,7 +33,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -50,8 +47,6 @@ class RequestParsingErrorTest {
     private UserService userService;
     @Mock
     private FeedbackService feedbackService;
-    @Mock
-    private PasswordEncoder passwordEncoder;
     @Mock
     private NotificationService notificationService;
     @Mock
@@ -72,8 +67,6 @@ class RequestParsingErrorTest {
     private PracticeQuestionSubmissionService practiceQuestionSubmissionService;
     @Mock
     private SiteNotificationService siteNotificationService;
-    @Mock
-    private MallService mallService;
     @Mock
     private ExperienceService experienceService;
     @Mock
@@ -99,8 +92,6 @@ class RequestParsingErrorTest {
     @Mock
     private CheckinRecordMapper checkinRecordMapper;
     @Mock
-    private AdminLogMapper adminLogMapper;
-    @Mock
     private HtmlSanitizer htmlSanitizer;
     @Mock
     private PracticeCampaignService practiceCampaignService;
@@ -112,7 +103,6 @@ class RequestParsingErrorTest {
         AdminController adminController = new AdminController(
                 userService,
                 feedbackService,
-                passwordEncoder,
                 notificationService,
                 pointsRuleService,
                 pointsRuleOptionService,
@@ -123,7 +113,6 @@ class RequestParsingErrorTest {
                 questionExcelTemplateService,
                 practiceQuestionSubmissionService,
                 siteNotificationService,
-                mallService,
                 experienceService,
                 experienceProperties,
                 experienceRuleService,
@@ -136,7 +125,6 @@ class RequestParsingErrorTest {
                 practiceRecordMapper,
                 practiceAnswerMapper,
                 checkinRecordMapper,
-                adminLogMapper,
                 htmlSanitizer,
                 practiceCampaignService
         );

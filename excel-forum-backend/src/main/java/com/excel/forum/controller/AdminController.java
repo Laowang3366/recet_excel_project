@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.config.ExperienceProperties;
 import com.excel.forum.entity.*;
 import com.excel.forum.entity.dto.AdminQuestionRequest;
-import com.excel.forum.mapper.AdminLogMapper;
 import com.excel.forum.mapper.CheckinRecordMapper;
 import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
@@ -14,12 +13,9 @@ import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
 import com.excel.forum.service.*;
 import com.excel.forum.util.HtmlSanitizer;
-import com.excel.forum.util.PasswordPolicy;
-import com.excel.forum.util.UsernamePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +46,6 @@ public class AdminController {
 
     private final UserService userService;
     private final FeedbackService feedbackService;
-    private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
     private final PointsRuleService pointsRuleService;
     private final PointsRuleOptionService pointsRuleOptionService;
@@ -61,7 +56,6 @@ public class AdminController {
     private final QuestionExcelTemplateService questionExcelTemplateService;
     private final PracticeQuestionSubmissionService practiceQuestionSubmissionService;
     private final SiteNotificationService siteNotificationService;
-    private final MallService mallService;
     private final ExperienceService experienceService;
     private final ExperienceProperties experienceProperties;
     private final ExperienceRuleService experienceRuleService;
@@ -74,230 +68,8 @@ public class AdminController {
     private final PracticeRecordMapper practiceRecordMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final CheckinRecordMapper checkinRecordMapper;
-    private final AdminLogMapper adminLogMapper;
     private final HtmlSanitizer htmlSanitizer;
     private final PracticeCampaignService practiceCampaignService;
-
-    @GetMapping("/users")
-    public ResponseEntity<?> getUsers(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "10") Integer size,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String role,
-            @RequestParam(required = false) Integer status) {
-        
-        Page<User> pageRequest = new Page<>(page, size);
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        
-        if (keyword != null && !keyword.isEmpty()) {
-            queryWrapper.and(wrapper -> wrapper
-                .like("username", keyword)
-                .or()
-                .like("email", keyword)
-            );
-        }
-        
-        if (role != null && !role.isEmpty()) {
-            queryWrapper.eq("role", role);
-        }
-        
-        if (status != null) {
-            queryWrapper.eq("status", status);
-        }
-        
-        queryWrapper.orderByDesc("create_time");
-        
-        Page<User> result = userService.page(pageRequest, queryWrapper);
-        
-        result.getRecords().forEach(user -> user.setPassword(null));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("records", result.getRecords());
-        response.put("total", result.getTotal());
-        response.put("current", result.getCurrent());
-        response.put("size", result.getSize());
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/users")
-    public ResponseEntity<?> createUser(@RequestBody Map<String, Object> body) {
-        String username = UsernamePolicy.normalize((String) body.get("username"));
-        String email = body.get("email") == null ? null : String.valueOf(body.get("email")).trim().toLowerCase();
-        String password = (String) body.get("password");
-        String role = (String) body.get("role");
-        Integer status = body.get("status") != null ? (Integer) body.get("status") : 0;
-        
-        if (username == null || username.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "用户名不能为空"));
-        }
-        if (!UsernamePolicy.isValid(username)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "用户名仅支持 2-30 位中文、字母、数字、下划线和中划线"));
-        }
-        if (UsernamePolicy.isReserved(username)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "该用户名不可使用"));
-        }
-        
-        if (email == null || email.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "邮箱不能为空"));
-        }
-        if (!email.matches("^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\\.[A-Za-z]{2,63}$")) {
-            return ResponseEntity.badRequest().body(Map.of("message", "邮箱格式不正确"));
-        }
-        
-        if (password == null || password.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
-        }
-
-        if (!PasswordPolicy.isStrongPassword(password)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码必须至少8位，且只能包含字母和数字"));
-        }
-        
-        QueryWrapper<User> checkWrapper = new QueryWrapper<>();
-        checkWrapper.eq("username", username);
-        if (userService.count(checkWrapper) > 0) {
-            return ResponseEntity.badRequest().body(Map.of("message", "用户名已存在"));
-        }
-        
-        QueryWrapper<User> emailWrapper = new QueryWrapper<>();
-        emailWrapper.eq("email", email);
-        if (userService.count(emailWrapper) > 0) {
-            return ResponseEntity.badRequest().body(Map.of("message", "邮箱已被注册"));
-        }
-        
-        User user = new User();
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setTokenVersion(0);
-        user.setRole(role != null ? role : "user");
-        user.setStatus(status);
-        user.setIsMuted(Boolean.FALSE);
-        user.setLevel(1);
-        user.setPoints(0);
-        user.setExp(0);
-
-        userService.save(user);
-        user.setPassword(null);
-        
-        return ResponseEntity.ok(user);
-    }
-
-    @PutMapping("/users/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        User existingUser = userService.getById(id);
-        if (existingUser == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        String email = body.get("email") == null ? null : String.valueOf(body.get("email")).trim().toLowerCase();
-        String role = (String) body.get("role");
-        Integer status = body.get("status") != null ? (Integer) body.get("status") : existingUser.getStatus();
-        Boolean isMuted = body.get("isMuted") instanceof Boolean ? (Boolean) body.get("isMuted") : existingUser.getIsMuted();
-        
-        if (email != null) {
-            if (!email.matches("^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\\.[A-Za-z]{2,63}$")) {
-                return ResponseEntity.badRequest().body(Map.of("message", "邮箱格式不正确"));
-            }
-            existingUser.setEmail(email);
-        }
-        if (role != null) {
-            existingUser.setRole(role);
-        }
-        existingUser.setStatus(status);
-        existingUser.setIsMuted(Boolean.TRUE.equals(isMuted));
-
-        userService.updateById(existingUser);
-        
-        existingUser = userService.getById(id);
-        existingUser.setPassword(null);
-        return ResponseEntity.ok(existingUser);
-    }
-
-    @PutMapping("/users/{id}/password")
-    public ResponseEntity<?> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        User user = userService.getById(id);
-        if (user == null) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        String password = body.get("password");
-        if (password == null || password.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
-        }
-
-        if (!PasswordPolicy.isStrongPassword(password)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码必须至少8位，包含大小写字母、数字和特殊字符"));
-        }
-
-        user.setPassword(passwordEncoder.encode(password));
-        user.setTokenVersion(user.getTokenVersion() == null ? 1 : user.getTokenVersion() + 1);
-        userService.updateById(user);
-
-        return ResponseEntity.ok(Map.of("message", "密码重置成功"));
-    }
-
-    @PutMapping("/users/{id}/lock")
-    public ResponseEntity<?> toggleUserLock(@PathVariable Long id, @RequestAttribute("userId") Long adminUserId) {
-        User user = userService.getById(id);
-        if (user == null) {
-            return ResponseEntity.notFound().build();
-        }
-        if (adminUserId != null && adminUserId.equals(id)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "不能锁定当前登录账号"));
-        }
-
-        boolean locked = user.getStatus() != null && user.getStatus() == 1;
-        user.setStatus(locked ? 0 : 1);
-        if (!locked) {
-            user.setIsOnline(false);
-        }
-        userService.updateById(user);
-
-        return ResponseEntity.ok(Map.of(
-                "locked", !locked,
-                "status", user.getStatus(),
-                "message", !locked ? "用户已锁定" : "用户已解锁"
-        ));
-    }
-
-    @PutMapping("/users/{id}/mute")
-    public ResponseEntity<?> toggleUserMute(@PathVariable Long id, @RequestAttribute("userId") Long adminUserId) {
-        User user = userService.getById(id);
-        if (user == null) {
-            return ResponseEntity.notFound().build();
-        }
-        if (adminUserId != null && adminUserId.equals(id)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "不能禁言当前登录账号"));
-        }
-
-        boolean muted = Boolean.TRUE.equals(user.getIsMuted());
-        user.setIsMuted(!muted);
-        userService.updateById(user);
-
-        return ResponseEntity.ok(Map.of(
-                "muted", !muted,
-                "isMuted", user.getIsMuted(),
-                "message", !muted ? "用户已禁言" : "用户已解除禁言"
-        ));
-    }
-
-    @DeleteMapping("/users/{id}")
-    @Transactional
-    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
-        User user = userService.getById(id);
-        if (user == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        notificationService.remove(new QueryWrapper<Notification>().eq("sender_id", id));
-        pointsRecordService.remove(new QueryWrapper<PointsRecord>().eq("user_id", id));
-        adminLogMapper.delete(new QueryWrapper<AdminLog>().eq("admin_user_id", id));
-
-        userService.removeById(id);
-        log.info("管理员删除用户: userId={}, username={}", id, user.getUsername());
-        return ResponseEntity.ok(Map.of("message", "用户已删除"));
-    }
 
     @GetMapping("/question-categories")
     public ResponseEntity<?> getQuestionCategories() {

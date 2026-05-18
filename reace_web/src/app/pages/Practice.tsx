@@ -26,6 +26,26 @@ const ExcelWorkbookEditor = lazy(() =>
   import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
+type PracticeCategorySummary = {
+  name?: string | null;
+};
+
+type PracticeQuestionSummary = {
+  id: number | string;
+  title?: string;
+  categoryName?: string | null;
+  questionCategoryName?: string | null;
+  difficulty?: number | string;
+  points?: number | string;
+  templateFileUrl?: string | null;
+  userStatus?: string | null;
+  bestScore?: number | string | null;
+  total?: number | string | null;
+  count?: number | string | null;
+  completed?: boolean | null;
+  score?: number | string | null;
+};
+
 function defaultSubmissionForm() {
   return {
     title: "",
@@ -78,8 +98,8 @@ export function Practice() {
     queryFn: () => api.get<any>(`/api/practice/submissions/mine?page=${submissionProgressPage}&size=8`, { silent: true }),
   });
 
-  const categories = categoriesQuery.data?.categories || [];
-  const questionGroups = questionListQuery.data?.questions || [];
+  const categories = (categoriesQuery.data?.categories || []) as PracticeCategorySummary[];
+  const questionGroups = (questionListQuery.data?.questions || []) as PracticeQuestionSummary[];
   const leaderboard = leaderboardQuery.data?.records || [];
 
   const tabs = useMemo(() => {

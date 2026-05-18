@@ -23,8 +23,6 @@ import {
   Award,
   Ticket,
   ArrowRightLeft,
-  Gift,
-  History,
   Target as TargetIcon,
   ClipboardList,
   FolderKanban,
@@ -502,8 +500,6 @@ export function Layout() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: profileKeys.props() }),
         queryClient.invalidateQueries({ queryKey: profileKeys.overview() }),
-        queryClient.invalidateQueries({ queryKey: ["post"] }),
-        queryClient.invalidateQueries({ queryKey: ["board"] }),
         queryClient.invalidateQueries({ queryKey: ["user-profile"] }),
         queryClient.invalidateQueries({ queryKey: ["home", "checkin-status"] }),
       ]);
