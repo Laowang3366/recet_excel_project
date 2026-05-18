@@ -22,7 +22,6 @@ import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.FeedbackService;
 import com.excel.forum.service.NotificationService;
-import com.excel.forum.service.PointsTaskService;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.PointsRuleOptionService;
 import com.excel.forum.service.PointsRuleService;
@@ -68,7 +67,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
-class AdminControllerTest {
+class AdminManagementControllersTest {
 
     @Mock
     private UserService userService;
@@ -90,9 +89,6 @@ class AdminControllerTest {
 
     @Mock
     private PointsRecordService pointsRecordService;
-
-    @Mock
-    private PointsTaskService pointsTaskService;
 
     @Mock
     private QuestionService questionService;
@@ -159,36 +155,80 @@ class AdminControllerTest {
     @BeforeEach
     void setUp() {
         lenient().when(htmlSanitizer.sanitize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
-        AdminController controller = new AdminController(
+        AdminOverviewController overviewController = new AdminOverviewController(
                 userService,
                 feedbackService,
                 notificationService,
-                pointsRuleService,
-                pointsRuleOptionService,
-                pointsRecordService,
-                pointsTaskService,
+                siteNotificationService,
                 questionService,
                 questionCategoryService,
                 questionExcelTemplateService,
                 practiceQuestionSubmissionService,
-                siteNotificationService,
+                pointsRuleService,
+                pointsRuleOptionService,
+                pointsRecordService,
                 experienceService,
-                experienceProperties,
                 experienceRuleService,
                 experienceLevelRuleService,
                 userEntitlementService,
+                practiceRecordMapper,
+                practiceAnswerMapper,
+                checkinRecordMapper
+        );
+        AdminLevelController levelController = new AdminLevelController(
+                userService,
+                experienceService,
+                experienceProperties,
+                experienceRuleService,
+                experienceLevelRuleService
+        );
+        AdminPointsController pointsController = new AdminPointsController(
+                userService,
+                pointsRecordService,
+                notificationService,
+                pointsRuleService,
+                pointsRuleOptionService
+        );
+        AdminQuestionCategoryController questionCategoryController = new AdminQuestionCategoryController(
+                questionCategoryService,
+                practiceCampaignService
+        );
+        AdminQuestionController questionController = new AdminQuestionController(
+                questionService,
+                questionCategoryService,
+                questionExcelTemplateService,
                 excelTemplateGradingService,
+                practiceCampaignService
+        );
+        AdminPracticeReviewController practiceReviewController = new AdminPracticeReviewController(
+                practiceQuestionSubmissionService,
+                questionCategoryService,
+                questionService,
+                questionExcelTemplateService,
+                notificationService,
+                excelTemplateGradingService,
+                practiceCampaignService
+        );
+        AdminPracticeCampaignController practiceCampaignController = new AdminPracticeCampaignController(
                 practiceLevelMapper,
                 practiceChapterMapper,
                 dailyChallengeMapper,
-                practiceRecordMapper,
-                practiceAnswerMapper,
-                checkinRecordMapper,
-                htmlSanitizer,
+                questionService,
                 practiceCampaignService
         );
+        AdminNotificationController notificationController = new AdminNotificationController(siteNotificationService, htmlSanitizer);
         AdminUserController userController = new AdminUserController(userService, passwordEncoder);
-        mockMvc = MockMvcBuilders.standaloneSetup(controller, userController)
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        overviewController,
+                        levelController,
+                        pointsController,
+                        questionCategoryController,
+                        questionController,
+                        practiceReviewController,
+                        practiceCampaignController,
+                        notificationController,
+                        userController
+                )
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
