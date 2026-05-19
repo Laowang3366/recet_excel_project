@@ -5,6 +5,8 @@ import {
   getCampaignLevelStatusLabel,
   getChapterQuestionToggleLabel,
   getCampaignProgressSessionKey,
+  campaignChapterMatchesSearch,
+  filterCampaignLevelsBySearch,
   getPracticeDetailEditorKey,
 } from "./practice-campaign-ui";
 
@@ -30,6 +32,16 @@ describe("practice campaign UI helpers", () => {
     expect(getCampaignProgressSessionKey(null, null)).toBe("guest");
     expect(getCampaignProgressSessionKey(null, "token")).toBe("auth-pending");
     expect(getCampaignProgressSessionKey({ id: 1 }, "token")).toBe("user:1");
+  });
+
+  it("matches practice chapters and levels with a normalized search term", () => {
+    expect(campaignChapterMatchesSearch({ name: "函数基础", description: "SUM 入门" }, "sum")).toBe(true);
+    expect(campaignChapterMatchesSearch({ name: "逻辑判断", description: "IF" }, "sum")).toBe(false);
+
+    expect(filterCampaignLevelsBySearch([
+      { title: "季度销售合计：SUM 汇总门店销售额" },
+      { title: "字段完整度：COUNTA-COUNTBLANK" },
+    ], "sum")).toHaveLength(1);
   });
 
   it("routes campaign returns to the question list instead of the map page", () => {

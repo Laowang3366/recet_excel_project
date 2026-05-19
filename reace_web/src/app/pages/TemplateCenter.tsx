@@ -7,7 +7,7 @@ import { LitePageFrame, LitePanel } from "../components/LiteSurface";
 import { api, downloadFile } from "../lib/api";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { pointsKeys, templateKeys } from "../lib/query-keys";
-import { formatTemplateCost, formatTemplateDifficulty } from "../lib/template-center";
+import { filterTemplatesBySearch, formatTemplateCost, formatTemplateDifficulty } from "../lib/template-center";
 import { useSession } from "../lib/session";
 
 function formatTemplateTime(value?: string | null) {
@@ -59,6 +59,7 @@ export function TemplateCenter() {
   const { isAuthenticated } = useSession();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedCategory = searchParams.get("category") || "";
+  const searchTerm = searchParams.get("search") || "";
 
   const templatesQuery = useQuery({
     queryKey: templateKeys.list(selectedCategory),
@@ -76,7 +77,8 @@ export function TemplateCenter() {
 
   const currentPoints = Number(pointsOverviewQuery.data?.user?.points || 0);
   const categories = templatesQuery.data?.categories || [];
-  const records = templatesQuery.data?.records || [];
+  const rawRecords = templatesQuery.data?.records || [];
+  const records = useMemo(() => filterTemplatesBySearch(rawRecords, searchTerm), [rawRecords, searchTerm]);
   const selectedCategoryLabel = selectedCategory || "全部行业";
   const downloadedCount = records.filter((item) => item.downloaded).length;
 
@@ -105,12 +107,14 @@ export function TemplateCenter() {
   }, [records]);
 
   const handleCategoryChange = (category: string) => {
+    const nextParams = new URLSearchParams(searchParams);
     if (!category) {
-      searchParams.delete("category");
-      setSearchParams(searchParams);
+      nextParams.delete("category");
+      setSearchParams(nextParams);
       return;
     }
-    setSearchParams({ category });
+    nextParams.set("category", category);
+    setSearchParams(nextParams);
   };
 
   const handleDownload = (item: TemplateRecord) => {
@@ -137,7 +141,7 @@ export function TemplateCenter() {
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <TemplateMetric label="当前行业" value={selectedCategoryLabel} />
-          <TemplateMetric label="模板" value={summary.total} />
+          <TemplateMetric label={searchTerm ? "匹配" : "模板"} value={summary.total} />
           <TemplateMetric label="免费" value={summary.free} />
           <TemplateMetric label="积分" value={isAuthenticated ? currentPoints : "-"} />
           <TemplateMetric label="已下载" value={downloadedCount} />
@@ -196,8 +200,10 @@ export function TemplateCenter() {
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[30px] border border-emerald-100 bg-white text-emerald-700 shadow-sm">
             <FolderKanban size={34} />
           </div>
-          <div className="mt-6 text-2xl font-black text-emerald-950">当前分类下还没有模板</div>
-          <div className="mt-2 text-sm font-semibold text-emerald-900/58">后台新增并启用模板后，这里会自动展示。</div>
+          <div className="mt-6 text-2xl font-black text-emerald-950">{searchTerm ? "没有匹配的模板" : "当前分类下还没有模板"}</div>
+          <div className="mt-2 text-sm font-semibold text-emerald-900/58">
+            {searchTerm ? "换个关键词或清空顶部搜索后再试。" : "后台新增并启用模板后，这里会自动展示。"}
+          </div>
         </LitePanel>
       ) : (
         <section className="grid gap-5 xl:grid-cols-2">

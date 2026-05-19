@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Award,
@@ -10,7 +10,7 @@ import {
   History,
   Loader2,
   Lock,
-  Map,
+  Map as MapIcon,
   Play,
   Target,
   Trophy,
@@ -22,6 +22,8 @@ import { api } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import {
   canExpandChapterQuestions,
+  campaignChapterMatchesSearch,
+  filterCampaignLevelsBySearch,
   getCampaignProgressSessionKey,
   getCampaignQuestionListPath,
   getCampaignLevelStatusLabel,
@@ -65,6 +67,7 @@ export function PracticeCampaignHub() {
   const { user, token } = useSession();
   const [searchParams] = useSearchParams();
   const routeChapterId = searchParams.get("chapter") || null;
+  const searchTerm = searchParams.get("search") || "";
   const [expandedChapterId, setExpandedChapterId] = useState<number | string | null>(routeChapterId);
   const [startingLevelId, setStartingLevelId] = useState<number | string | null>(null);
   const campaignSessionKey = getCampaignProgressSessionKey(user, token);
@@ -73,17 +76,34 @@ export function PracticeCampaignHub() {
     queryFn: () => api.get<CampaignChaptersResponse>("/api/practice/campaign/chapters", { silent: true }),
     refetchOnMount: "always",
   });
-  const chapterDetailQuery = useQuery({
-    queryKey: [...practiceKeys.campaignChapter(expandedChapterId || "none"), campaignSessionKey],
-    enabled: Boolean(expandedChapterId),
-    queryFn: () => api.get<CampaignChapterDetailResponse>(`/api/practice/campaign/chapters/${expandedChapterId}`, { silent: true }),
-    refetchOnMount: "always",
-    staleTime: 0,
-  });
 
   const chapters = chaptersQuery.data?.chapters || [];
-  const expandedChapter = chapters.find((chapter) => String(chapter.id) === String(expandedChapterId)) || null;
-  const expandedLevels = chapterDetailQuery.data?.levels || [];
+  const searchActive = Boolean(searchTerm.trim());
+  const detailChapterIds = useMemo(() => {
+    if (searchActive) return chapters.map((chapter) => chapter.id);
+    return expandedChapterId ? [expandedChapterId] : [];
+  }, [chapters, expandedChapterId, searchActive]);
+  const chapterDetailQueries = useQueries({
+    queries: detailChapterIds.map((chapterId) => ({
+      queryKey: [...practiceKeys.campaignChapter(chapterId), campaignSessionKey],
+      queryFn: () => api.get<CampaignChapterDetailResponse>(`/api/practice/campaign/chapters/${chapterId}`, { silent: true }),
+      refetchOnMount: "always" as const,
+      staleTime: 0,
+    })),
+  });
+  const chapterDetailStateById = new globalThis.Map(
+    detailChapterIds.map((chapterId, index) => [String(chapterId), chapterDetailQueries[index]])
+  );
+  const getChapterLevels = (chapterId: number | string) =>
+    chapterDetailStateById.get(String(chapterId))?.data?.levels || [];
+  const visibleChapters = searchActive
+    ? chapters.filter((chapter) => {
+        const levels = getChapterLevels(chapter.id);
+        return campaignChapterMatchesSearch(chapter, searchTerm)
+          || filterCampaignLevelsBySearch(levels, searchTerm).length > 0
+          || chapterDetailStateById.get(String(chapter.id))?.isLoading;
+      })
+    : chapters;
 
   useEffect(() => {
     if (routeChapterId) {
@@ -129,7 +149,7 @@ export function PracticeCampaignHub() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/10 text-[#ccfff1] shadow-sm">
-                <Map size={20} />
+                <MapIcon size={20} />
               </div>
               <div>
                 <h1 className="text-[30px] font-black tracking-tight text-white">章节地图</h1>
@@ -157,7 +177,7 @@ export function PracticeCampaignHub() {
         </div>
 
         <div className="px-5 py-5 sm:px-8 sm:py-6">
-          {chapters.length ? (
+          {visibleChapters.length ? (
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
               <div className="grid grid-cols-[70px_minmax(170px,1fr)_96px_140px_74px_74px_190px] gap-3 border-b border-white/10 px-5 py-3 text-xs font-black text-white/42 max-lg:hidden">
                 <span>序号</span>
@@ -170,10 +190,16 @@ export function PracticeCampaignHub() {
               </div>
 
               <div className="divide-y divide-white/10">
-                {chapters.map((chapter, index) => {
+                {visibleChapters.map((chapter, index) => {
                   const isCompleted = Boolean(chapter.completed);
                   const isUnlocked = Boolean(chapter.unlocked);
                   const isExpanded = String(expandedChapterId) === String(chapter.id);
+                  const detailState = chapterDetailStateById.get(String(chapter.id));
+                  const chapterLevels = getChapterLevels(chapter.id);
+                  const chapterMatchesSearch = campaignChapterMatchesSearch(chapter, searchTerm);
+                  const visibleLevels = searchActive && !chapterMatchesSearch
+                    ? filterCampaignLevelsBySearch(chapterLevels, searchTerm)
+                    : chapterLevels;
                   const status = isCompleted ? "已通关" : isUnlocked ? "可进入" : "未解锁";
                   const progress = Math.max(0, Math.min(100, Number(chapter.progress || 0)));
 
@@ -251,12 +277,13 @@ export function PracticeCampaignHub() {
                         </div>
                       </div>
 
-                      {isExpanded ? (
+                      {isExpanded || searchActive ? (
                         <ChapterQuestionList
-                          chapter={expandedChapter || chapter}
-                          levels={expandedLevels}
-                          isLoading={chapterDetailQuery.isLoading || chapterDetailQuery.isFetching}
-                          isError={chapterDetailQuery.isError}
+                          chapter={chapter}
+                          levels={visibleLevels}
+                          isLoading={Boolean(detailState?.isLoading || detailState?.isFetching)}
+                          isError={Boolean(detailState?.isError)}
+                          emptyText={searchActive ? "当前章节没有匹配的题目。" : undefined}
                           startingLevelId={startingLevelId}
                           onStartLevel={handleStartLevel}
                         />
@@ -269,11 +296,11 @@ export function PracticeCampaignHub() {
           ) : (
             <div className="flex min-h-[260px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/12 bg-white/[0.04] px-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b050] text-white shadow-[0_18px_38px_rgba(0,176,80,0.3)]">
-                <Map size={24} />
+                <MapIcon size={24} />
               </div>
-              <div className="mt-5 text-2xl font-black text-white">章节等待配置</div>
+              <div className="mt-5 text-2xl font-black text-white">{searchActive ? "没有匹配的章节或题目" : "章节等待配置"}</div>
               <div className="mt-2 max-w-md text-sm leading-6 text-white/54">
-                后台启用章节后，这里会自动展示章节列表、进度和星级。
+                {searchActive ? "换个关键词或清空顶部搜索后再试。" : "后台启用章节后，这里会自动展示章节列表、进度和星级。"}
               </div>
             </div>
           )}
@@ -288,6 +315,7 @@ function ChapterQuestionList({
   levels,
   isLoading,
   isError,
+  emptyText = "当前章节暂无题目。",
   startingLevelId,
   onStartLevel,
 }: {
@@ -295,6 +323,7 @@ function ChapterQuestionList({
   levels: CampaignLevel[];
   isLoading: boolean;
   isError: boolean;
+  emptyText?: string;
   startingLevelId: number | string | null;
   onStartLevel: (level: CampaignLevel, chapter: CampaignChapter) => Promise<void>;
 }) {
@@ -320,7 +349,7 @@ function ChapterQuestionList({
   if (!levels.length) {
     return (
       <div className="mx-5 mb-5 rounded-2xl border border-dashed border-white/12 bg-[#001f15] px-5 py-5 text-sm font-bold text-white/50 sm:mx-8">
-        当前章节暂无题目。
+        {emptyText}
       </div>
     );
   }

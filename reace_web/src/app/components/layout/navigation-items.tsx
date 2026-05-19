@@ -55,10 +55,10 @@ export function buildLayoutNavigation(pathname: string, isAuthenticated: boolean
       icon: navIconMap[item.key],
     }));
   const primaryLiteNavItems = navItems.filter((item) =>
-    ["home", "practice", "tutorials"].includes(item.key)
+    ["home", "practice", "templates", "tutorials"].includes(item.key)
   );
   const accountLiteNavItems = navItems.filter((item) =>
-    ["mall", "tools", "templates"].includes(item.key)
+    ["mall", "tools"].includes(item.key)
   );
   const mobileDrawerNavItems: LayoutMobileDrawerNavItem[] =
     liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }));

@@ -32,10 +32,10 @@ import { useIsMobile } from "./ui/use-mobile";
 import { ONLINE_LITE_MODE, isLiteAllowedPath } from "../lib/site-mode";
 import { AssistantWidget } from "./layout/AssistantWidget";
 import { AccountMenu } from "./layout/AccountMenu";
-import { CategorySearch } from "./layout/CategorySearch";
 import { CheckinDialog, useCheckinStatusQuery } from "./layout/CheckinDialog";
 import { FeedbackDialog } from "./layout/FeedbackDialog";
 import { MobileBottomNav } from "./layout/MobileBottomNav";
+import { ModuleSearch } from "./layout/ModuleSearch";
 import { NotificationDropdown, type LayoutNotification } from "./layout/NotificationDropdown";
 import { SitePopupNotificationDialog } from "./layout/SitePopupNotificationDialog";
 import { UserPropsDialog } from "./layout/UserPropsDialog";
@@ -342,7 +342,7 @@ export function Layout() {
               </Sheet>
             ) : null}
             {ONLINE_LITE_MODE ? (
-              <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-7">
+              <div className="flex min-w-0 flex-1 items-center gap-3 xl:gap-5">
                 <button
                   type="button"
                   onPointerEnter={() => preloadNavigationTarget("/")}
@@ -443,7 +443,11 @@ export function Layout() {
                     </HoverCardContent>
                   </HoverCard>
                 </nav>
-                <CategorySearch onNavigate={navigateToPrefetchedRoute} />
+                <ModuleSearch
+                  pathname={location.pathname}
+                  search={location.search}
+                  onNavigate={navigateToPrefetchedRoute}
+                />
               </div>
             ) : null}
           </div>

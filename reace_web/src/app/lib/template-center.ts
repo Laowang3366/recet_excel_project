@@ -17,3 +17,21 @@ export function parseFunctionsInput(value: string) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+
+export function filterTemplatesBySearch<T extends {
+  title?: string | null;
+  industryCategory?: string | null;
+  useScenario?: string | null;
+  templateDescription?: string | null;
+  functionsUsed?: string[] | null;
+}>(records: T[], searchTerm?: string | null) {
+  const keyword = (searchTerm || "").trim().toLowerCase();
+  if (!keyword) return records;
+  return records.filter((item) => [
+    item.title,
+    item.industryCategory,
+    item.useScenario,
+    item.templateDescription,
+    ...(item.functionsUsed || []),
+  ].some((value) => String(value || "").toLowerCase().includes(keyword)));
+}

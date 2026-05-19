@@ -2,6 +2,13 @@ type ChapterLike = {
   unlocked?: boolean | null;
 };
 
+type SearchableTextLike = {
+  name?: string | null;
+  description?: string | null;
+  title?: string | null;
+  summary?: string | null;
+};
+
 type SessionLike = {
   id?: number | string | null;
 };
@@ -44,6 +51,16 @@ export function getCampaignProgressSessionKey(user?: SessionLike | null, token?:
   return token ? "auth-pending" : "guest";
 }
 
+export function campaignChapterMatchesSearch(chapter: SearchableTextLike, searchTerm?: string | null) {
+  return searchableTextIncludes([chapter.name, chapter.description], searchTerm);
+}
+
+export function filterCampaignLevelsBySearch<T extends SearchableTextLike>(levels: T[], searchTerm?: string | null) {
+  const normalizedSearchTerm = normalizeSearchTerm(searchTerm);
+  if (!normalizedSearchTerm) return levels;
+  return levels.filter((level) => searchableTextIncludes([level.title, level.summary], normalizedSearchTerm));
+}
+
 export function getCampaignQuestionListPath(chapterId?: number | string | null) {
   const normalizedChapterId = chapterId === null || chapterId === undefined ? "" : String(chapterId).trim();
   if (!normalizedChapterId) {
@@ -55,4 +72,14 @@ export function getCampaignQuestionListPath(chapterId?: number | string | null) 
 export function getPracticeDetailEditorKey(questionId?: number | string | null) {
   const normalizedQuestionId = questionId === null || questionId === undefined ? "" : String(questionId).trim();
   return `practice-question-${normalizedQuestionId || "unknown"}`;
+}
+
+function normalizeSearchTerm(searchTerm?: string | null) {
+  return (searchTerm || "").trim().toLowerCase();
+}
+
+function searchableTextIncludes(values: Array<string | null | undefined>, searchTerm?: string | null) {
+  const normalizedSearchTerm = normalizeSearchTerm(searchTerm);
+  if (!normalizedSearchTerm) return true;
+  return values.some((value) => String(value || "").toLowerCase().includes(normalizedSearchTerm));
 }
