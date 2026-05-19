@@ -119,6 +119,31 @@ class PracticeControllerTest {
     }
 
     @Test
+    void questionWorkbookExternalOpenUrlUsesXlsxPathForOfficeProtocol() throws Exception {
+        when(practiceWorkbookLinkService.createTicket(9L, 7L)).thenReturn("signed-ticket");
+
+        mockMvc.perform(post("/api/practice/questions/9/external-open-url").requestAttr("userId", 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("/api/practice/questions/9/file/excelcc-practice-question.xlsx?ticket=signed-ticket"))
+                .andExpect(jsonPath("$.expiresInSeconds").value(600));
+    }
+
+    @Test
+    void questionWorkbookDownloadAcceptsSignedOfficePath() throws Exception {
+        when(practiceWorkbookLinkService.isValid(9L, "signed-ticket")).thenReturn(true);
+        when(practiceService.buildPracticeQuestionWorkbookFile(9L)).thenReturn(new PracticeQuestionWorkbookFile(
+                "函数练习.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] { 1, 2, 3 }
+        ));
+
+        mockMvc.perform(get("/api/practice/questions/9/file/excelcc-practice-question.xlsx")
+                        .param("ticket", "signed-ticket"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, startsWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")));
+    }
+
+    @Test
     void submitPracticeReturnsUnauthorizedWhenServiceReportsNotLoggedIn() throws Exception {
         when(practiceService.submitPractice(eq(7L), any())).thenThrow(new IllegalStateException("未登录"));
 

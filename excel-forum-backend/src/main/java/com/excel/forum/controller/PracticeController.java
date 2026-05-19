@@ -79,7 +79,7 @@ public class PracticeController {
             @PathVariable Long questionId) {
         String ticket = practiceWorkbookLinkService.createTicket(questionId, userId);
         return ResponseEntity.ok(Map.of(
-                "url", "/api/practice/questions/" + questionId + "/file?ticket=" + ticket,
+                "url", "/api/practice/questions/" + questionId + "/file/excelcc-practice-question.xlsx?ticket=" + ticket,
                 "expiresInSeconds", 600
         ));
     }
@@ -89,6 +89,19 @@ public class PracticeController {
             @RequestAttribute(value = "userId", required = false) Long userId,
             @PathVariable Long questionId,
             @RequestParam(required = false) String ticket) {
+        return buildQuestionWorkbookFileResponse(userId, questionId, ticket);
+    }
+
+    @GetMapping("/questions/{questionId}/file/{fileName}")
+    public ResponseEntity<?> downloadQuestionWorkbookFileForOffice(
+            @RequestAttribute(value = "userId", required = false) Long userId,
+            @PathVariable Long questionId,
+            @PathVariable String fileName,
+            @RequestParam(required = false) String ticket) {
+        return buildQuestionWorkbookFileResponse(userId, questionId, ticket);
+    }
+
+    private ResponseEntity<?> buildQuestionWorkbookFileResponse(Long userId, Long questionId, String ticket) {
         if (userId == null && !practiceWorkbookLinkService.isValid(questionId, ticket)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "未登录"));
         }

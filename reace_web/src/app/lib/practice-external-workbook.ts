@@ -1,5 +1,5 @@
 export function buildExcelDesktopUri(downloadUrl: string) {
-  return `ms-excel:ofe|u|${downloadUrl}`;
+  return `ms-excel:ofv|u|${downloadUrl}`;
 }
 
 export function sanitizeWorkbookFileName(title?: string | null) {

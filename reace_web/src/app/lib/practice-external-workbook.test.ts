@@ -3,9 +3,9 @@ import { buildExcelDesktopUri, sanitizeWorkbookFileName } from "./practice-exter
 
 describe("practice external workbook helpers", () => {
   it("builds an Excel desktop URI from an absolute download URL", () => {
-    const uri = buildExcelDesktopUri("https://www.excelcc.cn/api/practice/questions/9/file?ticket=abc");
+    const uri = buildExcelDesktopUri("https://www.excelcc.cn/api/practice/questions/9/file/excelcc-practice-question.xlsx?ticket=abc");
 
-    expect(uri).toBe("ms-excel:ofe|u|https://www.excelcc.cn/api/practice/questions/9/file?ticket=abc");
+    expect(uri).toBe("ms-excel:ofv|u|https://www.excelcc.cn/api/practice/questions/9/file/excelcc-practice-question.xlsx?ticket=abc");
   });
 
   it("sanitizes question titles into xlsx file names", () => {
