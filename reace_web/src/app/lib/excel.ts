@@ -438,6 +438,8 @@ type FormulaAnswerRegionCandidate = FormulaAnswerRegion & {
   startCol: number;
 };
 
+const dynamicArrayFormulaPattern = /\b(?:BYCOL|BYROW|CHOOSECOLS|CHOOSEROWS|DROP|EXPAND|FILTER|HSTACK|MAKEARRAY|MAP|RANDARRAY|REDUCE|SCAN|SEQUENCE|SORT|SORTBY|TAKE|TOCOL|TOROW|UNIQUE|VSTACK|WRAPCOLS|WRAPROWS)\s*\(/i;
+
 function hasFormula(cell: ExcelCellSnapshot | undefined) {
   return normalizeExcelFormulaText(cell?.formula).length > 0;
 }
@@ -540,6 +542,36 @@ function compareFormulaCandidates(mode: "simple" | "dynamic_array") {
       || left.startRow - right.startRow
       || left.startCol - right.startCol;
   };
+}
+
+function isDynamicArrayFormula(formula: string | null | undefined) {
+  return dynamicArrayFormulaPattern.test(normalizeExcelFormulaText(formula));
+}
+
+export function clearInferredDynamicArraySpillChildren(workbook: ExcelWorkbookSnapshot | null | undefined) {
+  const next = cloneWorkbookSnapshot(workbook);
+  next.sheets.forEach((sheet) => {
+    const cells = parseSheetCells(sheet);
+    const formulaCells = Array.from(cells.values())
+      .filter((item) => hasFormula(item.cell))
+      .sort((left, right) => left.row - right.row || left.col - right.col);
+    const formulaRefs = new Set(formulaCells.map((item) => item.ref));
+
+    formulaCells.forEach((anchor) => {
+      if (!isDynamicArrayFormula(anchor.cell.formula)) return;
+      const spillBounds = expandSingleFormulaSpill(cells, anchor, formulaRefs);
+      for (let row = spillBounds.startRow; row <= spillBounds.endRow; row += 1) {
+        for (let col = spillBounds.startCol; col <= spillBounds.endCol; col += 1) {
+          const cellRef = toCellRef(row, col);
+          if (cellRef === anchor.ref) continue;
+          const cell = sheet.cells[cellRef];
+          if (!cell || hasFormula(cell)) continue;
+          delete sheet.cells[cellRef];
+        }
+      }
+    });
+  });
+  return next;
 }
 
 export function detectFormulaAnswerRegion(

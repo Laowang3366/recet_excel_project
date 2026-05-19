@@ -8,6 +8,7 @@ import { Expand, Minimize2 } from "lucide-react";
 import {
   ExcelRangeSelection,
   ExcelWorkbookSnapshot,
+  clearInferredDynamicArraySpillChildren,
   normalizeSelection,
   parseRangeRef,
   parseSheetAndRange,
@@ -86,7 +87,8 @@ function workbookSnapshotToUniverData(workbook: ExcelWorkbookSnapshot): Partial<
 }
 
 function applyWorkbookSnapshotToUniver(workbookFacade: FWorkbook, snapshot: ExcelWorkbookSnapshot) {
-  const targetSheets = snapshot.sheets || [];
+  const hydratedSnapshot = clearInferredDynamicArraySpillChildren(snapshot);
+  const targetSheets = hydratedSnapshot.sheets || [];
   if (targetSheets.length === 0) {
     return;
   }
