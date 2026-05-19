@@ -115,6 +115,25 @@ class ExcelTemplateGradingServiceImplTest {
         }
     }
 
+    @Test
+    void workbookSnapshotDoesNotTreatDateStyledTextAsNumericDate() throws Exception {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("yyyy-mm-dd"));
+            org.apache.poi.ss.usermodel.Cell cell = sheet.createRow(0).createCell(0);
+            cell.setCellValue("销售员");
+            cell.setCellStyle(dateStyle);
+
+            ExcelWorkbookSnapshot snapshot = ReflectionTestUtils.invokeMethod(service, "toWorkbookSnapshot", workbook);
+            ExcelWorkbookSnapshot.CellSnapshot output = snapshot.getSheets().get(0).getCells().get("A1");
+
+            assertThat(output.getValue()).isEqualTo("销售员");
+            assertThat(output.getDisplay()).isEqualTo("销售员");
+            assertThat(output.getNumberFormat()).isNull();
+        }
+    }
+
     private void putCell(ExcelWorkbookSnapshot.SheetSnapshot sheet, String ref, Object value, String formula) {
         ExcelWorkbookSnapshot.CellSnapshot cell = new ExcelWorkbookSnapshot.CellSnapshot();
         cell.setValue(value);

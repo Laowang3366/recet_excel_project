@@ -759,12 +759,33 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
     }
 
     private void applyNumberFormat(ExcelWorkbookSnapshot.CellSnapshot cellSnapshot, Cell cell) {
+        if (!canHaveDateNumberFormat(cell)) {
+            return;
+        }
         try {
             if (DateUtil.isCellDateFormatted(cell)) {
                 cellSnapshot.setNumberFormat("yyyy-mm-dd");
             }
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException | IllegalStateException exception) {
             log.trace("Date number format detection failed at {}", cell.getAddress(), exception);
+        }
+    }
+
+    private boolean canHaveDateNumberFormat(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        if (cell.getCellType() == CellType.NUMERIC) {
+            return true;
+        }
+        if (cell.getCellType() != CellType.FORMULA) {
+            return false;
+        }
+        try {
+            return cell.getCachedFormulaResultType() == CellType.NUMERIC;
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            log.trace("Formula cached result type detection failed at {}", cell.getAddress(), exception);
+            return false;
         }
     }
 
