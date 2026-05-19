@@ -3,18 +3,22 @@ import { FormEvent, useEffect, useState } from "react";
 
 import {
   buildModuleSearchPath,
+  getHeaderSearchModule,
   getModuleSearchKeyword,
   resolveHeaderSearchModule,
+  type HeaderSearchModuleKey,
 } from "../../lib/module-search";
 
 type ModuleSearchProps = {
-  pathname: string;
+  pathname?: string;
+  moduleKey?: HeaderSearchModuleKey;
   search: string;
   onNavigate: (path: string) => void;
+  className?: string;
 };
 
-export function ModuleSearch({ pathname, search, onNavigate }: ModuleSearchProps) {
-  const module = resolveHeaderSearchModule(pathname);
+export function ModuleSearch({ pathname, moduleKey, search, onNavigate, className }: ModuleSearchProps) {
+  const module = moduleKey ? getHeaderSearchModule(moduleKey) : pathname ? resolveHeaderSearchModule(pathname) : null;
   const [keyword, setKeyword] = useState(() => getModuleSearchKeyword(search));
 
   useEffect(() => {
@@ -39,7 +43,7 @@ export function ModuleSearch({ pathname, search, onNavigate }: ModuleSearchProps
       onSubmit={handleSubmit}
       role="search"
       aria-label={module.label}
-      className="hidden min-w-[230px] max-w-[320px] flex-1 items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition focus-within:border-[#7cffb2]/70 focus-within:bg-white/12 min-[1180px]:flex"
+      className={`flex min-w-0 items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition focus-within:border-[#7cffb2]/70 focus-within:bg-white/12 ${className || ""}`}
     >
       <Search size={17} className="shrink-0 text-[#7cffb2]" />
       <input

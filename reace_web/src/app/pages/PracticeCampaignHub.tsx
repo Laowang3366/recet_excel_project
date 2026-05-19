@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { ModuleSearch } from "../components/layout/ModuleSearch";
 import { LitePageFrame } from "../components/LiteSurface";
 import { api } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
@@ -177,8 +178,17 @@ export function PracticeCampaignHub() {
         </div>
 
         <div className="px-5 py-5 sm:px-8 sm:py-6">
-          {visibleChapters.length ? (
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+            <div className="flex justify-end border-b border-white/10 px-5 py-4">
+              <ModuleSearch
+                moduleKey="practice"
+                search={searchParams.toString()}
+                onNavigate={navigate}
+                className="h-12 w-full lg:max-w-[560px]"
+              />
+            </div>
+            {visibleChapters.length ? (
+              <>
               <div className="grid grid-cols-[70px_minmax(170px,1fr)_96px_140px_74px_74px_190px] gap-3 border-b border-white/10 px-5 py-3 text-xs font-black text-white/42 max-lg:hidden">
                 <span>序号</span>
                 <span>章节</span>
@@ -292,18 +302,19 @@ export function PracticeCampaignHub() {
                   );
                 })}
               </div>
-            </div>
-          ) : (
-            <div className="flex min-h-[260px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/12 bg-white/[0.04] px-6 text-center">
+              </>
+            ) : (
+            <div className="flex min-h-[260px] flex-col items-center justify-center border-t border-dashed border-white/12 px-6 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b050] text-white shadow-[0_18px_38px_rgba(0,176,80,0.3)]">
                 <MapIcon size={24} />
               </div>
               <div className="mt-5 text-2xl font-black text-white">{searchActive ? "没有匹配的章节或题目" : "章节等待配置"}</div>
               <div className="mt-2 max-w-md text-sm leading-6 text-white/54">
-                {searchActive ? "换个关键词或清空顶部搜索后再试。" : "后台启用章节后，这里会自动展示章节列表、进度和星级。"}
+                {searchActive ? "换个关键词或清空搜索后再试。" : "后台启用章节后，这里会自动展示章节列表、进度和星级。"}
               </div>
             </div>
-          )}
+            )}
+          </div>
         </div>
       </section>
     </LitePageFrame>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Download, FileImage, FolderKanban, Layers3, Sparkles, Tag } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { ModuleSearch } from "../components/layout/ModuleSearch";
 import { LitePageFrame, LitePanel } from "../components/LiteSurface";
 import { api, downloadFile } from "../lib/api";
 import { normalizeResourceUrl } from "../lib/mappers";
@@ -162,36 +163,44 @@ export function TemplateCenter() {
       </div>
 
       <LitePanel className="border-white/10 bg-[#00140d] p-5 text-white shadow-[0_24px_70px_rgba(0,20,13,0.26)] sm:p-6">
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => handleCategoryChange("")}
-            className={`rounded-full px-4 py-2 text-sm font-black transition ${
-              !selectedCategory ? "bg-white text-[#00140d]" : "bg-white/8 text-white/58 hover:bg-white/14 hover:text-white"
-            }`}
-          >
-            全部行业
-          </button>
-          {categories.map((category) => {
-            const active = category.key === selectedCategory;
-            return (
-              <button
-                key={category.key}
-                type="button"
-                onClick={() => handleCategoryChange(category.key)}
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition ${
-                  active
-                    ? "bg-[#00b050] text-white shadow-[0_12px_28px_rgba(0,176,80,0.28)]"
-                    : "bg-white/8 text-white/62 hover:bg-white/14 hover:text-white"
-                }`}
-              >
-                <span>{category.label}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? "bg-white/16 text-white" : "bg-white/10 text-white/48"}`}>
-                  {category.count}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => handleCategoryChange("")}
+              className={`rounded-full px-4 py-2 text-sm font-black transition ${
+                !selectedCategory ? "bg-white text-[#00140d]" : "bg-white/8 text-white/58 hover:bg-white/14 hover:text-white"
+              }`}
+            >
+              全部行业
+            </button>
+            {categories.map((category) => {
+              const active = category.key === selectedCategory;
+              return (
+                <button
+                  key={category.key}
+                  type="button"
+                  onClick={() => handleCategoryChange(category.key)}
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black transition ${
+                    active
+                      ? "bg-[#00b050] text-white shadow-[0_12px_28px_rgba(0,176,80,0.28)]"
+                      : "bg-white/8 text-white/62 hover:bg-white/14 hover:text-white"
+                  }`}
+                >
+                  <span>{category.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? "bg-white/16 text-white" : "bg-white/10 text-white/48"}`}>
+                    {category.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <ModuleSearch
+            moduleKey="templates"
+            search={searchParams.toString()}
+            onNavigate={navigate}
+            className="h-12 w-full xl:w-[420px]"
+          />
         </div>
       </LitePanel>
 
@@ -202,7 +211,7 @@ export function TemplateCenter() {
           </div>
           <div className="mt-6 text-2xl font-black text-emerald-950">{searchTerm ? "没有匹配的模板" : "当前分类下还没有模板"}</div>
           <div className="mt-2 text-sm font-semibold text-emerald-900/58">
-            {searchTerm ? "换个关键词或清空顶部搜索后再试。" : "后台新增并启用模板后，这里会自动展示。"}
+            {searchTerm ? "换个关键词或清空搜索后再试。" : "后台新增并启用模板后，这里会自动展示。"}
           </div>
         </LitePanel>
       ) : (

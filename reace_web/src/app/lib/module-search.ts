@@ -22,6 +22,10 @@ const SEARCH_MODULES: Record<HeaderSearchModuleKey, HeaderSearchModule> = {
   },
 };
 
+export function getHeaderSearchModule(moduleKey: HeaderSearchModuleKey): HeaderSearchModule {
+  return SEARCH_MODULES[moduleKey];
+}
+
 export function resolveHeaderSearchModule(pathname: string): HeaderSearchModule | null {
   const normalizedPathname = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
   if (normalizedPathname === "/practice" || normalizedPathname.startsWith("/practice/")) {

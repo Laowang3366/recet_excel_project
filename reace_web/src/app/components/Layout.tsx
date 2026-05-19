@@ -35,7 +35,6 @@ import { AccountMenu } from "./layout/AccountMenu";
 import { CheckinDialog, useCheckinStatusQuery } from "./layout/CheckinDialog";
 import { FeedbackDialog } from "./layout/FeedbackDialog";
 import { MobileBottomNav } from "./layout/MobileBottomNav";
-import { ModuleSearch } from "./layout/ModuleSearch";
 import { NotificationDropdown, type LayoutNotification } from "./layout/NotificationDropdown";
 import { SitePopupNotificationDialog } from "./layout/SitePopupNotificationDialog";
 import { UserPropsDialog } from "./layout/UserPropsDialog";
@@ -443,11 +442,6 @@ export function Layout() {
                     </HoverCardContent>
                   </HoverCard>
                 </nav>
-                <ModuleSearch
-                  pathname={location.pathname}
-                  search={location.search}
-                  onNavigate={navigateToPrefetchedRoute}
-                />
               </div>
             ) : null}
           </div>
