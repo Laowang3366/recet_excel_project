@@ -13,6 +13,7 @@ import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.PracticeQuestionSubmissionRequest;
+import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.entity.dto.PracticeSubmitAnswerRequest;
 import com.excel.forum.entity.dto.PracticeSubmitRequest;
 import com.excel.forum.mapper.PracticeAnswerMapper;
@@ -242,6 +243,31 @@ public class PracticeServiceImpl implements PracticeService {
         response.put("categoryId", questionCategoryId);
         response.put("categoryName", category == null ? "全部题目" : category.getName());
         return response;
+    }
+
+    @Override
+    public PracticeQuestionWorkbookFile buildPracticeQuestionWorkbookFile(Long questionId) {
+        if (questionId == null) {
+            throw new IllegalArgumentException("题目参数无效");
+        }
+        QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template");
+        Question question = questionService.getOne(queryWrapper, false);
+        if (question == null) {
+            throw new IllegalArgumentException("题目不存在或已停用");
+        }
+        QuestionExcelTemplate template = questionExcelTemplateService.getByQuestionId(questionId);
+        if (template == null || !StringUtils.hasText(template.getTemplateFileUrl())) {
+            throw new IllegalArgumentException("题目模板不存在");
+        }
+        byte[] content = excelTemplateGradingService.buildStudentWorkbookFile(
+                template.getTemplateFileUrl(),
+                template.getAnswerSheet(),
+                template.getAnswerRange()
+        );
+        String extension = resolveWorkbookExtension(template.getTemplateFileUrl());
+        String fileName = sanitizeDownloadFileName(question.getTitle()) + extension;
+        return new PracticeQuestionWorkbookFile(fileName, resolveWorkbookContentType(extension), content);
     }
 
     @Override
@@ -1013,6 +1039,33 @@ public class PracticeServiceImpl implements PracticeService {
             current = (current - 1) / 26;
         }
         return column + String.valueOf(row);
+    }
+
+    private String resolveWorkbookExtension(String fileUrl) {
+        String value = fileUrl == null ? "" : fileUrl.trim().toLowerCase(Locale.ROOT);
+        int queryIndex = value.indexOf('?');
+        if (queryIndex >= 0) {
+            value = value.substring(0, queryIndex);
+        }
+        return value.endsWith(".xls") && !value.endsWith(".xlsx") ? ".xls" : ".xlsx";
+    }
+
+    private String resolveWorkbookContentType(String extension) {
+        return ".xls".equals(extension)
+                ? "application/vnd.ms-excel"
+                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
+
+    private String sanitizeDownloadFileName(String title) {
+        String normalized = title == null ? "" : title.trim();
+        if (normalized.isBlank()) {
+            return "excelcc-practice-question";
+        }
+        normalized = normalized.replaceAll("[\\\\/:*?\"<>|]+", "-")
+                .replaceAll("\\s+", "-")
+                .replaceAll("-{2,}", "-")
+                .replaceAll("^-|-$", "");
+        return normalized.isBlank() ? "excelcc-practice-question" : normalized;
     }
 
     private record RangeRef(int startRow, int startCol, int endRow, int endCol) {

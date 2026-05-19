@@ -8,10 +8,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,6 +27,9 @@ class ExcelTemplateGradingServiceImplTest {
 
     private final ExcelTemplateGradingServiceImpl service =
             new ExcelTemplateGradingServiceImpl(new ObjectMapper(), new FileStorageConfig());
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void gradeSimpleAnswerRuleAllowsDifferentFormulaTextWhenFormulaExists() {
@@ -131,6 +140,33 @@ class ExcelTemplateGradingServiceImplTest {
             assertThat(output.getValue()).isEqualTo("销售员");
             assertThat(output.getDisplay()).isEqualTo("销售员");
             assertThat(output.getNumberFormat()).isNull();
+        }
+    }
+
+    @Test
+    void buildStudentWorkbookFileClearsConfiguredAnswerRangeBeforeDownload() throws Exception {
+        FileStorageConfig config = new FileStorageConfig();
+        config.getLocal().setPath(tempDir.toString());
+        ExcelTemplateGradingServiceImpl localService = new ExcelTemplateGradingServiceImpl(new ObjectMapper(), config);
+        Path workbookPath = tempDir.resolve("practice.xlsx");
+        try (Workbook workbook = new XSSFWorkbook();
+             OutputStream outputStream = Files.newOutputStream(workbookPath)) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            sheet.createRow(0).createCell(0).setCellValue("题目数据");
+            sheet.createRow(1).createCell(1).setCellFormula("SUM(A1:A3)");
+            sheet.getRow(1).createCell(2).setCellValue(100);
+            sheet.createRow(2).createCell(1).setCellValue("答案");
+            workbook.write(outputStream);
+        }
+
+        byte[] fileBytes = localService.buildStudentWorkbookFile("/uploads/practice.xlsx", "Sheet1", "B2:C3");
+
+        try (Workbook downloaded = WorkbookFactory.create(new ByteArrayInputStream(fileBytes))) {
+            Sheet sheet = downloaded.getSheet("Sheet1");
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("题目数据");
+            assertThat(sheet.getRow(1).getCell(1)).satisfies(cell -> assertThat(cell).isNull());
+            assertThat(sheet.getRow(1).getCell(2)).satisfies(cell -> assertThat(cell).isNull());
+            assertThat(sheet.getRow(2).getCell(1)).satisfies(cell -> assertThat(cell).isNull());
         }
     }
 

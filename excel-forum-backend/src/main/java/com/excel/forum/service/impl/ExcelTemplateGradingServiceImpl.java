@@ -26,6 +26,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
@@ -476,6 +477,35 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
     }
 
     @Override
+    public byte[] buildStudentWorkbookFile(String fileUrl, String answerSheet, String answerRange) {
+        if (!StringUtils.hasText(fileUrl)) {
+            throw new IllegalArgumentException("模板文件不能为空");
+        }
+        if (!StringUtils.hasText(answerSheet)) {
+            throw new IllegalArgumentException("答题工作表不能为空");
+        }
+        RangeRef range = requireRange(answerRange);
+        Path filePath = resolveLocalPath(fileUrl);
+        if (!Files.exists(filePath)) {
+            throw new IllegalArgumentException("模板文件不存在");
+        }
+
+        try (InputStream inputStream = Files.newInputStream(filePath);
+             Workbook workbook = WorkbookFactory.create(inputStream);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.getSheet(answerSheet);
+            if (sheet == null) {
+                throw new IllegalArgumentException("答题工作表不存在");
+            }
+            clearAnswerRange(sheet, range);
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("模板文件解析失败", e);
+        }
+    }
+
+    @Override
     public ExcelTemplateEvaluation grade(ExcelWorkbookSnapshot submission, String gradingRuleJson, String expectedSnapshotJson) {
         ExcelTemplateRuleConfig ruleConfig = parseRuleConfig(gradingRuleJson);
         ExcelTemplateExpectedSnapshot expectedSnapshot = parseExpectedSnapshot(expectedSnapshotJson);
@@ -815,6 +845,21 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                     cell = row.createCell(ref.col() - 1);
                 }
                 applyCellSnapshot(cell, entry.getValue());
+            }
+        }
+    }
+
+    private void clearAnswerRange(Sheet sheet, RangeRef range) {
+        for (int rowIndex = range.startRow(); rowIndex <= range.endRow(); rowIndex += 1) {
+            Row row = sheet.getRow(rowIndex - 1);
+            if (row == null) {
+                continue;
+            }
+            for (int colIndex = range.startCol(); colIndex <= range.endCol(); colIndex += 1) {
+                Cell cell = row.getCell(colIndex - 1);
+                if (cell != null) {
+                    row.removeCell(cell);
+                }
             }
         }
     }

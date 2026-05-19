@@ -1,12 +1,13 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { ArrowLeft, CheckCircle2, Clock3, FileSpreadsheet, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, Download, ExternalLink, FileSpreadsheet, Sparkles, Target, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "../lib/api";
+import { api, downloadFile } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import { ExcelWorkbookSnapshot, normalizeSelection, parseRangeRef } from "../lib/excel";
 import { formatDuration } from "../lib/format";
+import { buildExcelDesktopUri, resolveAbsoluteDownloadUrl, sanitizeWorkbookFileName } from "../lib/practice-external-workbook";
 import { getPracticeDetailEditorKey, getPracticeQuestionRequirement } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
 import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
@@ -73,6 +74,10 @@ type PracticeSubmitResponse = {
   dailyChallenge?: unknown;
 };
 
+type PracticeWorkbookOpenLinkResponse = {
+  url?: string;
+};
+
 export function PracticeDetail() {
   const { id } = useParams();
   const location = useLocation();
@@ -88,7 +93,11 @@ export function PracticeDetail() {
   const [selectedSheetName, setSelectedSheetName] = useState("");
   const [workbook, setWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [submitting, setSubmitting] = useState(false);
+  const [downloadingQuestion, setDownloadingQuestion] = useState(false);
+  const [openingExternally, setOpeningExternally] = useState(false);
+  const [importingWorkbook, setImportingWorkbook] = useState(false);
   const editorSnapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
+  const answerImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const detailQuery = useQuery({
     queryKey: practiceKeys.detail(isRandomMode ? "random" : id || "unknown"),
@@ -111,6 +120,7 @@ export function PracticeDetail() {
   const currentSheetName = selectedSheetName || question?.answerSheet || question?.templateWorkbook?.sheets?.[0]?.name || "";
   const editorKey = getPracticeDetailEditorKey(question?.id);
   const questionRequirement = getPracticeQuestionRequirement(question);
+  const workbookFileName = sanitizeWorkbookFileName(campaignLevel?.title || question?.title);
 
   useEffect(() => {
     if (!question?.templateWorkbook?.sheets?.length) return;
@@ -198,6 +208,78 @@ export function PracticeDetail() {
     }
   };
 
+  const handleDownloadQuestion = async () => {
+    if (!question?.id) return;
+    setDownloadingQuestion(true);
+    try {
+      await downloadFile(`/api/practice/questions/${question.id}/file`, workbookFileName, { silent: true });
+      toast.success("题目文件已开始下载");
+    } catch (error) {
+      if (!handleLoginRequiredError(error, "请先登录后再下载题目")) {
+        toast.error(error instanceof Error ? error.message : "题目下载失败");
+      }
+    } finally {
+      setDownloadingQuestion(false);
+    }
+  };
+
+  const handleOpenExcelDesktop = async () => {
+    if (!question?.id) return;
+    setOpeningExternally(true);
+    try {
+      const result = await api.post<PracticeWorkbookOpenLinkResponse>(
+        `/api/practice/questions/${question.id}/external-open-url`,
+        {},
+        { silent: true }
+      );
+      if (!result?.url) {
+        throw new Error("无法生成题目打开链接");
+      }
+      window.location.href = buildExcelDesktopUri(resolveAbsoluteDownloadUrl(result.url));
+      toast.info("浏览器会询问是否打开 Excel 365；WPS 用户可先下载题目后打开，保存后导入答卷。");
+    } catch (error) {
+      if (!handleLoginRequiredError(error, "请先登录后再打开题目")) {
+        toast.error(error instanceof Error ? error.message : "打开本机表格失败");
+      }
+    } finally {
+      setOpeningExternally(false);
+    }
+  };
+
+  const handleImportWorkbook = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setImportingWorkbook(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("scene", "reply_attachment");
+      const uploadResult = await api.post<{ url: string }>("/api/upload", formData, { silent: true });
+      if (!uploadResult?.url) {
+        throw new Error("答卷上传失败");
+      }
+      const snapshot = await api.get<ExcelWorkbookSnapshot>(
+        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(uploadResult.url)}`,
+        { silent: true }
+      );
+      if (!snapshot?.sheets?.length) {
+        throw new Error("无法识别答卷工作簿");
+      }
+      setWorkbook(snapshot);
+      setSelectedSheetName(question?.answerSheet || snapshot.sheets[0]?.name || "");
+      toast.success("答卷已导入，请确认后提交");
+    } catch (error) {
+      if (!handleLoginRequiredError(error, "请先登录后再导入答卷")) {
+        toast.error(error instanceof Error ? error.message : "答卷导入失败");
+      }
+    } finally {
+      setImportingWorkbook(false);
+      if (answerImportInputRef.current) {
+        answerImportInputRef.current.value = "";
+      }
+    }
+  };
+
   if (!question) {
     return <div className="p-10 text-center text-slate-400">加载中...</div>;
   }
@@ -225,15 +307,47 @@ export function PracticeDetail() {
               ) : null}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={submitting}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-900 px-6 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <CheckCircle2 size={16} />
-            {submitting ? "提交中..." : "提交答卷"}
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownloadQuestion()}
+              disabled={downloadingQuestion}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Download size={16} />
+              {downloadingQuestion ? "下载中..." : "WPS/下载题目"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOpenExcelDesktop()}
+              disabled={openingExternally}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-5 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <ExternalLink size={16} />
+              {openingExternally ? "打开中..." : "Excel 365 打开"}
+            </button>
+            <label className={`inline-flex h-12 items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 text-sm font-black text-cyan-700 shadow-sm transition hover:bg-cyan-100 ${importingWorkbook ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+              <UploadCloud size={16} />
+              {importingWorkbook ? "导入中..." : "导入答卷"}
+              <input
+                ref={answerImportInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                disabled={importingWorkbook}
+                onChange={(event) => void handleImportWorkbook(event.target.files)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={submitting}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-900 px-6 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <CheckCircle2 size={16} />
+              {submitting ? "提交中..." : "提交答卷"}
+            </button>
+          </div>
         </div>
 
         <div className="mb-6 grid gap-4 lg:grid-cols-[280px_1fr]">

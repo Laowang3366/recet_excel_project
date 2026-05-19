@@ -2,8 +2,10 @@ package com.excel.forum.controller;
 
 import com.excel.forum.config.PublicJsonCache;
 import com.excel.forum.config.PublicReadCache;
+import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.PracticeService;
+import com.excel.forum.service.PracticeWorkbookLinkService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,9 @@ class PracticeControllerTest {
     @Mock
     private ExcelTemplateGradingService excelTemplateGradingService;
 
+    @Mock
+    private PracticeWorkbookLinkService practiceWorkbookLinkService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -48,7 +53,8 @@ class PracticeControllerTest {
         PracticeController controller = new PracticeController(
                 practiceService,
                 excelTemplateGradingService,
-                new PublicJsonCache(new PublicReadCache(), new ObjectMapper())
+                new PublicJsonCache(new PublicReadCache(), new ObjectMapper()),
+                practiceWorkbookLinkService
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -95,6 +101,21 @@ class PracticeControllerTest {
         mockMvc.perform(get("/api/practice/question-list").requestAttr("userId", 7L))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist(HttpHeaders.CACHE_CONTROL));
+    }
+
+    @Test
+    void questionWorkbookDownloadReturnsAttachment() throws Exception {
+        when(practiceService.buildPracticeQuestionWorkbookFile(9L)).thenReturn(new PracticeQuestionWorkbookFile(
+                "函数练习.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] { 1, 2, 3 }
+        ));
+
+        mockMvc.perform(get("/api/practice/questions/9/file").requestAttr("userId", 7L))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("filename*=")))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("%E5%87%BD%E6%95%B0%E7%BB%83%E4%B9%A0.xlsx")))
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, startsWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")));
     }
 
     @Test

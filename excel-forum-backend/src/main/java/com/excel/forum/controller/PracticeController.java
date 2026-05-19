@@ -4,9 +4,15 @@ import com.excel.forum.config.PublicCacheHeaders;
 import com.excel.forum.config.PublicJsonCache;
 import com.excel.forum.entity.dto.PracticeSubmitRequest;
 import com.excel.forum.entity.dto.PracticeQuestionSubmissionRequest;
+import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.PracticeService;
+import com.excel.forum.service.PracticeWorkbookLinkService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @RestController
@@ -27,6 +34,7 @@ public class PracticeController {
     private final PracticeService practiceService;
     private final ExcelTemplateGradingService excelTemplateGradingService;
     private final PublicJsonCache publicJsonCache;
+    private final PracticeWorkbookLinkService practiceWorkbookLinkService;
 
     @GetMapping("/categories")
     public ResponseEntity<String> getCategories() {
@@ -60,6 +68,41 @@ public class PracticeController {
     public ResponseEntity<?> getQuestionDetail(@PathVariable Long questionId) {
         try {
             return ResponseEntity.ok(practiceService.getPracticeQuestionDetail(questionId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/questions/{questionId}/external-open-url")
+    public ResponseEntity<?> createQuestionWorkbookExternalOpenUrl(
+            @RequestAttribute Long userId,
+            @PathVariable Long questionId) {
+        String ticket = practiceWorkbookLinkService.createTicket(questionId, userId);
+        return ResponseEntity.ok(Map.of(
+                "url", "/api/practice/questions/" + questionId + "/file?ticket=" + ticket,
+                "expiresInSeconds", 600
+        ));
+    }
+
+    @GetMapping("/questions/{questionId}/file")
+    public ResponseEntity<?> downloadQuestionWorkbookFile(
+            @RequestAttribute(value = "userId", required = false) Long userId,
+            @PathVariable Long questionId,
+            @RequestParam(required = false) String ticket) {
+        if (userId == null && !practiceWorkbookLinkService.isValid(questionId, ticket)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "未登录"));
+        }
+        try {
+            PracticeQuestionWorkbookFile workbookFile = practiceService.buildPracticeQuestionWorkbookFile(questionId);
+            ByteArrayResource resource = new ByteArrayResource(workbookFile.content());
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(workbookFile.contentType()))
+                    .contentLength(workbookFile.content().length)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                            .filename(workbookFile.fileName(), StandardCharsets.UTF_8)
+                            .build()
+                            .toString())
+                    .body(resource);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
