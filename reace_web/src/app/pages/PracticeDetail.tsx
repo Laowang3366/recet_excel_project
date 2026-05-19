@@ -10,10 +10,10 @@ import { formatDuration } from "../lib/format";
 import { buildExcelDesktopUri, resolveAbsoluteDownloadUrl, sanitizeWorkbookFileName } from "../lib/practice-external-workbook";
 import { getPracticeDetailEditorKey, getPracticeQuestionRequirement } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
-import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
+import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 
 const ExcelWorkbookEditor = lazy(() =>
-  import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
+  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
 type PracticeCampaignLevelState = {
@@ -128,6 +128,23 @@ export function PracticeDetail() {
     setSelectedSheetName(question.answerSheet || question.templateWorkbook.sheets?.[0]?.name || "");
     setElapsedSeconds(0);
   }, [question]);
+
+  useEffect(() => {
+    if (!question?.templateWorkbook?.sheets?.length) return;
+    const requestIdleCallback = window.requestIdleCallback;
+    const cancelIdleCallback = window.cancelIdleCallback;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+    if (requestIdleCallback && cancelIdleCallback) {
+      idleId = requestIdleCallback(() => void preloadExcelWorkbookEditor(), { timeout: 1200 });
+    } else {
+      timeoutId = window.setTimeout(() => void preloadExcelWorkbookEditor(), 300);
+    }
+    return () => {
+      if (idleId !== null && cancelIdleCallback) cancelIdleCallback(idleId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [question?.id, question?.templateWorkbook?.sheets?.length]);
 
   useEffect(() => {
     if (!question) return;

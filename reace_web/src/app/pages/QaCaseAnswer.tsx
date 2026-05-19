@@ -8,9 +8,10 @@ import { api } from "../lib/api";
 import type { ExcelWorkbookSnapshot } from "../lib/excel";
 import type { QaCaseHelp } from "../lib/qa";
 import { qaKeys } from "../lib/query-keys";
+import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 
 const ExcelWorkbookEditor = lazy(() =>
-  import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
+  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
 export function QaCaseAnswer() {
@@ -32,6 +33,7 @@ export function QaCaseAnswer() {
   const loadWorkbook = async () => {
     if (!qaCase?.templateFileUrl) return;
     try {
+      void preloadExcelWorkbookEditor();
       setLoadingWorkbook(true);
       const snapshot = await api.get<ExcelWorkbookSnapshot>(
         `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(qaCase.templateFileUrl)}`,
@@ -146,6 +148,8 @@ export function QaCaseAnswer() {
             <button
               type="button"
               onClick={() => void loadWorkbook()}
+              onMouseEnter={() => void preloadExcelWorkbookEditor()}
+              onFocus={() => void preloadExcelWorkbookEditor()}
               disabled={loadingWorkbook || !qaCase?.templateFileUrl}
               className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
             >
@@ -154,7 +158,15 @@ export function QaCaseAnswer() {
           </div>
         ) : (
           <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200">
-            <Suspense fallback={<div className="h-[620px] p-10 text-center text-sm text-slate-400">正在加载编辑器...</div>}>
+            <Suspense fallback={(
+              <FastWorkbookFallbackEditor
+                workbook={workbook}
+                onWorkbookChange={setWorkbook}
+                selectedSheetName={selectedSheetName}
+                onSelectedSheetNameChange={setSelectedSheetName}
+                viewportClassName="h-[630px]"
+              />
+            )}>
               <ExcelWorkbookEditor
                 workbook={workbook}
                 onWorkbookChange={setWorkbook}

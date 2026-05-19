@@ -16,7 +16,18 @@ type FastWorkbookFallbackEditorProps = {
   selectedSheetName: string;
   onSelectedSheetNameChange: (sheetName: string) => void;
   editableRange?: ExcelRangeSelection | null;
+  readOnly?: boolean;
+  viewportClassName?: string;
 };
+
+let excelWorkbookEditorPromise: Promise<typeof import("./ExcelWorkbookEditor")> | null = null;
+
+export function preloadExcelWorkbookEditor() {
+  if (!excelWorkbookEditorPromise) {
+    excelWorkbookEditorPromise = import("./ExcelWorkbookEditor");
+  }
+  return excelWorkbookEditorPromise;
+}
 
 export function FastWorkbookFallbackEditor({
   workbook,
@@ -24,6 +35,8 @@ export function FastWorkbookFallbackEditor({
   selectedSheetName,
   onSelectedSheetNameChange,
   editableRange = null,
+  readOnly = false,
+  viewportClassName = "h-[640px] max-h-[70vh]",
 }: FastWorkbookFallbackEditorProps) {
   const activeSheetName = selectedSheetName || workbook.sheets[0]?.name || "";
   const activeSheet = getSheetSnapshot(workbook, activeSheetName);
@@ -44,7 +57,7 @@ export function FastWorkbookFallbackEditor({
       line.split("\t").forEach((value, colOffset) => {
         const row = startRow + rowOffset;
         const col = startCol + colOffset;
-        if (!isEditableCell(row, col, editableRange)) return;
+        if (!isEditableCell(row, col, editableRange, readOnly)) return;
         next = updateWorkbookCell(next, activeSheetName, toCellRef(row, col), value);
       });
     });
@@ -53,7 +66,7 @@ export function FastWorkbookFallbackEditor({
 
   if (!activeSheet || rows.length === 0) {
     return (
-      <div className="flex h-[640px] items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+      <div className={`flex ${viewportClassName} items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400`}>
         正在加载题目模板...
       </div>
     );
@@ -90,7 +103,7 @@ export function FastWorkbookFallbackEditor({
           ) : null}
         </div>
       </div>
-      <div className="h-[640px] max-h-[70vh] overflow-auto bg-slate-50 p-3">
+      <div className={`${viewportClassName} overflow-auto bg-slate-50 p-3`}>
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
@@ -111,9 +124,9 @@ export function FastWorkbookFallbackEditor({
                 {row.cells.map((cell) => (
                   <td
                     key={cell.ref}
-                    className={`h-10 border border-slate-200 bg-white p-0 ${cell.editable ? "ring-1 ring-inset ring-emerald-200" : ""}`}
+                    className={`h-10 border border-slate-200 bg-white p-0 ${cell.editable && !readOnly ? "ring-1 ring-inset ring-emerald-200" : ""}`}
                   >
-                    {cell.editable ? (
+                    {cell.editable && !readOnly ? (
                       <input
                         aria-label={cell.ref}
                         value={cell.inputValue}
@@ -142,7 +155,8 @@ export function FastWorkbookFallbackEditor({
   );
 }
 
-function isEditableCell(row: number, col: number, editableRange: ExcelRangeSelection | null | undefined) {
+function isEditableCell(row: number, col: number, editableRange: ExcelRangeSelection | null | undefined, readOnly: boolean) {
+  if (readOnly) return false;
   if (!editableRange) return true;
   return row >= editableRange.startRow
     && row <= editableRange.endRow

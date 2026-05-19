@@ -34,6 +34,12 @@ location /api/ {
 }
 ```
 
+前端静态资源发布后会在运行时目录生成 `.gz` 预压缩文件，供 Nginx `gzip_static` 使用。部署前确认 Nginx 配置中开启：
+
+```nginx
+gzip_static on;
+```
+
 ## 目录约定
 
 生产环境只允许以下目录参与发布：
@@ -90,9 +96,10 @@ bash scripts/deploy/production-deploy.sh
 5. 构建后端 `excel-forum-backend/target/forum-1.0.0.jar`
 6. 为将被覆盖的前端受管文件和后端 JAR 建立时间戳备份
 7. 发布前端受管文件，不替换或删除整个前端运行时目录
-8. 重启 `kick-backend.service`
-9. 通过 HTTP 接口进行健康检查
-10. 如失败则自动回滚
+8. 如系统存在 `gzip`，为前端运行时目录中的 `.js`、`.css`、`.html`、`.json`、`.svg` 生成同路径 `.gz` 预压缩文件
+9. 重启 `kick-backend.service`
+10. 通过 HTTP 接口进行健康检查
+11. 如失败则自动回滚
 
 如果需要跳过拉取，仅构建服务器当前代码，可以在执行时覆盖配置：
 
@@ -260,7 +267,7 @@ curl -Iks https://www.excelcc.cn
 - `kick-web-managed/`
 - `forum-1.0.0.jar`
 
-`kick-web-managed/` 只保存本次发布会覆盖的项目文件，例如 `index.html`、构建产物根文件和 `assets` 下同名文件。前端发布与回滚都不会整体删除、移动或替换 `/www/wwwroot/excelcc/kick-web`，避免影响同一目录里的其它项目。
+`kick-web-managed/` 只保存本次发布会覆盖的项目文件，例如 `index.html`、构建产物根文件、`assets` 下同名文件，以及这些文件已有的 `.gz` 预压缩文件。前端发布与回滚都不会整体删除、移动或替换 `/www/wwwroot/excelcc/kick-web`，避免影响同一目录里的其它项目。自动回滚恢复前端文件后会重新刷新预压缩文件，使 `.gz` 内容与当前运行时文件一致。
 
 如果自动回滚没有完成，人工回滚步骤如下：
 
@@ -277,9 +284,39 @@ if [ -d "$ROLLBACK_DIR/kick-web-managed/assets" ]; then
   install -d -o www -g www /www/wwwroot/excelcc/kick-web/assets
   cp -a "$ROLLBACK_DIR/kick-web-managed/assets/." /www/wwwroot/excelcc/kick-web/assets/
 fi
+if command -v gzip >/dev/null 2>&1; then
+  WEB_DIR=/www/wwwroot/excelcc/kick-web
+  DIST_DIR=/www/wwwroot/excelcc/kick-deploy/repo/reace_web/dist
+  gzip_runtime_file() {
+    case "$1" in *.js|*.css|*.html|*.json|*.svg) ;; *) return 0 ;; esac
+    [ -f "$1" ] || return 0
+    tmp="${1}.gz.tmp.$$"
+    gzip -9 -n -c "$1" > "$tmp" && chown www:www "$tmp" && chmod 0644 "$tmp" && mv -f "$tmp" "${1}.gz"
+  }
+  gzip_runtime_file "$WEB_DIR/index.html"
+  while IFS= read -r -d '' source_file; do
+    file_name="$(basename "$source_file")"
+    [ "$file_name" = "index.html" ] && continue
+    gzip_runtime_file "$WEB_DIR/$file_name"
+  done < <(find "$DIST_DIR" -maxdepth 1 -type f -print0)
+  if [ -d "$DIST_DIR/assets" ]; then
+    while IFS= read -r -d '' rel_path; do
+      rel_path="${rel_path#./}"
+      gzip_runtime_file "$WEB_DIR/assets/$rel_path"
+    done < <(cd "$DIST_DIR/assets" && find . -type f -print0)
+  fi
+fi
 install -o www -g www -m 0644 "$ROLLBACK_DIR/forum-1.0.0.jar" /www/wwwroot/excelcc/kick-backend/forum-1.0.0.jar
 systemctl restart kick-backend.service
 curl -fsS http://127.0.0.1:8081/api/public/home-overview
+```
+
+预压缩发布验证：
+
+```bash
+find /www/wwwroot/excelcc/kick-web/assets -type f -name '*.js.gz' | head
+curl -Iks -H 'Accept-Encoding: gzip' https://www.excelcc.cn/assets/<current-js-file>.js
+nginx -t && systemctl reload nginx
 ```
 
 如果只需要检查最近一次备份：

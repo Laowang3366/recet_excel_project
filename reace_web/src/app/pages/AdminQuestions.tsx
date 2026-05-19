@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, detectFormulaAnswerRegion, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
@@ -11,7 +12,7 @@ import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminSecti
 import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson } from "./AdminConsoleShared";
 
 const ExcelWorkbookEditor = lazy(() =>
-  import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
+  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
 export function AdminQuestions() {
@@ -127,6 +128,7 @@ export function AdminQuestions() {
     answerSnapshotJson?: string | null,
     dynamicArrayRules?: DynamicArrayHydrationRule[] | null,
   ) => {
+    void preloadExcelWorkbookEditor();
     setTemplateLoading(true);
     setTemplateLoadError("");
     try {
@@ -170,6 +172,7 @@ export function AdminQuestions() {
   };
 
   const openCreate = () => {
+    void preloadExcelWorkbookEditor();
     setEditing(null);
     setForm(defaultQuestionForm());
     resetEditorState();
@@ -178,6 +181,7 @@ export function AdminQuestions() {
   };
 
   const openEdit = async (item: AdminQuestionRecord) => {
+    void preloadExcelWorkbookEditor();
     const dynamicArrayRules = parseDynamicArrayRulesFromJson(item.gradingRuleJson, item.answerSheet || "");
     const gradingMode = dynamicArrayRules.some((rule) => rule.anchorCell && rule.spillRange) ? "dynamic_array" : "simple";
     setFormulaDetectionNotice("");
@@ -1199,7 +1203,17 @@ export function AdminQuestions() {
                 </div>
               )}
             >
-              <Suspense fallback={<div className="flex h-[460px] items-center justify-center text-sm text-slate-400">正在加载编辑器...</div>}>
+              <Suspense fallback={(
+                <FastWorkbookFallbackEditor
+                  workbook={editorWorkbook}
+                  onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : () => undefined}
+                  selectedSheetName={selectedSheetName}
+                  onSelectedSheetNameChange={setSelectedSheetName}
+                  editableRange={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
+                  readOnly={!isTemplateEditMode}
+                  viewportClassName="h-[460px]"
+                />
+              )}>
                 <ExcelWorkbookEditor
                   workbook={editorWorkbook}
                   onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : undefined}

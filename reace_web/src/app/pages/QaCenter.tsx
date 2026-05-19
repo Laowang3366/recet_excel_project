@@ -10,9 +10,10 @@ import { extractRangeAnswerSnapshot, selectionToRangeRef } from "../lib/excel";
 import { formatDateTime } from "../lib/format";
 import { formatQaStatus, type QaCaseHelp, type QaPageResponse, type QaSolutionShare } from "../lib/qa";
 import { qaKeys } from "../lib/query-keys";
+import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 
 const ExcelWorkbookEditor = lazy(() =>
-  import("../components/ExcelWorkbookEditor").then((module) => ({ default: module.ExcelWorkbookEditor }))
+  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
 type QaTab = "cases" | "solutions";
@@ -73,6 +74,7 @@ export function QaCenter() {
   const handleUploadTemplate = async (file: File | null) => {
     if (!file) return;
     try {
+      void preloadExcelWorkbookEditor();
       setTemplateLoading(true);
       const formData = new FormData();
       formData.append("file", file);
@@ -209,7 +211,11 @@ export function QaCenter() {
                 rows={4}
                 className="w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
               />
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-black text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50">
+              <label
+                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-black text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50"
+                onMouseEnter={() => void preloadExcelWorkbookEditor()}
+                onFocus={() => void preloadExcelWorkbookEditor()}
+              >
                 <FileSpreadsheet size={18} />
                 {templateFileUrl ? "重新上传 Excel 模板" : "上传 Excel 模板"}
                 <input
@@ -227,7 +233,15 @@ export function QaCenter() {
               </div>
             ) : workbook.sheets.length > 0 ? (
               <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <Suspense fallback={<div className="h-[360px] p-10 text-center text-sm text-slate-400">正在加载编辑器...</div>}>
+                <Suspense fallback={(
+                  <FastWorkbookFallbackEditor
+                    workbook={workbook}
+                    onWorkbookChange={setWorkbook}
+                    selectedSheetName={selectedSheetName}
+                    onSelectedSheetNameChange={setSelectedSheetName}
+                    viewportClassName="h-[360px]"
+                  />
+                )}>
                   <ExcelWorkbookEditor
                     workbook={workbook}
                     onWorkbookChange={setWorkbook}

@@ -20,6 +20,27 @@ function getNodeModulePackageName(id: string) {
   return first.startsWith('@') && second ? `${first}/${second}` : first;
 }
 
+function getUniverEngineRenderDataChunk(id: string) {
+  const marker = '/@univerjs/engine-render/lib/es/';
+  const [, renderModulePath] = id.split(marker);
+  if (!renderModulePath || renderModulePath === 'index.js' || !renderModulePath.endsWith('.js')) {
+    return null;
+  }
+
+  const fileName = renderModulePath.split('/').pop() ?? '';
+  const firstLetter = fileName[0]?.toLowerCase();
+
+  if (!firstLetter || firstLetter < 'a' || firstLetter > 'z') {
+    return 'univer-render-data-misc';
+  }
+  if (firstLetter <= 'c') return 'univer-render-data-a-c';
+  if (firstLetter <= 'g') return 'univer-render-data-d-g';
+  if (firstLetter <= 'l') return 'univer-render-data-h-l';
+  if (firstLetter <= 'n') return 'univer-render-data-m-n';
+  if (firstLetter <= 'r') return 'univer-render-data-o-r';
+  return 'univer-render-data-s-z';
+}
+
 export default defineConfig({
   plugins: [
     // The React and Tailwind plugins are both required for Make, even if
@@ -59,23 +80,28 @@ export default defineConfig({
           if (
             packageName === '@univerjs/engine-render' &&
             normalized.includes('/lib/es/') &&
-            normalized.endsWith('.js') &&
-            !normalized.endsWith('/index.js')
+            normalized.endsWith('.js')
           ) {
-            return 'univer-render-text-data';
+            const renderDataChunk = getUniverEngineRenderDataChunk(normalized);
+            if (renderDataChunk) return renderDataChunk;
           }
           if (packageName === '@univerjs/engine-formula') {
             return 'univer-engine-formula';
           }
-          if (
-            packageName === '@univerjs/design' ||
-            packageName === '@univerjs/ui' ||
-            packageName === '@univerjs/docs-ui' ||
-            packageName === '@univerjs/sheets-ui' ||
-            packageName === '@univerjs/sheets-formula-ui' ||
-            packageName === '@univerjs/sheets-numfmt-ui'
-          ) {
-            return 'univer-ui';
+          if (packageName === '@univerjs/design') {
+            return 'univer-design';
+          }
+          if (packageName === '@univerjs/ui') {
+            return 'univer-ui-core';
+          }
+          if (packageName === '@univerjs/docs-ui') {
+            return 'univer-docs-ui';
+          }
+          if (packageName === '@univerjs/sheets-ui') {
+            return 'univer-sheets-ui';
+          }
+          if (packageName === '@univerjs/sheets-formula-ui' || packageName === '@univerjs/sheets-numfmt-ui') {
+            return 'univer-sheets-feature-ui';
           }
           if (
             packageName === '@univerjs/sheets' ||
