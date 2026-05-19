@@ -15,4 +15,8 @@ describe("excel answer preview", () => {
     expect(formatAnswerPreviewCellDisplay(434000, "SUM(C5:E5)")).toBe("=SUM(C5:E5)");
     expect(formatAnswerPreviewCellDisplay(434000, "")).toBe("434000");
   });
+
+  it("renders external Excel formulas without compatibility prefixes", () => {
+    expect(formatAnswerPreviewCellDisplay("#NAME?", "_xlfn.LET(_xlpm.m,K6,_xlpm.m)")).toBe("=LET(m,K6,m)");
+  });
 });

@@ -47,6 +47,48 @@ type BuildWorkbookWithAnswerSnapshotOptions = {
   dynamicArrayRules?: DynamicArrayHydrationRule[];
 };
 
+function mapFormulaOutsideStringLiterals(formula: string, mapper: (text: string) => string) {
+  let result = "";
+  let cursor = 0;
+  let literalStart = -1;
+
+  for (let index = 0; index < formula.length; index += 1) {
+    if (formula[index] !== "\"") continue;
+    if (literalStart >= 0 && formula[index + 1] === "\"") {
+      index += 1;
+      continue;
+    }
+
+    if (literalStart < 0) {
+      result += mapper(formula.slice(cursor, index));
+      literalStart = index;
+    } else {
+      result += formula.slice(literalStart, index + 1);
+      cursor = index + 1;
+      literalStart = -1;
+    }
+  }
+
+  if (literalStart >= 0) {
+    result += formula.slice(literalStart);
+  } else if (cursor < formula.length) {
+    result += mapper(formula.slice(cursor));
+  }
+
+  return result;
+}
+
+export function normalizeExcelFormulaText(formula: string | null | undefined) {
+  if (typeof formula !== "string") return "";
+  const normalized = formula.trim().replace(/^=\s*/, "");
+  if (!normalized) return "";
+  return mapFormulaOutsideStringLiterals(normalized, (text) =>
+    text
+      .replace(/_xlfn\./gi, "")
+      .replace(/_xlpm\./gi, ""),
+  ).trim();
+}
+
 export function columnIndexToLabel(index: number) {
   let current = Math.max(1, index);
   let result = "";
@@ -116,7 +158,7 @@ export function cloneWorkbookSnapshot(workbook: ExcelWorkbookSnapshot | null | u
           key,
           {
             value: value?.value ?? "",
-            formula: value?.formula ?? null,
+            formula: normalizeExcelFormulaText(value?.formula) || null,
             display: value?.display ?? null,
           },
         ]),
@@ -137,7 +179,8 @@ export function getCellSnapshot(sheet: ExcelSheetSnapshot | null | undefined, ce
 
 export function getCellInputValue(cell: ExcelCellSnapshot | undefined) {
   if (!cell) return "";
-  if (cell.formula) return `=${cell.formula}`;
+  const formula = normalizeExcelFormulaText(cell.formula);
+  if (formula) return `=${formula}`;
   if (cell.value === null || cell.value === undefined) return "";
   return String(cell.value);
 }
@@ -147,7 +190,8 @@ export function getCellDisplayValue(cell: ExcelCellSnapshot | undefined) {
   if (cell.display !== null && cell.display !== undefined && String(cell.display).trim()) {
     return String(cell.display);
   }
-  if (cell.formula) return `=${cell.formula}`;
+  const formula = normalizeExcelFormulaText(cell.formula);
+  if (formula) return `=${formula}`;
   if (cell.value === null || cell.value === undefined) return "";
   return String(cell.value);
 }
@@ -162,10 +206,11 @@ export function updateWorkbookCell(workbook: ExcelWorkbookSnapshot, sheetName: s
     return next;
   }
   if (value.startsWith("=")) {
+    const formula = normalizeExcelFormulaText(value);
     sheet.cells[cellRef] = {
       value,
-      formula: value.slice(1),
-      display: value,
+      formula,
+      display: formula ? `=${formula}` : value,
     };
     return next;
   }
@@ -273,7 +318,7 @@ export function buildWorkbookWithAnswerSnapshot(
         delete sheet.cells[cellRef];
         continue;
       }
-      const formula = answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "";
+      const formula = normalizeExcelFormulaText(answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "");
       const value = answerSnapshot?.values?.[rowOffset]?.[colOffset] ?? "";
       if (!formula && (value === null || value === undefined || String(value).trim() === "")) {
         delete sheet.cells[cellRef];
@@ -307,7 +352,7 @@ export function extractRangeAnswerSnapshot(
     for (let col = range.startCol; col <= range.endCol; col += 1) {
       const cell = getCellSnapshot(sheet, toCellRef(row, col));
       valueRow.push(cell?.value ?? "");
-      formulaRow.push(cell?.formula ?? "");
+      formulaRow.push(normalizeExcelFormulaText(cell?.formula));
     }
     values.push(valueRow);
     formulas.push(formulaRow);
@@ -317,7 +362,7 @@ export function extractRangeAnswerSnapshot(
 }
 
 export function formatAnswerPreviewCellDisplay(value: unknown, formula: string | null | undefined) {
-  const normalizedFormula = typeof formula === "string" ? formula.trim() : "";
+  const normalizedFormula = normalizeExcelFormulaText(formula);
   if (normalizedFormula) return `=${normalizedFormula}`;
   if (value === null || value === undefined) return "";
   return String(value);
@@ -336,7 +381,7 @@ export function findMissingFormulaCellRefs(
       const value = answerSnapshot.values?.[rowOffset]?.[colOffset];
       const formula = answerSnapshot.formulas?.[rowOffset]?.[colOffset];
       const hasValue = value !== null && value !== undefined && String(value).trim().length > 0;
-      const hasFormulaValue = typeof formula === "string" && formula.trim().length > 0;
+      const hasFormulaValue = normalizeExcelFormulaText(formula).length > 0;
       if (hasValue && !hasFormulaValue) {
         missingRefs.push(toCellRef(range.startRow + rowOffset, range.startCol + colOffset));
       }
@@ -394,7 +439,7 @@ type FormulaAnswerRegionCandidate = FormulaAnswerRegion & {
 };
 
 function hasFormula(cell: ExcelCellSnapshot | undefined) {
-  return typeof cell?.formula === "string" && cell.formula.trim().length > 0;
+  return normalizeExcelFormulaText(cell?.formula).length > 0;
 }
 
 function hasCellContent(cell: ExcelCellSnapshot | undefined) {
@@ -658,7 +703,7 @@ function buildFormulaFunctions() {
 }
 
 function transformFormulaExpression(formula: string) {
-  let expression = formula.trim().replace(/^=/, "");
+  let expression = normalizeExcelFormulaText(formula);
   const stringLiterals: string[] = [];
   expression = expression.replace(/"([^"]*)"/g, (_, content: string) => {
     const token = `__STR_${stringLiterals.length}__`;

@@ -102,4 +102,32 @@ describe("univerDataToWorkbookSnapshot", () => {
     expect(sheet.cells.B3.formula).toBeUndefined();
     expect(sheet.cells.C3.formula).toBeUndefined();
   });
+
+  it("normalizes Excel compatibility prefixes in captured formulas", () => {
+    const snapshot = univerDataToWorkbookSnapshot({
+      sheetOrder: ["sheet-1"],
+      sheets: {
+        "sheet-1": {
+          name: "Sheet1",
+          rowCount: 20,
+          columnCount: 12,
+          cellData: {
+            5: {
+              10: { v: 46113 },
+            },
+            6: {
+              10: {
+                v: "#NAME?",
+                f: "=_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlpm.m)",
+              },
+            },
+          },
+        },
+      },
+    } as unknown as IWorkbookData);
+
+    const sheet = snapshot.sheets[0];
+    expect(sheet.cells.K7.formula).toBe("LET(m,K6,r,L6,m)");
+    expect(extractRangeAnswerSnapshot(snapshot, "Sheet1", "K7").formulas).toEqual([["LET(m,K6,r,L6,m)"]]);
+  });
 });

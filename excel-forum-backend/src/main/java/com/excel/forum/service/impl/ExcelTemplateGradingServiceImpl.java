@@ -171,6 +171,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             if (snapshot.getFormulas() == null) {
                 snapshot.setFormulas(new ArrayList<>());
             }
+            snapshot.setFormulas(normalizeFormulaMatrix(snapshot.getFormulas()));
             return snapshot;
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("标准答案快照 JSON 格式错误", e);
@@ -437,6 +438,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             if (snapshot.getHeaderValues() == null) {
                 snapshot.setHeaderValues(new LinkedHashMap<>());
             }
+            snapshot.setCellFormulas(normalizeFormulaMap(snapshot.getCellFormulas()));
+            snapshot.setRangeFormulas(normalizeFormulaMatrixMap(snapshot.getRangeFormulas()));
             return snapshot;
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("标准结果快照 JSON 格式错误", e);
@@ -734,7 +737,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                     }
                     ExcelWorkbookSnapshot.CellSnapshot cellSnapshot = new ExcelWorkbookSnapshot.CellSnapshot();
                     if (cell.getCellType() == CellType.FORMULA) {
-                        cellSnapshot.setFormula(cell.getCellFormula());
+                        cellSnapshot.setFormula(normalizeFormulaForSnapshot(cell.getCellFormula()));
                         cellSnapshot.setValue(readEvaluatedCellValue(cell, evaluator));
                     } else {
                         cellSnapshot.setValue(readPlainCellValue(cell));
@@ -849,7 +852,84 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         if (normalized.startsWith("=")) {
             normalized = normalized.substring(1);
         }
+        return stripExcelCompatibilityPrefixes(normalized).trim();
+    }
+
+    private String normalizeFormulaForSnapshot(String formula) {
+        return normalizeFormulaForPoi(formula);
+    }
+
+    private List<List<String>> normalizeFormulaMatrix(List<List<String>> formulas) {
+        if (formulas == null) {
+            return new ArrayList<>();
+        }
+        List<List<String>> normalized = new ArrayList<>();
+        for (List<String> row : formulas) {
+            List<String> normalizedRow = new ArrayList<>();
+            if (row != null) {
+                for (String formula : row) {
+                    normalizedRow.add(normalizeFormulaForSnapshot(formula));
+                }
+            }
+            normalized.add(normalizedRow);
+        }
         return normalized;
+    }
+
+    private Map<String, String> normalizeFormulaMap(Map<String, String> formulas) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        if (formulas == null) {
+            return normalized;
+        }
+        formulas.forEach((key, formula) -> normalized.put(key, normalizeFormulaForSnapshot(formula)));
+        return normalized;
+    }
+
+    private Map<String, List<List<String>>> normalizeFormulaMatrixMap(Map<String, List<List<String>>> formulas) {
+        Map<String, List<List<String>>> normalized = new LinkedHashMap<>();
+        if (formulas == null) {
+            return normalized;
+        }
+        formulas.forEach((key, matrix) -> normalized.put(key, normalizeFormulaMatrix(matrix)));
+        return normalized;
+    }
+
+    private String stripExcelCompatibilityPrefixes(String formula) {
+        if (!StringUtils.hasText(formula)) {
+            return "";
+        }
+        StringBuilder result = new StringBuilder();
+        int cursor = 0;
+        int literalStart = -1;
+        for (int index = 0; index < formula.length(); index += 1) {
+            if (formula.charAt(index) != '"') {
+                continue;
+            }
+            if (literalStart >= 0 && index + 1 < formula.length() && formula.charAt(index + 1) == '"') {
+                index += 1;
+                continue;
+            }
+            if (literalStart < 0) {
+                result.append(replaceExcelCompatibilityPrefixes(formula.substring(cursor, index)));
+                literalStart = index;
+            } else {
+                result.append(formula, literalStart, index + 1);
+                cursor = index + 1;
+                literalStart = -1;
+            }
+        }
+        if (literalStart >= 0) {
+            result.append(formula.substring(literalStart));
+        } else if (cursor < formula.length()) {
+            result.append(replaceExcelCompatibilityPrefixes(formula.substring(cursor)));
+        }
+        return result.toString();
+    }
+
+    private String replaceExcelCompatibilityPrefixes(String formula) {
+        return formula
+                .replaceAll("(?i)_xlfn\\.", "")
+                .replaceAll("(?i)_xlpm\\.", "");
     }
 
     private Path resolveLocalPath(String fileUrl) {
@@ -973,7 +1053,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                 if (sheet != null && sheet.getCells() != null) {
                     ExcelWorkbookSnapshot.CellSnapshot cell = sheet.getCells().get(cellRef);
                     if (cell != null && StringUtils.hasText(cell.getFormula())) {
-                        formula = cell.getFormula();
+                        formula = normalizeFormulaForSnapshot(cell.getFormula());
                     }
                 }
                 rowFormulas.add(formula);
@@ -989,7 +1069,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             return "";
         }
         ExcelWorkbookSnapshot.CellSnapshot cell = sheet.getCells().get(normalizeCellRef(cellRef));
-        return cell == null || !StringUtils.hasText(cell.getFormula()) ? "" : cell.getFormula();
+        return cell == null || !StringUtils.hasText(cell.getFormula()) ? "" : normalizeFormulaForSnapshot(cell.getFormula());
     }
 
     private List<String> getHeaderValues(ExcelWorkbookSnapshot workbookSnapshot, String sheetName, String rangeRef) {
@@ -1222,10 +1302,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         if (!StringUtils.hasText(formula)) {
             return "";
         }
-        String normalized = formula.trim();
-        if (normalized.startsWith("=")) {
-            normalized = normalized.substring(1);
-        }
+        String normalized = normalizeFormulaForSnapshot(formula);
         return normalized.replace(" ", "").toUpperCase(Locale.ROOT);
     }
 

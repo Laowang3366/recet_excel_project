@@ -1,5 +1,5 @@
 import type { IWorkbookData } from "@univerjs/core";
-import { columnIndexToLabel, columnLabelToIndex, parseCellRef, toCellRef, type ExcelWorkbookSnapshot } from "./excel";
+import { columnIndexToLabel, columnLabelToIndex, normalizeExcelFormulaText, parseCellRef, toCellRef, type ExcelWorkbookSnapshot } from "./excel";
 
 type UniverCellData = {
   v?: unknown;
@@ -37,7 +37,7 @@ export type UniverWorkbookSnapshotSource = {
 
 function normalizeFormula(formula: unknown) {
   if (typeof formula !== "string") return null;
-  const normalized = formula.trim().replace(/^=/, "");
+  const normalized = normalizeExcelFormulaText(formula);
   return normalized ? normalized : null;
 }
 

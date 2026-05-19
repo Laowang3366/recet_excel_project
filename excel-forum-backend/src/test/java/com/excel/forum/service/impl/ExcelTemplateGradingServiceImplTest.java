@@ -1,10 +1,13 @@
 package com.excel.forum.service.impl;
 
 import com.excel.forum.config.FileStorageConfig;
+import com.excel.forum.entity.dto.ExcelTemplateAnswerSnapshot;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,6 +79,15 @@ class ExcelTemplateGradingServiceImplTest {
 
         assertThat(evaluation.isPassed()).isTrue();
         assertThat(evaluation.getScore()).isEqualTo(1);
+    }
+
+    @Test
+    void parseAnswerSnapshotNormalizesExcelCompatibilityFormulaPrefixes() {
+        ExcelTemplateAnswerSnapshot snapshot = service.parseAnswerSnapshot(
+                "{\"values\":[[46113]],\"formulas\":[[\"_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlpm.m)\"]]}"
+        );
+
+        assertThat(snapshot.getFormulas()).isEqualTo(List.of(List.of("LET(m,K6,r,L6,m)")));
     }
 
     private void putCell(ExcelWorkbookSnapshot.SheetSnapshot sheet, String ref, Object value, String formula) {
