@@ -37,6 +37,18 @@ function Invoke-InDirectory {
     }
 }
 
+function Invoke-Native {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed: $FilePath $($Arguments -join ' ')"
+    }
+}
+
 function Test-FrontendExplicitAny {
     $sourceRoot = Join-Path $root "reace_web\src\app"
     $files = Get-ChildItem -Path $sourceRoot -Recurse -Include *.ts,*.tsx -File
@@ -104,21 +116,21 @@ if (-not $SkipFrontend) {
     if (-not $SkipFrontendAudit) {
         Invoke-Step "Frontend dependency audit" {
             Invoke-InDirectory (Join-Path $root "reace_web") {
-                npm audit --audit-level=moderate
+                Invoke-Native "npm" @("audit", "--audit-level=moderate")
             }
         }
     }
 
     Invoke-Step "Frontend typecheck" {
         Invoke-InDirectory (Join-Path $root "reace_web") {
-            npm run typecheck
+            Invoke-Native "npm" @("run", "typecheck")
         }
     }
 
     if (-not $SkipFrontendTest) {
         Invoke-Step "Frontend tests" {
             Invoke-InDirectory (Join-Path $root "reace_web") {
-                npm run test
+                Invoke-Native "npm" @("run", "test")
             }
         }
     }
@@ -126,7 +138,7 @@ if (-not $SkipFrontend) {
     if (-not $SkipFrontendBuild) {
         Invoke-Step "Frontend production build" {
             Invoke-InDirectory (Join-Path $root "reace_web") {
-                npm run build
+                Invoke-Native "npm" @("run", "build")
             }
         }
     }
@@ -140,14 +152,14 @@ if (-not $SkipBackend) {
     if (-not $SkipBackendCompile) {
         Invoke-Step "Backend compile" {
             Invoke-InDirectory (Join-Path $root "excel-forum-backend") {
-                mvn -q -DskipTests compile
+                Invoke-Native "mvn" @("-q", "-DskipTests", "compile")
             }
         }
     }
 
     Invoke-Step "Backend tests" {
         Invoke-InDirectory (Join-Path $root "excel-forum-backend") {
-            mvn test
+            Invoke-Native "mvn" @("test")
         }
     }
 }

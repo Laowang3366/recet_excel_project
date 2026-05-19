@@ -27,9 +27,11 @@ describe("vite performance configuration", () => {
     const resolveChunk = manualChunks as (id: string) => string | undefined;
 
     expect(resolveChunk("D:/repo/node_modules/@univerjs/engine-render/lib/es/index.js")).toBe("univer-render-core");
-    expect(resolveChunk("D:/repo/node_modules/@univerjs/engine-render/lib/es/hu-Er-06LwB.js")).toBe("univer-render-text-data");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/engine-render/lib/es/hu-Er-06LwB.js")).toBe("univer-render-data-h-l");
     expect(resolveChunk("D:/repo/node_modules/@univerjs/engine-formula/lib/es/index.js")).toBe("univer-engine-formula");
-    expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets-formula-ui/lib/es/index.js")).toBe("univer-ui");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets-formula-ui/lib/es/index.js")).toBe("univer-sheets-feature-ui");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets-ui/lib/es/index.js")).toBe("univer-sheets-ui");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/ui/lib/es/index.js")).toBe("univer-ui-core");
     expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets/lib/es/index.js")).toBe("univer-sheets");
     expect(resolveChunk("D:/repo/node_modules/@univerjs/core/lib/es/index.js")).toBe("univer-render-core");
   });
