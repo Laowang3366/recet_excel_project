@@ -371,13 +371,13 @@ function ChapterQuestionList({
 
   return (
     <div className="mx-5 mb-5 overflow-hidden rounded-2xl border border-[#00b050]/20 bg-[#001f15] sm:mx-8">
-      <div className="grid grid-cols-[56px_minmax(160px,1fr)_90px_96px_160px_112px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-black text-white/38 max-md:hidden">
+      <div className="grid grid-cols-[56px_minmax(220px,1fr)_84px_104px_132px_120px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-black text-white/38 max-md:hidden">
         <span>序号</span>
         <span>题目</span>
         <span>状态</span>
         <span>奖励</span>
         <span>统计</span>
-        <span className="text-right">操作</span>
+        <span>操作</span>
       </div>
       <div className="divide-y divide-white/10">
         {levels.map((level, index) => {
@@ -388,7 +388,7 @@ function ChapterQuestionList({
           return (
             <div
               key={level.id}
-              className="grid gap-3 px-4 py-3 md:grid-cols-[56px_minmax(160px,1fr)_90px_96px_160px_112px] md:items-center"
+              className="grid gap-3 px-4 py-3 md:grid-cols-[56px_minmax(220px,1fr)_84px_104px_132px_120px] md:items-center"
             >
               <div className="text-xs font-black text-white/38">题目 {(index + 1).toString().padStart(2, "0")}</div>
               <div className="min-w-0">
@@ -414,7 +414,7 @@ function ChapterQuestionList({
                 {Number(level.rewardExp || 0)} 经验 / {Number(level.rewardPoints || 0)} 积分
               </div>
               <QuestionStatsSummary stats={stats} />
-              <div className="flex justify-end max-md:justify-start">
+              <div className="flex justify-start">
                 <button
                   type="button"
                   onClick={() => void onStartLevel(level, chapter)}
@@ -443,17 +443,22 @@ function QuestionStatsSummary({
   stats: ReturnType<typeof getCampaignLevelStatsSummary>;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5 text-[11px] font-black text-white/62 md:text-xs">
-      <QuestionStatsItem label="参与" value={stats.participants} />
-      <QuestionStatsItem label="通过" value={stats.passed} />
-      <QuestionStatsItem label="通过率" value={stats.passRate} />
+    <div className="min-w-0 text-[11px] font-black leading-5 text-white/62 md:text-xs">
+      <div className="truncate">
+        <QuestionStatsItem label="参与" value={stats.participants} />
+        <span className="mx-1.5 text-white/20">/</span>
+        <QuestionStatsItem label="通过" value={stats.passed} />
+      </div>
+      <div className="truncate">
+        <QuestionStatsItem label="通过率" value={stats.passRate} />
+      </div>
     </div>
   );
 }
 
 function QuestionStatsItem({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-1">
+    <span>
       <span className="mr-1 text-white/34">{label}</span>
       <span className="text-white/82">{value}</span>
     </span>
