@@ -10,6 +10,7 @@ public class AdminAiAssistantConfigRequest {
     private String model;
     private String reasoningEffort;
     private Integer timeoutMs;
+    private Integer timeoutMinutes;
     private String systemPrompt;
     private String promptFileName;
     private Boolean enabled;

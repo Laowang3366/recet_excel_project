@@ -45,8 +45,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AssistantServiceImpl implements AssistantService {
     private static final int DEFAULT_TIMEOUT_MS = 60000;
-    private static final int MIN_TIMEOUT_MS = 3000;
-    private static final int MAX_TIMEOUT_MS = 300000;
+    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MAX_TIMEOUT_MS = 3600000;
+    private static final int MIN_TIMEOUT_MINUTES = 1;
+    private static final int MAX_TIMEOUT_MINUTES = 60;
     private static final int MAX_IMAGE_COUNT = 3;
     private static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
     private static final int MAX_IMAGE_DATA_URL_LENGTH = 7 * 1024 * 1024;
@@ -122,6 +124,10 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     private int environmentTimeoutMs() {
+        Integer timeoutMinutes = environment.getProperty("AI_ASSISTANT_TIMEOUT_MINUTES", Integer.class);
+        if (timeoutMinutes != null) {
+            return timeoutMinutesToMs(timeoutMinutes);
+        }
         return normalizeTimeoutMs(environment.getProperty("AI_ASSISTANT_TIMEOUT_MS", Integer.class, DEFAULT_TIMEOUT_MS));
     }
 
@@ -130,6 +136,13 @@ public class AssistantServiceImpl implements AssistantService {
             return DEFAULT_TIMEOUT_MS;
         }
         return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, timeoutMs));
+    }
+
+    private int timeoutMinutesToMs(Integer timeoutMinutes) {
+        int minutes = timeoutMinutes == null
+                ? MIN_TIMEOUT_MINUTES
+                : Math.min(MAX_TIMEOUT_MINUTES, Math.max(MIN_TIMEOUT_MINUTES, timeoutMinutes));
+        return minutes * 60 * 1000;
     }
 
     private String buildPrompt(String message, String formula, String workbookContext,

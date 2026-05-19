@@ -35,8 +35,11 @@ import static com.excel.forum.util.QueryPageUtils.first;
 @RequiredArgsConstructor
 public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigMapper, AiAssistantConfig> implements AiAssistantConfigService {
     private static final Set<String> REASONING_EFFORT_VALUES = Set.of("low", "medium", "high");
-    private static final int MIN_TIMEOUT_MS = 3000;
-    private static final int MAX_TIMEOUT_MS = 300000;
+    private static final int DEFAULT_TIMEOUT_MS = 60000;
+    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MAX_TIMEOUT_MS = 3600000;
+    private static final int MIN_TIMEOUT_MINUTES = 1;
+    private static final int MAX_TIMEOUT_MINUTES = 60;
 
     private final ObjectMapper objectMapper;
     private final Environment environment;
@@ -85,7 +88,7 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
         config.setApiKey(apiKey);
         config.setModel(model);
         config.setReasoningEffort(normalizeReasoningEffort(environment.getProperty("AI_ASSISTANT_REASONING_EFFORT")));
-        config.setTimeoutMs(normalizeTimeoutMs(environment.getProperty("AI_ASSISTANT_TIMEOUT_MS", Integer.class, 60000)));
+        config.setTimeoutMs(environmentTimeoutMs());
         AiAssistantPromptProvider.PromptSource defaultPrompt = promptProvider.getDefaultPrompt();
         config.setSystemPrompt(defaultPrompt.content());
         config.setPromptFileName(defaultPrompt.fileName());
@@ -194,7 +197,9 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
         map.put("hasApiKey", !isBlank(config.getApiKey()));
         map.put("model", defaultString(config.getModel()));
         map.put("reasoningEffort", defaultString(config.getReasoningEffort()));
-        map.put("timeoutMs", normalizeTimeoutMs(config.getTimeoutMs()));
+        int timeoutMs = normalizeTimeoutMs(config.getTimeoutMs());
+        map.put("timeoutMs", timeoutMs);
+        map.put("timeoutMinutes", timeoutMsToMinutes(timeoutMs));
         map.put("systemPrompt", defaultString(config.getSystemPrompt()));
         map.put("promptFileName", defaultString(config.getPromptFileName()));
         map.put("enabled", !Boolean.FALSE.equals(config.getEnabled()));
@@ -228,9 +233,26 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
 
     private Integer normalizeTimeoutMs(Integer value) {
         if (value == null) {
-            return 60000;
+            return DEFAULT_TIMEOUT_MS;
         }
         return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, value));
+    }
+
+    private Integer environmentTimeoutMs() {
+        Integer timeoutMinutes = environment.getProperty("AI_ASSISTANT_TIMEOUT_MINUTES", Integer.class);
+        if (timeoutMinutes != null) {
+            return timeoutMinutesToMs(timeoutMinutes);
+        }
+        return normalizeTimeoutMs(environment.getProperty("AI_ASSISTANT_TIMEOUT_MS", Integer.class, DEFAULT_TIMEOUT_MS));
+    }
+
+    private Integer timeoutMinutesToMs(Integer value) {
+        int minutes = value == null ? MIN_TIMEOUT_MINUTES : Math.min(MAX_TIMEOUT_MINUTES, Math.max(MIN_TIMEOUT_MINUTES, value));
+        return minutes * 60 * 1000;
+    }
+
+    private Integer timeoutMsToMinutes(Integer value) {
+        return Math.min(MAX_TIMEOUT_MINUTES, Math.max(MIN_TIMEOUT_MINUTES, (int) Math.ceil(normalizeTimeoutMs(value) / 60000.0)));
     }
 
     private String firstText(String primary, String fallback) {

@@ -58,7 +58,7 @@ class AssistantServiceImplTest {
     @Test
     void timeoutUsesConfiguredValue() {
         MockEnvironment environment = new MockEnvironment()
-                .withProperty("AI_ASSISTANT_TIMEOUT_MS", "20000");
+                .withProperty("AI_ASSISTANT_TIMEOUT_MS", "120000");
         AssistantServiceImpl assistantService = new AssistantServiceImpl(
                 null,
                 null,
@@ -71,7 +71,45 @@ class AssistantServiceImplTest {
 
         Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
 
-        assertThat(timeoutMs).isEqualTo(20000);
+        assertThat(timeoutMs).isEqualTo(120000);
+    }
+
+    @Test
+    void timeoutSupportsUpToSixtyMinutes() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("AI_ASSISTANT_TIMEOUT_MS", "7200000");
+        AssistantServiceImpl assistantService = new AssistantServiceImpl(
+                null,
+                null,
+                null,
+                null,
+                null,
+                environment,
+                new ObjectMapper()
+        );
+
+        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
+
+        assertThat(timeoutMs).isEqualTo(3_600_000);
+    }
+
+    @Test
+    void timeoutCanBeConfiguredInMinutes() {
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("AI_ASSISTANT_TIMEOUT_MINUTES", "45");
+        AssistantServiceImpl assistantService = new AssistantServiceImpl(
+                null,
+                null,
+                null,
+                null,
+                null,
+                environment,
+                new ObjectMapper()
+        );
+
+        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
+
+        assertThat(timeoutMs).isEqualTo(2_700_000);
     }
 
     @Test

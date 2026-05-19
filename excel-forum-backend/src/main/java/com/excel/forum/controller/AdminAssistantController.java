@@ -30,8 +30,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AdminAssistantController {
     private static final Set<String> REASONING_EFFORT_VALUES = Set.of("low", "medium", "high");
-    private static final int MIN_TIMEOUT_MS = 3000;
-    private static final int MAX_TIMEOUT_MS = 300000;
+    private static final int DEFAULT_TIMEOUT_MS = 60000;
+    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MAX_TIMEOUT_MS = 3600000;
+    private static final int MIN_TIMEOUT_MINUTES = 1;
+    private static final int MAX_TIMEOUT_MINUTES = 60;
 
     private final AiAssistantConfigService aiAssistantConfigService;
     private final AiAssistantCallLogService aiAssistantCallLogService;
@@ -149,8 +152,14 @@ public class AdminAssistantController {
         if (!isBlank(request.getReasoningEffort()) && !REASONING_EFFORT_VALUES.contains(request.getReasoningEffort().trim().toLowerCase())) {
             return "推理等级不支持";
         }
-        if (request.getTimeoutMs() != null && (request.getTimeoutMs() < MIN_TIMEOUT_MS || request.getTimeoutMs() > MAX_TIMEOUT_MS)) {
-            return "模型超时时间需在 3 秒到 300 秒之间";
+        if (request.getTimeoutMinutes() != null
+                && (request.getTimeoutMinutes() < MIN_TIMEOUT_MINUTES || request.getTimeoutMinutes() > MAX_TIMEOUT_MINUTES)) {
+            return "模型超时时间需在 1 分钟到 60 分钟之间";
+        }
+        if (request.getTimeoutMinutes() == null
+                && request.getTimeoutMs() != null
+                && (request.getTimeoutMs() < MIN_TIMEOUT_MS || request.getTimeoutMs() > MAX_TIMEOUT_MS)) {
+            return "模型超时时间需在 1 分钟到 60 分钟之间";
         }
         if (Boolean.TRUE.equals(request.getActive()) && Boolean.FALSE.equals(request.getEnabled())) {
             return "生效配置必须保持启用";
@@ -166,7 +175,7 @@ public class AdminAssistantController {
         }
         config.setModel(normalizeText(request.getModel()));
         config.setReasoningEffort(normalizeReasoningEffort(request.getReasoningEffort()));
-        config.setTimeoutMs(normalizeTimeoutMs(request.getTimeoutMs()));
+        config.setTimeoutMs(resolveTimeoutMs(request));
         config.setSystemPrompt(normalizeText(request.getSystemPrompt()));
         config.setPromptFileName(normalizeText(request.getPromptFileName()));
         config.setEnabled(request.getEnabled() == null || Boolean.TRUE.equals(request.getEnabled()));
@@ -195,8 +204,18 @@ public class AdminAssistantController {
         return normalized == null ? null : normalized.toLowerCase();
     }
 
+    private Integer resolveTimeoutMs(AdminAiAssistantConfigRequest request) {
+        if (request.getTimeoutMinutes() != null) {
+            return request.getTimeoutMinutes() * 60 * 1000;
+        }
+        return normalizeTimeoutMs(request.getTimeoutMs());
+    }
+
     private Integer normalizeTimeoutMs(Integer value) {
-        return value == null ? 60000 : value;
+        if (value == null) {
+            return DEFAULT_TIMEOUT_MS;
+        }
+        return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, value));
     }
 
     private String normalizeText(String value) {

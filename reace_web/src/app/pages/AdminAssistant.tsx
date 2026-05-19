@@ -37,6 +37,7 @@ type AiAssistantConfigRecord = {
   model: string;
   reasoningEffort?: string;
   timeoutMs?: number;
+  timeoutMinutes?: number;
   systemPrompt: string;
   promptFileName: string;
   enabled: boolean;
@@ -73,7 +74,7 @@ const defaultForm = {
   apiKey: "",
   model: "",
   reasoningEffort: "",
-  timeoutMs: 60000,
+  timeoutMinutes: 1,
   systemPrompt: "",
   promptFileName: "",
   enabled: true,
@@ -177,7 +178,7 @@ export function AdminAssistant() {
       apiKey: "",
       model: item.model || "",
       reasoningEffort: item.reasoningEffort || "",
-      timeoutMs: Number(item.timeoutMs || 60000),
+      timeoutMinutes: Number(item.timeoutMinutes || timeoutMsToMinutes(item.timeoutMs)),
       systemPrompt: item.systemPrompt || "",
       promptFileName: item.promptFileName || "",
       enabled: Boolean(item.enabled),
@@ -200,10 +201,12 @@ export function AdminAssistant() {
       return;
     }
     try {
+      const timeoutMinutes = normalizeTimeoutMinutes(form.timeoutMinutes);
       const payload = {
         ...form,
         sortOrder: Number(form.sortOrder || 0),
-        timeoutMs: Number(form.timeoutMs || 60000),
+        timeoutMinutes,
+        timeoutMs: timeoutMinutesToMs(timeoutMinutes),
         apiKey: editingItem && !apiKeyTouched ? "" : normalizedApiKey,
       };
       if (editingItem?.id) {
@@ -518,14 +521,14 @@ export function AdminAssistant() {
               ))}
             </select>
           </Field>
-          <Field label="模型超时（秒）">
+          <Field label="模型超时（分钟）">
             <input
               type="number"
-              min={3}
-              max={300}
+              min={1}
+              max={60}
               step={1}
-              value={Math.round(Number(form.timeoutMs || 60000) / 1000)}
-              onChange={(event) => setForm((prev) => ({ ...prev, timeoutMs: Number(event.target.value || 0) * 1000 }))}
+              value={form.timeoutMinutes}
+              onChange={(event) => setForm((prev) => ({ ...prev, timeoutMinutes: Number(event.target.value || 0) }))}
               className={inputClassName()}
             />
           </Field>
@@ -663,9 +666,24 @@ function formatReasoningEffort(value: unknown) {
   return reasoningEffortOptions.find((item) => item.value === normalized)?.label || "默认";
 }
 
-function formatTimeoutMs(value: unknown) {
+export function timeoutMsToMinutes(value: unknown) {
   const timeoutMs = Number(value || 60000);
-  return `${Math.round(timeoutMs / 1000)} 秒`;
+  const minutes = Math.ceil(Math.max(60000, timeoutMs) / 60000);
+  return normalizeTimeoutMinutes(minutes);
+}
+
+export function timeoutMinutesToMs(value: unknown) {
+  return normalizeTimeoutMinutes(value) * 60 * 1000;
+}
+
+function normalizeTimeoutMinutes(value: unknown) {
+  const minutes = Number(value || 1);
+  if (!Number.isFinite(minutes)) return 1;
+  return Math.min(60, Math.max(1, Math.round(minutes)));
+}
+
+export function formatTimeoutMs(value: unknown) {
+  return `${timeoutMsToMinutes(value)} 分钟`;
 }
 
 function normalizeApiKeyInput(value: string) {
