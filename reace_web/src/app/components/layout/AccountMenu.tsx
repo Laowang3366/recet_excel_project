@@ -1,4 +1,4 @@
-import { ClipboardList, LogOut, Settings, User } from "lucide-react";
+import { CalendarCheck, ClipboardList, LogOut, Settings, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -46,8 +46,8 @@ export function AccountMenu({
   onLogout,
 }: AccountMenuProps) {
   const panelClassName = ONLINE_LITE_MODE
-    ? "w-44 rounded-2xl border border-white/10 bg-[#06251a]/96 p-1.5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.30)] backdrop-blur-xl"
-    : "w-44 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.14)]";
+    ? "w-56 rounded-2xl border border-white/10 bg-[#06251a]/96 p-1.5 text-white shadow-[0_18px_44px_rgba(0,0,0,0.30)] backdrop-blur-xl"
+    : "w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.14)]";
   const itemClassName = ONLINE_LITE_MODE
     ? "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/74 transition hover:bg-white/10 hover:text-white"
     : "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-950";
@@ -96,6 +96,25 @@ export function AccountMenu({
               <User size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
               个人中心
             </button>
+            {ONLINE_LITE_MODE ? (
+              <>
+                <button type="button" onClick={onOpenCheckin} className={itemClassName}>
+                  <CalendarCheck size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
+                  {hasCheckedInToday ? "今日已签到" : "每日签到"}
+                </button>
+                {accountNavItems.map((item) => (
+                  <button
+                    key={`desktop-account-${item.key}`}
+                    type="button"
+                    onClick={() => onPrefetchedNavigate(item.path)}
+                    className={itemClassName}
+                  >
+                    <span className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"}>{item.icon}</span>
+                    {item.name}
+                  </button>
+                ))}
+              </>
+            ) : null}
             <button type="button" onClick={() => onNavigate("/settings")} className={itemClassName}>
               <Settings size={16} className={ONLINE_LITE_MODE ? "text-white/42" : "text-slate-400"} />
               设置

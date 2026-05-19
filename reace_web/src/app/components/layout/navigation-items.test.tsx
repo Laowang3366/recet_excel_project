@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildLayoutNavigation } from "./navigation-items";
 
 describe("layout navigation items", () => {
-  it("promotes templates into the desktop primary lite navigation", () => {
+  it("promotes templates and tools into the desktop primary lite navigation", () => {
     const navigation = buildLayoutNavigation("/templates", true);
 
     expect(navigation.primaryLiteNavItems.map((item) => item.key)).toEqual([
@@ -10,12 +10,13 @@ describe("layout navigation items", () => {
       "tutorials",
       "practice",
       "templates",
+      "tools",
     ]);
   });
 
-  it("keeps templates out of the more menu once it is promoted", () => {
+  it("keeps only the points center in the account avatar navigation", () => {
     const navigation = buildLayoutNavigation("/templates", true);
 
-    expect(navigation.accountLiteNavItems.map((item) => item.key)).toEqual(["mall", "tools"]);
+    expect(navigation.accountLiteNavItems.map((item) => item.key)).toEqual(["mall"]);
   });
 });

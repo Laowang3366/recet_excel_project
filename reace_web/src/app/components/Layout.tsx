@@ -2,14 +2,11 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   Menu,
-  MoreVertical,
-  ChevronDown,
   Activity,
   CalendarCheck,
 } from "lucide-react";
 import { startTransition, useCallback, useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { hasAdminConsoleAccess } from "../admin/config";
 import { api } from "../lib/api";
@@ -173,24 +170,6 @@ export function Layout() {
     setCheckinOpen(true);
   }, [isAuthenticated, navigate]);
 
-  const moreLiteNavItems = [
-    ...accountLiteNavItems.map((item) => ({
-      ...item,
-      action: () => navigateToPrefetchedRoute(item.path),
-      active: activePublicNav?.key === item.key,
-    })),
-    {
-      key: "checkin",
-      name: checkinStatus?.hasCheckedInToday ? "今日已签到" : "每日签到",
-      shortName: "签到",
-      path: "",
-      description: "连续签到获取积分和经验",
-      icon: <CalendarCheck size={18} strokeWidth={1.8} />,
-      action: openCheckinDialog,
-      active: false,
-    },
-  ];
-  const moreLiteActive = moreLiteNavItems.some((item) => item.active);
   useEffect(() => {
     const handleOpenProps = () => {
       openPropsDialog();
@@ -383,64 +362,6 @@ export function Layout() {
                       </button>
                     );
                   })}
-                  <HoverCard openDelay={80} closeDelay={120}>
-                    <HoverCardTrigger asChild>
-                      <button
-                        type="button"
-                        onPointerEnter={() => {
-                          accountLiteNavItems.forEach((item) => preloadNavigationTarget(item.path));
-                        }}
-                        onFocus={() => {
-                          accountLiteNavItems.forEach((item) => preloadNavigationTarget(item.path));
-                        }}
-                        className={`relative inline-flex h-10 items-center gap-1.5 rounded-full px-2 text-xs font-bold transition xl:h-11 xl:gap-2 xl:px-3 xl:text-sm ${
-                          moreLiteActive
-                            ? "bg-white text-[#00140d] shadow-[0_14px_32px_rgba(255,255,255,0.16)]"
-                            : "text-white/78 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        <MoreVertical size={17} className={moreLiteActive ? "text-[#00b050]" : "text-white/58"} />
-                        <span className="whitespace-nowrap">更多</span>
-                        <ChevronDown size={14} className={moreLiteActive ? "text-[#00b050]" : "text-white/42"} />
-                      </button>
-                    </HoverCardTrigger>
-                    <HoverCardContent
-                      align="start"
-                      className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-white/12 bg-[#06251a]/96 p-3 text-white shadow-[0_24px_64px_rgba(0,0,0,0.34)] backdrop-blur-xl"
-                    >
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        {moreLiteNavItems.map((item) => (
-                          <button
-                            key={`more-${item.key}`}
-                            type="button"
-                            onPointerEnter={() => preloadNavigationTarget(item.path)}
-                            onFocus={() => preloadNavigationTarget(item.path)}
-                            onTouchStart={() => preloadNavigationTarget(item.path)}
-                            onClick={item.action}
-                            className={`group rounded-[18px] border px-3 py-3 text-left transition ${
-                              item.active
-                                ? "border-[#7cffb2]/60 bg-[#7cffb2]/14"
-                                : "border-white/10 bg-white/7 hover:border-[#7cffb2]/36 hover:bg-white/12"
-                            }`}
-                          >
-                            <span
-                              className={`flex h-9 w-9 items-center justify-center rounded-2xl ${
-                                item.active
-                                  ? "bg-[#7cffb2] text-[#00140d]"
-                                  : "bg-white/10 text-[#9cffc3] group-hover:bg-[#00b050] group-hover:text-white"
-                              }`}
-                            >
-                              {item.icon}
-                            </span>
-                            <span className="mt-3 block text-sm font-black text-white">{item.name}</span>
-                            <span className="mt-1 line-clamp-2 block min-h-[34px] text-xs leading-[17px] text-white/52">
-                              {item.description}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </HoverCardContent>
-                  </HoverCard>
                 </nav>
               </div>
             ) : null}
