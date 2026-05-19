@@ -8,7 +8,6 @@ import {
   Trophy,
   Clock,
   Play,
-  Share2,
   Lightbulb,
   FileCode2,
   ChevronDown,
@@ -16,8 +15,8 @@ import {
   ListTodo,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toast } from "sonner";
 import { api } from "../lib/api";
+import { SolutionShareDialog } from "../components/qa/SolutionShareDialog";
 import { parseSheetAndRange } from "../lib/excel";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { practiceKeys } from "../lib/query-keys";
@@ -216,6 +215,7 @@ export function PracticeRecordDetail() {
   const passed = (record.accuracy || 0) >= 60;
   const sidebarQuestions = sidebarQuery.data?.questions || [];
   const currentQuestionIds = new Set((record.answers || []).map((item) => Number(item.questionId)).filter(Boolean));
+  const firstShareableAnswer = (record.answers || []).find((answer) => answer.isCorrect);
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-8 pb-20 space-y-6">
@@ -231,12 +231,11 @@ export function PracticeRecordDetail() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => toast.success("已复制分享链接！")}
-            className="px-4 py-2 bg-white text-slate-600 hover:text-teal-600 border border-gray-200 hover:border-teal-200 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2"
-          >
-            <Share2 size={16} /> 分享成绩
-          </button>
+          <SolutionShareDialog
+            answerId={firstShareableAnswer?.id}
+            title={firstShareableAnswer?.questionTitle || record.questionTitle}
+            disabled={!firstShareableAnswer}
+          />
           <button
             onClick={() => navigate("/practice")}
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-blue-500/30 transition-all flex items-center gap-2"

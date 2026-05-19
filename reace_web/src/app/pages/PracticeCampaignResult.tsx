@@ -3,6 +3,7 @@ import { ArrowLeft, Award, CheckCircle2, ChevronRight, Clock3, FileCode2, Lightb
 import { useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { api } from "../lib/api";
+import { SolutionShareDialog } from "../components/qa/SolutionShareDialog";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
 import { formatDuration } from "../lib/format";
@@ -90,6 +91,7 @@ export function PracticeCampaignResult() {
   const passed = record ? (record.correctCount || 0) > 0 : passedFromState;
   const stars = record ? Math.max(((record.correctCount || 0) > 0 ? 1 : 0), starsFromState) : starsFromState;
   const answerReviews = getCampaignResultAnswerReviews(record);
+  const firstShareableAnswer = answerReviews.find((answer) => answer.isCorrect);
   const questionListPath = getCampaignQuestionListPath(campaignChapter?.id);
 
   const handleStartLevel = async (levelId?: number | null) => {
@@ -142,6 +144,14 @@ export function PracticeCampaignResult() {
           <p className="mx-auto mt-3 max-w-[860px] text-[15px] leading-7 text-slate-500">
             {campaignLevel?.title || record?.questionTitle || "当前关卡"} 已完成结算。你可以继续前往下一关，或返回题目列表查看最新进度。
           </p>
+          {firstShareableAnswer ? (
+            <div className="mt-5 flex justify-center">
+              <SolutionShareDialog
+                answerId={firstShareableAnswer.id}
+                title={firstShareableAnswer.title}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-7 flex items-center justify-center gap-2 text-amber-500">
             {[0, 1, 2].map((index) => (

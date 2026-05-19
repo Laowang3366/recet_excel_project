@@ -32,7 +32,8 @@ describe("notification display helpers", () => {
   it("renders only current notification types", () => {
     expect(shouldRenderNotificationItem("retired_activity")).toBe(false);
     expect(shouldRenderNotificationItem("site_notification")).toBe(true);
-    expect(getVisibleNotificationTypeFilter()).toBe("system,site_notification,feedback_result");
+    expect(shouldRenderNotificationItem("qa_case_answered")).toBe(true);
+    expect(getVisibleNotificationTypeFilter()).toBe("system,site_notification,feedback_result,qa_case_answered");
   });
 
   it("uses the backend visible count directly for the all tab", () => {

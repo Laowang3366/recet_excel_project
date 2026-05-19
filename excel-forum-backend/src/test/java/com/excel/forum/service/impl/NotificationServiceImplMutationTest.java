@@ -18,6 +18,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,5 +69,31 @@ class NotificationServiceImplMutationTest {
         ArgumentCaptor<QueryWrapper<Notification>> wrapperCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
         verify(notificationMapper).delete(wrapperCaptor.capture());
         assertThat(wrapperCaptor.getValue().getSqlSegment()).contains("type");
+    }
+
+    @Test
+    void createNotificationAllowsQaCaseAnswered() {
+        when(notificationMapper.insert(any(Notification.class))).thenReturn(1);
+
+        service.createNotification(7L, "qa_case_answered", "有人提交了答疑", 30L);
+
+        verify(notificationMapper).insert(argThat(notification ->
+                notification.getUserId().equals(7L)
+                        && "qa_case_answered".equals(notification.getType())
+                        && notification.getRelatedId().equals(30L)
+        ));
+    }
+
+    @Test
+    void getCountsByTypeKeepsSystemAndQaCountsSeparate() {
+        when(notificationMapper.selectCount(any(QueryWrapper.class)))
+                .thenReturn(4L, 2L, 1L, 1L);
+
+        assertThat(service.getCountsByType(7L))
+                .containsEntry("all", 4L)
+                .containsEntry("system", 2L)
+                .containsEntry("points", 2L)
+                .containsEntry("announcements", 1L)
+                .containsEntry("qa", 1L);
     }
 }

@@ -1,5 +1,5 @@
 export type PublicNavItem = {
-  key: "home" | "practice" | "templates" | "tutorials" | "mall" | "tools" | "assistant";
+  key: "home" | "practice" | "templates" | "tutorials" | "qa" | "mall" | "tools" | "assistant";
   name: string;
   shortName: string;
   path: string;
@@ -36,6 +36,13 @@ export const publicNavItems: PublicNavItem[] = [
     shortName: "练习",
     path: "/practice",
     description: "章节闯关、每日挑战与错题复习",
+  },
+  {
+    key: "qa",
+    name: "求助答疑",
+    shortName: "答疑",
+    path: "/qa",
+    description: "案例求助、解题分享与答疑提交",
   },
   {
     key: "templates",
@@ -82,10 +89,11 @@ export const liteMobileBottomNavItems: LiteMobileBottomNavItem[] = [
 ];
 
 export const liteMobileDrawerNavItems: PublicNavItem[] = [
-  publicNavItems[4],
+  publicNavItems[3],
   publicNavItems[5],
   publicNavItems[6],
-  publicNavItems[3],
+  publicNavItems[7],
+  publicNavItems[4],
 ];
 
 export function resolveActiveNavItem(pathname: string) {

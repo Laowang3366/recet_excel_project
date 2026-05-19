@@ -9,14 +9,16 @@ describe("layout navigation items", () => {
       "home",
       "tutorials",
       "practice",
+      "qa",
       "templates",
       "tools",
     ]);
   });
 
-  it("keeps only the points center in the account avatar navigation", () => {
+  it("keeps personal-only entries in the account avatar navigation", () => {
     const navigation = buildLayoutNavigation("/templates", true);
 
-    expect(navigation.accountLiteNavItems.map((item) => item.key)).toEqual(["mall"]);
+    expect(navigation.accountLiteNavItems.map((item) => item.key)).toEqual(["qa-my", "mall"]);
+    expect(navigation.accountLiteNavItems.map((item) => item.path)).toEqual(["/qa/my", "/mall"]);
   });
 });

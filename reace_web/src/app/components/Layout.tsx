@@ -140,6 +140,8 @@ export function Layout() {
         return "/points-history";
       case "feedback_result":
         return "/notifications";
+      case "qa_case_answered":
+        return notification.relatedId ? `/qa/cases/${notification.relatedId}#answers` : "/qa/my";
       default:
         return "/notifications";
     }

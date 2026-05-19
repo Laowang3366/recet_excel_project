@@ -1,0 +1,123 @@
+package com.excel.forum.controller;
+
+import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
+import com.excel.forum.entity.dto.QaAiDraftRequest;
+import com.excel.forum.entity.dto.QaCaseAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseHelpRequest;
+import com.excel.forum.entity.dto.QaCaseSnapshotAnswerRequest;
+import com.excel.forum.entity.dto.QaSolutionShareRequest;
+import com.excel.forum.service.QaService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.nio.charset.StandardCharsets;
+
+@RestController
+@RequestMapping("/api/qa")
+@RequiredArgsConstructor
+public class QaController {
+    private final QaService qaService;
+
+    @GetMapping("/solution-shares")
+    public ResponseEntity<?> listSolutionShares(
+            @RequestAttribute Long userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+        return ResponseEntity.ok(qaService.listSolutionShares(userId, page, size));
+    }
+
+    @GetMapping("/solution-shares/{id}")
+    public ResponseEntity<?> getSolutionShareDetail(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.getSolutionShareDetail(userId, id));
+    }
+
+    @PostMapping("/solution-shares")
+    public ResponseEntity<?> shareSolution(
+            @RequestAttribute Long userId,
+            @RequestBody QaSolutionShareRequest request) {
+        return ResponseEntity.ok(qaService.shareSolution(userId, request));
+    }
+
+    @PostMapping("/solution-shares/ai-draft")
+    public ResponseEntity<?> generateSolutionThoughtDraft(
+            @RequestAttribute Long userId,
+            @RequestBody QaAiDraftRequest request) {
+        return ResponseEntity.ok(qaService.generateSolutionThoughtDraft(userId, request));
+    }
+
+    @GetMapping("/cases")
+    public ResponseEntity<?> listCases(
+            @RequestAttribute Long userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+        return ResponseEntity.ok(qaService.listCases(userId, status, page, size));
+    }
+
+    @PostMapping("/cases")
+    public ResponseEntity<?> createCase(
+            @RequestAttribute Long userId,
+            @RequestBody QaCaseHelpRequest request) {
+        return ResponseEntity.ok(qaService.createCase(userId, request));
+    }
+
+    @GetMapping("/cases/{id}")
+    public ResponseEntity<?> getCaseDetail(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.getCaseDetail(userId, id));
+    }
+
+    @GetMapping("/cases/{id}/file")
+    public ResponseEntity<?> downloadCaseFile(@RequestAttribute Long userId, @PathVariable Long id) {
+        PracticeQuestionWorkbookFile workbookFile = qaService.buildCaseWorkbookFile(userId, id);
+        ByteArrayResource resource = new ByteArrayResource(workbookFile.content());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(workbookFile.contentType()))
+                .contentLength(workbookFile.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(workbookFile.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(resource);
+    }
+
+    @PostMapping("/cases/{id}/answers")
+    public ResponseEntity<?> submitCaseAnswer(
+            @RequestAttribute Long userId,
+            @PathVariable Long id,
+            @RequestBody QaCaseAnswerRequest request) {
+        return ResponseEntity.ok(qaService.submitCaseAnswer(userId, id, request));
+    }
+
+    @PostMapping("/cases/{id}/answers/from-snapshot")
+    public ResponseEntity<?> submitCaseAnswerFromSnapshot(
+            @RequestAttribute Long userId,
+            @PathVariable Long id,
+            @RequestBody QaCaseSnapshotAnswerRequest request) {
+        return ResponseEntity.ok(qaService.submitCaseAnswerFromSnapshot(userId, id, request));
+    }
+
+    @GetMapping("/cases/{id}/answers")
+    public ResponseEntity<?> listCaseAnswers(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.listCaseAnswers(userId, id));
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<?> getMyQa(
+            @RequestAttribute Long userId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+        return ResponseEntity.ok(qaService.getMyQa(userId, page, size));
+    }
+}

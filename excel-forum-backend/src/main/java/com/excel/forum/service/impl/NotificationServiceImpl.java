@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Notification> implements NotificationService {
-    private static final Set<String> CURRENT_NOTIFICATION_TYPES = Set.of("system", "site_notification", "feedback_result");
+    private static final Set<String> CURRENT_NOTIFICATION_TYPES = Set.of("system", "site_notification", "feedback_result", "qa_case_answered");
 
     private final SiteNotificationMapper siteNotificationMapper;
     
@@ -165,12 +165,14 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         long all = count(new QueryWrapper<Notification>().eq("user_id", userId).in("type", CURRENT_NOTIFICATION_TYPES));
         long points = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "system"));
         long announcements = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "site_notification"));
+        long qa = count(new QueryWrapper<Notification>().eq("user_id", userId).eq("type", "qa_case_answered"));
 
         Map<String, Object> result = new HashMap<>();
         result.put("all", all);
-        result.put("system", all);
+        result.put("system", points);
         result.put("points", points);
         result.put("announcements", announcements);
+        result.put("qa", qa);
         return result;
     }
 }

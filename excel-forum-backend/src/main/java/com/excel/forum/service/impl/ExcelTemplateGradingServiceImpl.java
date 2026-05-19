@@ -506,6 +506,33 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
     }
 
     @Override
+    public byte[] buildWorkbookFileFromSnapshot(String fileUrl, ExcelWorkbookSnapshot submission) {
+        if (!StringUtils.hasText(fileUrl)) {
+            throw new IllegalArgumentException("模板文件不能为空");
+        }
+        Path filePath = resolveLocalPath(fileUrl);
+        if (!Files.exists(filePath)) {
+            throw new IllegalArgumentException("模板文件不存在");
+        }
+
+        ExcelWorkbookSnapshot safeSubmission = submission == null ? new ExcelWorkbookSnapshot() : submission;
+        try (InputStream inputStream = Files.newInputStream(filePath);
+             Workbook workbook = WorkbookFactory.create(inputStream);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            applySubmissionToWorkbook(workbook, safeSubmission);
+            try {
+                workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
+            } catch (FormulaParseException | NotImplementedException | IllegalArgumentException formulaEvaluationError) {
+                // 新版动态数组函数可能无法由 POI 计算，但公式本身需要保留在导出的答疑模板中。
+            }
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("模板文件解析失败", e);
+        }
+    }
+
+    @Override
     public ExcelTemplateEvaluation grade(ExcelWorkbookSnapshot submission, String gradingRuleJson, String expectedSnapshotJson) {
         ExcelTemplateRuleConfig ruleConfig = parseRuleConfig(gradingRuleJson);
         ExcelTemplateExpectedSnapshot expectedSnapshot = parseExpectedSnapshot(expectedSnapshotJson);

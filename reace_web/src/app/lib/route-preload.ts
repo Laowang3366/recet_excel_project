@@ -4,6 +4,7 @@ const publicRoutePreloaders: Record<string, RoutePreloader> = {
   "/": () => import("../pages/Home"),
   "/tutorials": () => import("../pages/TutorialCenter"),
   "/practice": () => import("../pages/PracticeCampaignHub"),
+  "/qa": () => import("../pages/QaCenter"),
   "/templates": () => import("../pages/TemplateCenter"),
   "/mall": () => import("../pages/Mall"),
   "/tools": () => import("../pages/Tools"),

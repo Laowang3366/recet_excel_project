@@ -1,0 +1,97 @@
+import type { ExcelWorkbookSnapshot } from "./excel";
+
+export type QaAuthor = {
+  id?: number | string | null;
+  username?: string | null;
+  avatar?: string | null;
+};
+
+export type QaSolutionShare = {
+  id: number;
+  userId?: number;
+  answerId?: number;
+  questionId?: number;
+  title?: string | null;
+  thoughtText?: string | null;
+  thoughtSource?: "manual" | "ai" | "empty" | string;
+  viewCount?: number;
+  createTime?: string | null;
+  author?: QaAuthor | null;
+  answer?: QaPracticeAnswer | null;
+};
+
+export type QaPracticeAnswer = {
+  id?: number | string | null;
+  questionId?: number | string | null;
+  questionType?: string | null;
+  questionTitle?: string | null;
+  questionExplanation?: string | null;
+  userAnswer?: unknown;
+  correctAnswer?: unknown;
+  gradingDetail?: unknown;
+  isCorrect?: boolean;
+  score?: number;
+};
+
+export type QaCaseHelp = {
+  id: number;
+  userId?: number;
+  title?: string | null;
+  description?: string | null;
+  status?: "open" | "answered" | "closed" | string;
+  templateFileUrl?: string | null;
+  answerSheet?: string | null;
+  answerRange?: string | null;
+  idealAnswerSnapshot?: unknown;
+  viewCount?: number;
+  answerCount?: number;
+  createTime?: string | null;
+  author?: QaAuthor | null;
+  answers?: QaCaseAnswer[];
+};
+
+export type QaCaseAnswer = {
+  id: number;
+  caseId?: number;
+  userId?: number;
+  answerFileUrl?: string | null;
+  createTime?: string | null;
+  author?: QaAuthor | null;
+};
+
+export type QaPageResponse<T> = {
+  records: T[];
+  total: number;
+  page?: number;
+  size?: number;
+};
+
+export type QaMyResponse = {
+  cases: QaPageResponse<QaCaseHelp>;
+  answers: QaPageResponse<QaCaseAnswer>;
+  shares: QaPageResponse<QaSolutionShare>;
+};
+
+export type QaTemplateSnapshotResponse = ExcelWorkbookSnapshot;
+
+export function formatQaStatus(status?: string | null) {
+  switch (status) {
+    case "answered":
+      return "已答疑";
+    case "closed":
+      return "已关闭";
+    default:
+      return "待答疑";
+  }
+}
+
+export function formatQaValue(value: unknown) {
+  if (value === null || value === undefined) return "无";
+  if (typeof value === "string") return value || "无";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}

@@ -69,6 +69,15 @@ export const practiceKeys = {
   campaignRankings: (scope: string) => ["practice", "campaign", "rankings", scope] as const,
 };
 
+export const qaKeys = {
+  all: ["qa"] as const,
+  cases: (params: Record<string, unknown>) => ["qa", "cases", params] as const,
+  caseDetail: (id: number | string) => ["qa", "case", id] as const,
+  solutionShares: (params: Record<string, unknown>) => ["qa", "solution-shares", params] as const,
+  solutionShareDetail: (id: number | string) => ["qa", "solution-share", id] as const,
+  my: () => ["qa", "my"] as const,
+};
+
 export const settingsKeys = {
   overview: () => ["settings", "overview"] as const,
   privacy: () => ["settings", "privacy"] as const,

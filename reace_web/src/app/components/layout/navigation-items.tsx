@@ -4,6 +4,7 @@ import {
   FolderKanban,
   Home,
   Lightbulb,
+  MessageSquareText,
   ShoppingBag,
   Target,
   User,
@@ -41,6 +42,7 @@ const navIconMap: Record<string, ReactNode> = {
   practice: <Target size={18} strokeWidth={1.8} />,
   templates: <FolderKanban size={18} strokeWidth={1.8} />,
   tutorials: <BookOpen size={18} strokeWidth={1.8} />,
+  qa: <MessageSquareText size={18} strokeWidth={1.8} />,
   mall: <ShoppingBag size={18} strokeWidth={1.8} />,
   tools: <ArrowRightLeft size={18} strokeWidth={1.8} />,
   assistant: <Lightbulb size={18} strokeWidth={1.8} />,
@@ -55,11 +57,13 @@ export function buildLayoutNavigation(pathname: string, isAuthenticated: boolean
       icon: navIconMap[item.key],
     }));
   const primaryLiteNavItems = navItems.filter((item) =>
-    ["home", "practice", "templates", "tutorials", "tools"].includes(item.key)
+    ["home", "practice", "qa", "templates", "tutorials", "tools"].includes(item.key)
   );
-  const accountLiteNavItems = navItems.filter((item) =>
-    ["mall"].includes(item.key)
-  );
+  const qaNavItem = navItems.find((item) => item.key === "qa");
+  const accountLiteNavItems = [
+    ...(qaNavItem ? [{ ...qaNavItem, key: "qa-my", name: "查看答疑", shortName: "答疑", path: "/qa/my" }] : []),
+    ...navItems.filter((item) => ["mall"].includes(item.key)),
+  ];
   const mobileDrawerNavItems: LayoutMobileDrawerNavItem[] =
     liteMobileDrawerNavItems.map((item) => ({ ...item, icon: navIconMap[item.key] }));
   const mobileBottomNavItems: LayoutMobileBottomNavItem[] = liteMobileBottomNavItems.map((item) => ({

@@ -39,6 +39,8 @@ public interface ExcelTemplateGradingService {
 
     byte[] buildStudentWorkbookFile(String fileUrl, String answerSheet, String answerRange);
 
+    byte[] buildWorkbookFileFromSnapshot(String fileUrl, ExcelWorkbookSnapshot submission);
+
     ExcelTemplateEvaluation grade(ExcelWorkbookSnapshot submission, String gradingRuleJson, String expectedSnapshotJson);
 
     Map<String, Object> buildRuleSummary(String gradingRuleJson);
