@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, type ExcelAnswerSnapshot } from "./excel";
+import {
+  findMissingFormulaCellRefs,
+  formatAnswerPreviewCellDisplay,
+  resolveExcelCellNumberFormat,
+  type ExcelAnswerSnapshot,
+} from "./excel";
 
 describe("excel answer preview", () => {
   it("reports non-formula cells inside a formula-checked answer range", () => {
@@ -18,5 +23,10 @@ describe("excel answer preview", () => {
 
   it("renders external Excel formulas without compatibility prefixes", () => {
     expect(formatAnswerPreviewCellDisplay("#NAME?", "_xlfn.LET(_xlpm.m,K6,_xlpm.m)")).toBe("=LET(m,K6,m)");
+  });
+
+  it("infers date number formatting from an Excel serial with date display", () => {
+    expect(resolveExcelCellNumberFormat({ value: 46083, display: "2026-03-02" })).toBe("yyyy-mm-dd");
+    expect(resolveExcelCellNumberFormat({ value: 46083, display: "46083" })).toBe("");
   });
 });

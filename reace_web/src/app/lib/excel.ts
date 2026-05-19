@@ -2,6 +2,7 @@ export type ExcelCellSnapshot = {
   value?: unknown;
   formula?: string | null;
   display?: string | null;
+  numberFormat?: string | null;
 };
 
 export type ExcelSheetSnapshot = {
@@ -154,14 +155,18 @@ export function cloneWorkbookSnapshot(workbook: ExcelWorkbookSnapshot | null | u
       rowCount: sheet.rowCount ?? 0,
       columnCount: sheet.columnCount ?? 0,
       cells: Object.fromEntries(
-        Object.entries(sheet.cells || {}).map(([key, value]) => [
-          key,
-          {
+        Object.entries(sheet.cells || {}).map(([key, value]) => {
+          const numberFormat = typeof value?.numberFormat === "string" ? value.numberFormat.trim() : "";
+          const cell: ExcelCellSnapshot = {
             value: value?.value ?? "",
             formula: normalizeExcelFormulaText(value?.formula) || null,
             display: value?.display ?? null,
-          },
-        ]),
+          };
+          if (numberFormat) {
+            cell.numberFormat = numberFormat;
+          }
+          return [key, cell];
+        }),
       ),
     })),
   };
@@ -194,6 +199,18 @@ export function getCellDisplayValue(cell: ExcelCellSnapshot | undefined) {
   if (formula) return `=${formula}`;
   if (cell.value === null || cell.value === undefined) return "";
   return String(cell.value);
+}
+
+const excelDateDisplayPattern = /^(?:\d{4}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/;
+
+export function resolveExcelCellNumberFormat(cell: ExcelCellSnapshot | null | undefined) {
+  const explicit = typeof cell?.numberFormat === "string" ? cell.numberFormat.trim() : "";
+  if (explicit) return explicit;
+  if (typeof cell?.value !== "number" || !Number.isFinite(cell.value)) return "";
+  if (cell.value < 1 || cell.value > 100000) return "";
+  const display = cell.display === null || cell.display === undefined ? "" : String(cell.display).trim();
+  if (!display || display === String(cell.value)) return "";
+  return excelDateDisplayPattern.test(display) ? "yyyy-mm-dd" : "";
 }
 
 export function updateWorkbookCell(workbook: ExcelWorkbookSnapshot, sheetName: string, cellRef: string, rawValue: string) {

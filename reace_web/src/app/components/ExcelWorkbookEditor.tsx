@@ -12,6 +12,7 @@ import {
   normalizeSelection,
   parseRangeRef,
   parseSheetAndRange,
+  resolveExcelCellNumberFormat,
   selectionToRangeRef,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
@@ -86,6 +87,17 @@ function workbookSnapshotToUniverData(workbook: ExcelWorkbookSnapshot): Partial<
   };
 }
 
+function workbookCellSnapshotToUniverValue(cell: ExcelWorkbookSnapshot["sheets"][number]["cells"][string]) {
+  const formula = cell?.formula ? `=${cell.formula}` : "";
+  if (formula) return formula;
+  const value = cell?.value;
+  const numberFormat = resolveExcelCellNumberFormat(cell);
+  if (numberFormat && typeof value === "number") {
+    return { v: value, s: { n: { pattern: numberFormat } } };
+  }
+  return value;
+}
+
 function applyWorkbookSnapshotToUniver(workbookFacade: FWorkbook, snapshot: ExcelWorkbookSnapshot) {
   const hydratedSnapshot = clearInferredDynamicArraySpillChildren(snapshot);
   const targetSheets = hydratedSnapshot.sheets || [];
@@ -119,8 +131,8 @@ function applyWorkbookSnapshotToUniver(workbookFacade: FWorkbook, snapshot: Exce
       worksheet.setName(sheetSnapshot.name);
     }
     Object.entries(sheetSnapshot.cells || {}).forEach(([cellRef, cell]) => {
-      const value = cell?.formula ? `=${cell.formula}` : cell?.value;
-      if (value === null || value === undefined || String(value).trim() === "") {
+      const value = workbookCellSnapshotToUniverValue(cell);
+      if (value === null || value === undefined || (typeof value !== "object" && String(value).trim() === "")) {
         return;
       }
       worksheet.getRange(cellRef).setValue(value as string | number | boolean);

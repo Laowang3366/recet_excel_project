@@ -130,4 +130,28 @@ describe("univerDataToWorkbookSnapshot", () => {
     expect(sheet.cells.K7.formula).toBe("LET(m,K6,r,L6,m)");
     expect(extractRangeAnswerSnapshot(snapshot, "Sheet1", "K7").formulas).toEqual([["LET(m,K6,r,L6,m)"]]);
   });
+
+  it("keeps number format metadata for formatted date cells", () => {
+    const snapshot = univerDataToWorkbookSnapshot({
+      sheetOrder: ["sheet-1"],
+      sheets: {
+        "sheet-1": {
+          name: "Sheet1",
+          rowCount: 20,
+          columnCount: 12,
+          cellData: {
+            9: {
+              0: {
+                v: 46083,
+                s: { n: { pattern: "yyyy-mm-dd" } },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as IWorkbookData);
+
+    expect(snapshot.sheets[0].cells.A10.value).toBe(46083);
+    expect(snapshot.sheets[0].cells.A10.numberFormat).toBe("yyyy-mm-dd");
+  });
 });

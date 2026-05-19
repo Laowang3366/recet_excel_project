@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getCampaignResultAnswerReviews,
   getCampaignResultAnswerTextClassName,
+  getCampaignResultAnswerSummaryGridClassName,
   getCampaignResultMatrixContainerClassName,
   getCampaignResultMatrixRowClassName,
   getCampaignResultShellClassName,
@@ -51,5 +52,10 @@ describe("campaign result layout classes", () => {
   it("renders answer matrices with horizontal overflow instead of vertical over-wrapping", () => {
     expect(getCampaignResultMatrixContainerClassName()).toContain("overflow-x-auto");
     expect(getCampaignResultMatrixRowClassName()).toContain("min-w-max");
+  });
+
+  it("places standard values and formulas side by side on desktop", () => {
+    expect(getCampaignResultAnswerSummaryGridClassName(true)).toContain("lg:grid-cols-2");
+    expect(getCampaignResultAnswerSummaryGridClassName(false)).not.toContain("lg:grid-cols-2");
   });
 });

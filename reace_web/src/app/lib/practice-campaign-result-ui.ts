@@ -78,6 +78,14 @@ export function getCampaignResultMatrixRowClassName() {
   return "grid min-w-max grid-flow-col auto-cols-[minmax(112px,260px)] gap-2";
 }
 
+export function getCampaignResultAnswerSummaryGridClassName(hasFormulas: boolean) {
+  return hasFormulas ? "grid gap-3 lg:grid-cols-2 lg:items-start" : "space-y-3";
+}
+
+export function getCampaignResultAnswerSummaryPanelClassName() {
+  return "min-w-0 rounded-xl border border-emerald-100/70 bg-white/70 p-3";
+}
+
 export function getCampaignResultMatrixCellClassName(tone: CampaignResultMatrixTone = "slate") {
   const toneClassName = {
     emerald: "border-emerald-200 bg-emerald-50/70 text-emerald-900",

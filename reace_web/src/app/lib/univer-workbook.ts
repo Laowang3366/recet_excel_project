@@ -5,6 +5,7 @@ type UniverCellData = {
   v?: unknown;
   f?: unknown;
   si?: unknown;
+  s?: unknown;
 };
 
 type SharedFormulaAnchor = {
@@ -193,6 +194,13 @@ function getCellFormula(
   return normalizeFormula(movedFormula) ?? anchor.formula;
 }
 
+function readCellNumberFormat(cellData: UniverCellData | null | undefined) {
+  const style = cellData?.s;
+  if (!style || typeof style !== "object") return null;
+  const pattern = (style as { n?: { pattern?: unknown } }).n?.pattern;
+  return typeof pattern === "string" && pattern.trim() ? pattern.trim() : null;
+}
+
 export function univerDataToWorkbookSnapshot(
   data: IWorkbookData,
   options: UniverWorkbookSnapshotOptions = {},
@@ -200,7 +208,7 @@ export function univerDataToWorkbookSnapshot(
   return {
     sheets: (data.sheetOrder || []).map((sheetId) => {
       const sheet = data.sheets?.[sheetId];
-      const cells: Record<string, { value?: unknown; formula?: string | null; display?: string | null }> = {};
+      const cells: Record<string, { value?: unknown; formula?: string | null; display?: string | null; numberFormat?: string | null }> = {};
       const matrix = (sheet?.cellData || {}) as Record<string, Record<string, UniverCellData | null | undefined>>;
       const sharedFormulaAnchors = collectSharedFormulaAnchors(matrix);
 
@@ -209,11 +217,16 @@ export function univerDataToWorkbookSnapshot(
           const row = Number(rowIndex) + 1;
           const col = Number(colIndex) + 1;
           const cellRef = toCellRef(row, col);
-          cells[cellRef] = {
+          const numberFormat = readCellNumberFormat(cellData);
+          const snapshotCell: ExcelWorkbookSnapshot["sheets"][number]["cells"][string] = {
             value: cellData?.v ?? "",
             formula: getCellFormula(cellData, row, col, sharedFormulaAnchors, options),
             display: cellData?.v !== undefined && cellData?.v !== null ? String(cellData.v) : "",
           };
+          if (numberFormat) {
+            snapshotCell.numberFormat = numberFormat;
+          }
+          cells[cellRef] = snapshotCell;
         });
       });
 

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
+import { getAssistantErrorMessage } from "../../lib/assistant-errors";
 import { preloadPublicRoute } from "../../lib/route-preload";
 import { useSession } from "../../lib/session";
 
@@ -46,10 +47,6 @@ type AssistantWidgetTurn = {
 type AssistantWidgetProps = {
   onOpen?: () => void;
 };
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export function AssistantWidget({ onOpen }: AssistantWidgetProps) {
   const location = useLocation();
@@ -261,7 +258,7 @@ export function AssistantWidget({ onOpen }: AssistantWidgetProps) {
       }
     },
     onError: (error: unknown, variables) => {
-      const message = getErrorMessage(error, "AI 助手暂时不可用");
+      const message = getAssistantErrorMessage(error);
       setAssistantHistory((prev) => prev.map((item) => item.id === variables?.turnId
         ? {
           ...item,

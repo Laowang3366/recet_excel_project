@@ -5,8 +5,14 @@ import com.excel.forum.entity.dto.ExcelTemplateAnswerSnapshot;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,6 +94,25 @@ class ExcelTemplateGradingServiceImplTest {
         );
 
         assertThat(snapshot.getFormulas()).isEqualTo(List.of(List.of("LET(m,K6,r,L6,m)")));
+    }
+
+    @Test
+    void workbookSnapshotKeepsDateNumberFormatWithNumericValue() throws Exception {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            CellStyle dateStyle = workbook.createCellStyle();
+            dateStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("yyyy-mm-dd"));
+            org.apache.poi.ss.usermodel.Cell cell = sheet.createRow(0).createCell(0);
+            cell.setCellValue(LocalDate.of(2026, 3, 2));
+            cell.setCellStyle(dateStyle);
+
+            ExcelWorkbookSnapshot snapshot = ReflectionTestUtils.invokeMethod(service, "toWorkbookSnapshot", workbook);
+            ExcelWorkbookSnapshot.CellSnapshot output = snapshot.getSheets().get(0).getCells().get("A1");
+
+            assertThat(output.getValue()).isInstanceOf(Number.class);
+            assertThat(output.getDisplay()).contains("2026");
+            assertThat(output.getNumberFormat()).isEqualTo("yyyy-mm-dd");
+        }
     }
 
     private void putCell(ExcelWorkbookSnapshot.SheetSnapshot sheet, String ref, Object value, String formula) {

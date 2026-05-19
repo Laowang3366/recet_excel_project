@@ -17,6 +17,7 @@ import org.apache.poi.ss.formula.eval.NotImplementedException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -748,12 +749,23 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
                         log.trace("Display formatting failed at {}", cell.getAddress(), exception);
                         cellSnapshot.setDisplay(cellSnapshot.getValue() == null ? "" : String.valueOf(cellSnapshot.getValue()));
                     }
+                    applyNumberFormat(cellSnapshot, cell);
                     sheetSnapshot.getCells().put(cell.getAddress().formatAsString(), cellSnapshot);
                 }
             }
             snapshot.getSheets().add(sheetSnapshot);
         }
         return snapshot;
+    }
+
+    private void applyNumberFormat(ExcelWorkbookSnapshot.CellSnapshot cellSnapshot, Cell cell) {
+        try {
+            if (DateUtil.isCellDateFormatted(cell)) {
+                cellSnapshot.setNumberFormat("yyyy-mm-dd");
+            }
+        } catch (IllegalArgumentException exception) {
+            log.trace("Date number format detection failed at {}", cell.getAddress(), exception);
+        }
     }
 
     private void applySubmissionToWorkbook(Workbook workbook, ExcelWorkbookSnapshot submission) {

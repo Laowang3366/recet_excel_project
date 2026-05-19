@@ -24,11 +24,24 @@ type RequestOptions = {
   silent?: boolean;
 };
 
-function normalizeErrorMessage(data: unknown, fallback: string) {
-  if (typeof data === "string" && data.trim()) return data;
+function isHtmlErrorPayload(value: string) {
+  const text = value.trim().slice(0, 800).toLowerCase();
+  if (!text) return false;
+  return text.startsWith("<!doctype html")
+    || text.startsWith("<html")
+    || /<title>\s*\d{3}\s/.test(text)
+    || /<h1>\s*\d{3}\s/.test(text);
+}
+
+export function normalizeApiErrorMessage(data: unknown, fallback: string) {
+  if (typeof data === "string" && data.trim()) {
+    return isHtmlErrorPayload(data) ? fallback : data;
+  }
   if (data && typeof data === "object") {
     const candidate = (data as Record<string, unknown>).message;
-    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (typeof candidate === "string" && candidate.trim()) {
+      return isHtmlErrorPayload(candidate) ? fallback : candidate;
+    }
   }
   return fallback;
 }
@@ -55,7 +68,7 @@ export async function downloadFile(path: string, fallbackFileName = "download", 
     const data = contentType.includes("application/json")
       ? await response.json().catch(() => null)
       : await response.text().catch(() => "");
-    const message = normalizeErrorMessage(data, `请求失败(${response.status})`);
+    const message = normalizeApiErrorMessage(data, `请求失败(${response.status})`);
     const loginRequired = isLoginRequiredResponse(response.status, message, data);
     if (loginRequired) {
       clearStoredSession();
@@ -115,7 +128,7 @@ async function apiRequestInternal<T = unknown>(path: string, options: RequestOpt
       await delay(300 * (retryCount + 1));
       return apiRequestInternal<T>(path, options, retryCount + 1);
     }
-    const message = normalizeErrorMessage(data, `请求失败(${response.status})`);
+    const message = normalizeApiErrorMessage(data, `请求失败(${response.status})`);
     const loginRequired = isLoginRequiredResponse(response.status, message, data);
     if (loginRequired) {
       clearStoredSession();

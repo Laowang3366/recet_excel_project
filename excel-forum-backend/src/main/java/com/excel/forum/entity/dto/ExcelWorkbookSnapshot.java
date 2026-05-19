@@ -24,5 +24,6 @@ public class ExcelWorkbookSnapshot {
         private Object value;
         private String formula;
         private String display;
+        private String numberFormat;
     }
 }

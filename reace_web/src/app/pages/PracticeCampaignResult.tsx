@@ -9,6 +9,8 @@ import { formatDuration } from "../lib/format";
 import { startCampaignLevel } from "../lib/practice-campaign";
 import {
   getCampaignResultAnswerReviews,
+  getCampaignResultAnswerSummaryGridClassName,
+  getCampaignResultAnswerSummaryPanelClassName,
   getCampaignResultAnswerTextClassName,
   getCampaignResultMatrixCellClassName,
   getCampaignResultMatrixContainerClassName,
@@ -375,18 +377,22 @@ function renderCorrectAnswerSummary(correctAnswer: unknown) {
     <div className="space-y-3">
       {rangeValues.map(([target, values]) => {
         const formulas = rangeFormulas[target] as string[][] | undefined;
+        const hasFormulas = hasAnyFormula(formulas);
         return (
           <div key={target} className="rounded-xl border border-emerald-100 bg-white/80 p-3">
             <div className="mb-3 w-fit rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-black text-emerald-700">
               {target}
             </div>
-            <div className="space-y-3">
-              {renderReviewMatrix(values as unknown[][], "emerald")}
-              {hasAnyFormula(formulas) ? (
-                <div>
-                  <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    标准公式
-                  </div>
+            <div className={getCampaignResultAnswerSummaryGridClassName(hasFormulas)}>
+              <div className={getCampaignResultAnswerSummaryPanelClassName()}>
+                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">
+                  标准答案
+                </div>
+                {renderReviewMatrix(values as unknown[][], "emerald")}
+              </div>
+              {hasFormulas ? (
+                <div className={getCampaignResultAnswerSummaryPanelClassName()}>
+                  <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">标准公式</div>
                   {renderReviewMatrix((formulas || []).map((row) => row.map((cell) => cell ? `=${cell}` : "")), "slate")}
                 </div>
               ) : null}
