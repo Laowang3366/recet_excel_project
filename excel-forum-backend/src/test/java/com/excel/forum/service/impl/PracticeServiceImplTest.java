@@ -111,6 +111,28 @@ class PracticeServiceImplTest {
     }
 
     @Test
+    void getPracticeQuestionDetailDoesNotExposeAnswerExplanationBeforeSubmit() {
+        PracticeServiceImpl service = createService();
+
+        Question question = buildExcelQuestion();
+        question.setExplanation("先用 FILTER+UNIQUE 生成组合，再用 BYROW+SUMIFS 聚合。");
+        QuestionExcelTemplate template = buildTemplate();
+        template.setAnswerSheet("Sheet1");
+        template.setAnswerRange("K10:P14");
+
+        when(questionService.getOne(any(QueryWrapper.class), eq(false))).thenReturn(question);
+        when(questionExcelTemplateService.getByQuestionId(9L)).thenReturn(template);
+        when(excelTemplateGradingService.loadWorkbookSnapshot("/uploads/practice.xlsx")).thenReturn(new ExcelWorkbookSnapshot());
+
+        Map<String, Object> result = service.getPracticeQuestionDetail(9L);
+
+        assertThat(result).doesNotContainKey("explanation");
+        assertThat(result.get("title")).isEqualTo("销售汇总");
+        assertThat(result.get("answerSheet")).isEqualTo("Sheet1");
+        assertThat(result.get("answerRange")).isEqualTo("K10:P14");
+    }
+
+    @Test
     void submitPracticeAwardsQuestionRewardOnlyOnFirstPass() {
         PracticeServiceImpl service = createService();
 

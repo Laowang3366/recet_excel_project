@@ -19,6 +19,16 @@ type CampaignLevelStatsLike = {
   passRate?: number | string | null;
 };
 
+type PracticeQuestionRequirementLike = {
+  requirement?: string | null;
+  questionRequirement?: string | null;
+  description?: string | null;
+  prompt?: string | null;
+  explanation?: string | null;
+  answerSheet?: string | null;
+  answerRange?: string | null;
+};
+
 export function canExpandChapterQuestions(chapter: ChapterLike | null | undefined) {
   return Boolean(chapter?.unlocked);
 }
@@ -92,6 +102,29 @@ export function getCampaignLevelStatsSummary(stats: CampaignLevelStatsLike | nul
 export function getPracticeDetailEditorKey(questionId?: number | string | null) {
   const normalizedQuestionId = questionId === null || questionId === undefined ? "" : String(questionId).trim();
   return `practice-question-${normalizedQuestionId || "unknown"}`;
+}
+
+export function getPracticeQuestionRequirement(question: PracticeQuestionRequirementLike | null | undefined) {
+  const explicitRequirement = [
+    question?.requirement,
+    question?.questionRequirement,
+    question?.description,
+    question?.prompt,
+  ]
+    .map((value) => String(value || "").trim())
+    .find(Boolean);
+  if (explicitRequirement) {
+    return explicitRequirement;
+  }
+
+  const answerArea = [
+    String(question?.answerSheet || "").trim(),
+    String(question?.answerRange || "").trim(),
+  ].filter(Boolean).join(" / ");
+  if (answerArea) {
+    return `请在 ${answerArea} 内完成作答。`;
+  }
+  return "请根据题目模板完成作答。";
 }
 
 function normalizeSearchTerm(searchTerm?: string | null) {

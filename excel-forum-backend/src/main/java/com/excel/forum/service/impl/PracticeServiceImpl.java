@@ -883,7 +883,6 @@ public class PracticeServiceImpl implements PracticeService {
         item.put("title", question.getTitle());
         item.put("score", safeInt(question.getPoints(), 10));
         item.put("difficulty", safeInt(question.getDifficulty(), 1));
-        item.put("explanation", question.getExplanation());
         item.put("options", parseOptions(question.getOptions()));
         item.put("questionCategoryId", question.getQuestionCategoryId());
         item.put("questionCategoryName", categoryName);

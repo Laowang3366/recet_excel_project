@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import { ExcelWorkbookSnapshot, normalizeSelection, parseRangeRef } from "../lib/excel";
 import { formatDuration } from "../lib/format";
-import { getPracticeDetailEditorKey } from "../lib/practice-campaign-ui";
+import { getPracticeDetailEditorKey, getPracticeQuestionRequirement } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
 import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
 
@@ -41,6 +41,10 @@ type PracticeQuestionDetail = {
   title?: string | null;
   questionCategoryId?: number | null;
   categoryId?: number | null;
+  requirement?: string | null;
+  questionRequirement?: string | null;
+  description?: string | null;
+  prompt?: string | null;
   explanation?: string | null;
   answerSheet?: string | null;
   answerRange?: string | null;
@@ -106,7 +110,7 @@ export function PracticeDetail() {
   const currentWorkbook = workbook.sheets.length > 0 ? workbook : (question?.templateWorkbook || { sheets: [] });
   const currentSheetName = selectedSheetName || question?.answerSheet || question?.templateWorkbook?.sheets?.[0]?.name || "";
   const editorKey = getPracticeDetailEditorKey(question?.id);
-  const questionRequirement = String(question?.explanation || "").trim();
+  const questionRequirement = getPracticeQuestionRequirement(question);
 
   useEffect(() => {
     if (!question?.templateWorkbook?.sheets?.length) return;
@@ -289,7 +293,7 @@ export function PracticeDetail() {
                 题目要求
               </div>
               <div className="whitespace-pre-wrap text-lg font-black leading-8 text-slate-950">
-                {questionRequirement || `请在 ${question.answerSheet} / ${question.answerRange} 内完成作答。`}
+                {questionRequirement}
               </div>
               <div className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-white/80 bg-white/70 px-4 py-2 text-sm font-bold text-emerald-800">
                 作答区域

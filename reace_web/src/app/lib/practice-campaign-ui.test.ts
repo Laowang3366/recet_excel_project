@@ -9,6 +9,7 @@ import {
   filterCampaignLevelsBySearch,
   getCampaignLevelStatsSummary,
   getPracticeDetailEditorKey,
+  getPracticeQuestionRequirement,
 } from "./practice-campaign-ui";
 
 describe("practice campaign UI helpers", () => {
@@ -68,5 +69,22 @@ describe("practice campaign UI helpers", () => {
     expect(getPracticeDetailEditorKey(18)).toBe("practice-question-18");
     expect(getPracticeDetailEditorKey("random")).toBe("practice-question-random");
     expect(getPracticeDetailEditorKey(null)).toBe("practice-question-unknown");
+  });
+
+  it("does not use answer explanation as the question requirement", () => {
+    expect(getPracticeQuestionRequirement({
+      explanation: "先用 FILTER+UNIQUE 生成组合，再用 BYROW+SUMIFS 聚合。",
+      answerSheet: "Sheet1",
+      answerRange: "K10:P14",
+    })).toBe("请在 Sheet1 / K10:P14 内完成作答。");
+  });
+
+  it("prefers explicit requirement text when the API provides it", () => {
+    expect(getPracticeQuestionRequirement({
+      questionRequirement: "按月份和区域筛选销售数据，并返回前 5 名。",
+      explanation: "这里是答案解析，不应出现在作答前。",
+      answerSheet: "Sheet1",
+      answerRange: "K10:P14",
+    })).toBe("按月份和区域筛选销售数据，并返回前 5 名。");
   });
 });
