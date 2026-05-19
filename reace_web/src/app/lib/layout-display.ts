@@ -32,7 +32,7 @@ export function shouldRenderHeaderDrawerTrigger({
 }
 
 export function getLitePublicNavigationClassName() {
-  return "hidden min-w-0 items-center gap-1 md:flex";
+  return "hidden min-w-0 items-center gap-1 md:ml-[clamp(56px,10vw,260px)] md:flex";
 }
 
 export function getLiteCategorySearchClassName() {

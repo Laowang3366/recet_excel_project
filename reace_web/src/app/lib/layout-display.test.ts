@@ -48,6 +48,7 @@ describe("layout display helpers", () => {
   it("shows compact public navigation before the desktop breakpoint", () => {
     expect(getLitePublicNavigationClassName()).toContain("md:flex");
     expect(getLitePublicNavigationClassName()).not.toContain("lg:flex");
+    expect(getLitePublicNavigationClassName()).toContain("md:ml-[clamp(56px,10vw,260px)]");
     expect(getLiteCategorySearchClassName()).toContain("xl:block");
     expect(getLiteCategorySearchClassName()).not.toContain("lg:block");
   });
