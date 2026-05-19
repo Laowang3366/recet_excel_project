@@ -7,6 +7,7 @@ import {
   getCampaignProgressSessionKey,
   campaignChapterMatchesSearch,
   filterCampaignLevelsBySearch,
+  getCampaignLevelStatsSummary,
   getPracticeDetailEditorKey,
 } from "./practice-campaign-ui";
 
@@ -48,6 +49,19 @@ describe("practice campaign UI helpers", () => {
     expect(getCampaignQuestionListPath()).toBe("/practice");
     expect(getCampaignQuestionListPath(8)).toBe("/practice?chapter=8");
     expect(getCampaignQuestionListPath("chapter 1")).toBe("/practice?chapter=chapter%201");
+  });
+
+  it("formats campaign level participation stats for the question list", () => {
+    expect(getCampaignLevelStatsSummary({ participantCount: 3, passedCount: 2, passRate: 66.7 })).toEqual({
+      participants: "3",
+      passed: "2",
+      passRate: "66.7%",
+    });
+    expect(getCampaignLevelStatsSummary({ participantCount: null, passedCount: undefined, passRate: null })).toEqual({
+      participants: "0",
+      passed: "0",
+      passRate: "0%",
+    });
   });
 
   it("keeps the workbook editor mounted while answers change", () => {

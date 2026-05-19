@@ -13,6 +13,12 @@ type SessionLike = {
   id?: number | string | null;
 };
 
+type CampaignLevelStatsLike = {
+  participantCount?: number | string | null;
+  passedCount?: number | string | null;
+  passRate?: number | string | null;
+};
+
 export function canExpandChapterQuestions(chapter: ChapterLike | null | undefined) {
   return Boolean(chapter?.unlocked);
 }
@@ -69,6 +75,20 @@ export function getCampaignQuestionListPath(chapterId?: number | string | null) 
   return `/practice?chapter=${encodeURIComponent(normalizedChapterId)}`;
 }
 
+export function getCampaignLevelStatsSummary(stats: CampaignLevelStatsLike | null | undefined) {
+  const participants = toNonNegativeNumber(stats?.participantCount);
+  const passed = toNonNegativeNumber(stats?.passedCount);
+  const passRate = stats?.passRate === null || stats?.passRate === undefined
+    ? (participants === 0 ? 0 : (passed * 100) / participants)
+    : toNonNegativeNumber(stats.passRate);
+
+  return {
+    participants: String(Math.round(participants)),
+    passed: String(Math.round(passed)),
+    passRate: `${formatPercentValue(passRate)}%`,
+  };
+}
+
 export function getPracticeDetailEditorKey(questionId?: number | string | null) {
   const normalizedQuestionId = questionId === null || questionId === undefined ? "" : String(questionId).trim();
   return `practice-question-${normalizedQuestionId || "unknown"}`;
@@ -82,4 +102,15 @@ function searchableTextIncludes(values: Array<string | null | undefined>, search
   const normalizedSearchTerm = normalizeSearchTerm(searchTerm);
   if (!normalizedSearchTerm) return true;
   return values.some((value) => String(value || "").toLowerCase().includes(normalizedSearchTerm));
+}
+
+function toNonNegativeNumber(value: number | string | null | undefined) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function formatPercentValue(value: number) {
+  const normalized = Math.max(0, Math.min(100, value));
+  const rounded = Math.round(normalized * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }

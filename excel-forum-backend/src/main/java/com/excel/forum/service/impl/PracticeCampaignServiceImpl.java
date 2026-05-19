@@ -135,10 +135,12 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("chapter", chapterSummaryMap.get(chapterId));
+        List<PracticeLevel> chapterLevels = levelsByChapterId.getOrDefault(chapterId, List.of());
         response.put("levels", buildLevelNodes(
-                levelsByChapterId.getOrDefault(chapterId, List.of()),
+                chapterLevels,
                 progressMap,
-                Boolean.TRUE.equals(chapterSummaryMap.getOrDefault(chapterId, Map.of()).get("unlocked"))
+                Boolean.TRUE.equals(chapterSummaryMap.getOrDefault(chapterId, Map.of()).get("unlocked")),
+                findAttemptStatsByLevelIds(chapterLevels)
         ));
         return response;
     }
@@ -159,7 +161,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
                 .stream()
                 .collect(Collectors.toMap(item -> toLong(item.get("id")), item -> item, (left, right) -> left, LinkedHashMap::new));
         boolean chapterUnlocked = Boolean.TRUE.equals(chapterSummaryMap.getOrDefault(level.getChapterId(), Map.of()).get("unlocked"));
-        Map<String, Object> levelNode = buildLevelNodes(levelsByChapterId.getOrDefault(level.getChapterId(), List.of()), progressMap, chapterUnlocked)
+        List<PracticeLevel> chapterLevels = levelsByChapterId.getOrDefault(level.getChapterId(), List.of());
+        Map<String, Object> levelNode = buildLevelNodes(chapterLevels, progressMap, chapterUnlocked, findAttemptStatsByLevelIds(chapterLevels))
                 .stream()
                 .filter(item -> levelId.equals(toLong(item.get("id"))))
                 .findFirst()
@@ -554,10 +557,19 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
     }
 
     private List<Map<String, Object>> buildLevelNodes(List<PracticeLevel> levels, Map<Long, UserLevelProgress> progressMap, boolean chapterUnlocked) {
+        return buildLevelNodes(levels, progressMap, chapterUnlocked, Map.of());
+    }
+
+    private List<Map<String, Object>> buildLevelNodes(
+            List<PracticeLevel> levels,
+            Map<Long, UserLevelProgress> progressMap,
+            boolean chapterUnlocked,
+            Map<Long, LevelAttemptStats> statsMap) {
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (PracticeLevel level : levels) {
             UserLevelProgress progress = progressMap.get(level.getId());
+            LevelAttemptStats attemptStats = statsMap.getOrDefault(level.getId(), LevelAttemptStats.empty());
             boolean cleared = progress != null && progress.getStars() != null && progress.getStars() > 0;
             String status;
             if (progress != null && progress.getStars() != null && progress.getStars() >= 3) {
@@ -582,9 +594,46 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             item.put("rewardPoints", level.getRewardPoints());
             item.put("firstPassBonus", level.getFirstPassBonus());
             item.put("sortOrder", level.getSortOrder());
+            item.put("participantCount", attemptStats.participantCount());
+            item.put("passedCount", attemptStats.passedCount());
+            item.put("passRate", attemptStats.passRate());
             result.add(item);
         }
 
+        return result;
+    }
+
+    private Map<Long, LevelAttemptStats> findAttemptStatsByLevelIds(List<PracticeLevel> levels) {
+        List<Long> levelIds = levels.stream()
+                .map(PracticeLevel::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (levelIds.isEmpty()) {
+            return Map.of();
+        }
+
+        QueryWrapper<PracticeAttempt> queryWrapper = new QueryWrapper<>();
+        queryWrapper
+                .select(
+                        "level_id",
+                        "COUNT(DISTINCT user_id) AS participant_count",
+                        "COUNT(DISTINCT CASE WHEN result_status = 'passed' THEN user_id END) AS passed_count"
+                )
+                .in("level_id", levelIds)
+                .groupBy("level_id");
+        List<Map<String, Object>> rows = practiceAttemptMapper.selectMaps(queryWrapper);
+        Map<Long, LevelAttemptStats> result = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long levelId = readOptionalLong(row, "level_id", "levelId");
+            if (levelId == null) {
+                continue;
+            }
+            result.put(levelId, new LevelAttemptStats(
+                    readLongOrZero(row, "participant_count", "participantCount"),
+                    readLongOrZero(row, "passed_count", "passedCount")
+            ));
+        }
         return result;
     }
 
@@ -779,5 +828,40 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             return number.longValue();
         }
         return Long.parseLong(String.valueOf(value));
+    }
+
+    private Long readOptionalLong(Map<String, Object> row, String snakeKey, String camelKey) {
+        Object value = row.get(snakeKey);
+        if (value == null) {
+            value = row.get(camelKey);
+        }
+        if (value == null) {
+            value = row.get(snakeKey.toUpperCase());
+        }
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(String.valueOf(value));
+    }
+
+    private long readLongOrZero(Map<String, Object> row, String snakeKey, String camelKey) {
+        Long value = readOptionalLong(row, snakeKey, camelKey);
+        return value == null ? 0L : value;
+    }
+
+    private record LevelAttemptStats(long participantCount, long passedCount) {
+        static LevelAttemptStats empty() {
+            return new LevelAttemptStats(0L, 0L);
+        }
+
+        double passRate() {
+            if (participantCount <= 0) {
+                return 0.0;
+            }
+            return Math.round((passedCount * 1000.0) / participantCount) / 10.0;
+        }
     }
 }

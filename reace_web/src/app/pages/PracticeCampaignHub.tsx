@@ -28,6 +28,7 @@ import {
   getCampaignProgressSessionKey,
   getCampaignQuestionListPath,
   getCampaignLevelStatusLabel,
+  getCampaignLevelStatsSummary,
   getChapterQuestionToggleLabel,
 } from "../lib/practice-campaign-ui";
 import { startCampaignLevel } from "../lib/practice-campaign";
@@ -53,6 +54,9 @@ type CampaignLevel = {
   questionId?: number | null;
   rewardExp?: number;
   rewardPoints?: number;
+  participantCount?: number | string | null;
+  passedCount?: number | string | null;
+  passRate?: number | string | null;
 };
 
 type CampaignChaptersResponse = {
@@ -367,11 +371,12 @@ function ChapterQuestionList({
 
   return (
     <div className="mx-5 mb-5 overflow-hidden rounded-2xl border border-[#00b050]/20 bg-[#001f15] sm:mx-8">
-      <div className="grid grid-cols-[56px_minmax(160px,1fr)_90px_96px_112px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-black text-white/38 max-md:hidden">
+      <div className="grid grid-cols-[56px_minmax(160px,1fr)_90px_96px_160px_112px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-black text-white/38 max-md:hidden">
         <span>序号</span>
         <span>题目</span>
         <span>状态</span>
         <span>奖励</span>
+        <span>统计</span>
         <span className="text-right">操作</span>
       </div>
       <div className="divide-y divide-white/10">
@@ -379,10 +384,11 @@ function ChapterQuestionList({
           const isLocked = level.status === "locked";
           const isPending = String(startingLevelId) === String(level.id);
           const statusLabel = getCampaignLevelStatusLabel(level.status);
+          const stats = getCampaignLevelStatsSummary(level);
           return (
             <div
               key={level.id}
-              className="grid gap-3 px-4 py-3 md:grid-cols-[56px_minmax(160px,1fr)_90px_96px_112px] md:items-center"
+              className="grid gap-3 px-4 py-3 md:grid-cols-[56px_minmax(160px,1fr)_90px_96px_160px_112px] md:items-center"
             >
               <div className="text-xs font-black text-white/38">题目 {(index + 1).toString().padStart(2, "0")}</div>
               <div className="min-w-0">
@@ -407,6 +413,7 @@ function ChapterQuestionList({
               <div className="text-xs font-black text-white/52">
                 {Number(level.rewardExp || 0)} 经验 / {Number(level.rewardPoints || 0)} 积分
               </div>
+              <QuestionStatsSummary stats={stats} />
               <div className="flex justify-end max-md:justify-start">
                 <button
                   type="button"
@@ -427,6 +434,29 @@ function ChapterQuestionList({
         })}
       </div>
     </div>
+  );
+}
+
+function QuestionStatsSummary({
+  stats,
+}: {
+  stats: ReturnType<typeof getCampaignLevelStatsSummary>;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5 text-[11px] font-black text-white/62 md:text-xs">
+      <QuestionStatsItem label="参与" value={stats.participants} />
+      <QuestionStatsItem label="通过" value={stats.passed} />
+      <QuestionStatsItem label="通过率" value={stats.passRate} />
+    </div>
+  );
+}
+
+function QuestionStatsItem({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-xl border border-white/10 bg-white/[0.04] px-2 py-1">
+      <span className="mr-1 text-white/34">{label}</span>
+      <span className="text-white/82">{value}</span>
+    </span>
   );
 }
 
