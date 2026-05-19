@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getCampaignResultAnswerReviews } from "./practice-campaign-result-ui";
+import {
+  getCampaignResultAnswerReviews,
+  getCampaignResultAnswerTextClassName,
+  getCampaignResultMatrixContainerClassName,
+  getCampaignResultMatrixRowClassName,
+  getCampaignResultShellClassName,
+} from "./practice-campaign-result-ui";
 
 describe("campaign result answer reviews", () => {
   it("keeps explanation and grading details from practice record answers", () => {
@@ -26,5 +32,24 @@ describe("campaign result answer reviews", () => {
       hasGradingRules: true,
       isCorrect: false,
     });
+  });
+});
+
+describe("campaign result layout classes", () => {
+  it("uses a wider desktop shell for long answer reviews", () => {
+    expect(getCampaignResultShellClassName()).toContain("w-full");
+    expect(getCampaignResultShellClassName()).toContain("max-w-[1320px]");
+  });
+
+  it("keeps long explanations readable inside answer cards", () => {
+    const className = getCampaignResultAnswerTextClassName();
+
+    expect(className).toContain("break-words");
+    expect(className).toContain("whitespace-pre-wrap");
+  });
+
+  it("renders answer matrices with horizontal overflow instead of vertical over-wrapping", () => {
+    expect(getCampaignResultMatrixContainerClassName()).toContain("overflow-x-auto");
+    expect(getCampaignResultMatrixRowClassName()).toContain("min-w-max");
   });
 });

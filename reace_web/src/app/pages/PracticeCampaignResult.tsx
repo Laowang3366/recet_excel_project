@@ -7,7 +7,20 @@ import { handleLoginRequiredError } from "../lib/auth-required";
 import { getCampaignQuestionListPath } from "../lib/practice-campaign-ui";
 import { formatDuration } from "../lib/format";
 import { startCampaignLevel } from "../lib/practice-campaign";
-import { getCampaignResultAnswerReviews, type CampaignRecordDetail, type CampaignRuleResult } from "../lib/practice-campaign-result-ui";
+import {
+  getCampaignResultAnswerReviews,
+  getCampaignResultAnswerTextClassName,
+  getCampaignResultMatrixCellClassName,
+  getCampaignResultMatrixContainerClassName,
+  getCampaignResultMatrixInnerClassName,
+  getCampaignResultMatrixRowClassName,
+  getCampaignResultPanelClassName,
+  getCampaignResultScalarValueClassName,
+  getCampaignResultShellClassName,
+  type CampaignRecordDetail,
+  type CampaignResultMatrixTone,
+  type CampaignRuleResult,
+} from "../lib/practice-campaign-result-ui";
 import { practiceKeys } from "../lib/query-keys";
 
 type CampaignLevelState = {
@@ -102,7 +115,7 @@ export function PracticeCampaignResult() {
   };
 
   return (
-    <div className="mx-auto max-w-[960px] px-4 py-5 sm:px-6 sm:py-6">
+    <div className={getCampaignResultShellClassName()}>
       <button
         type="button"
         onClick={() => navigate(questionListPath)}
@@ -112,8 +125,8 @@ export function PracticeCampaignResult() {
         返回题目列表
       </button>
 
-      <div className={`overflow-hidden rounded-[36px] border shadow-sm ${passed ? "border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#ffffff_28%)]" : "border-rose-200 bg-[linear-gradient(180deg,#fff1f2_0%,#ffffff_28%)]"}`}>
-        <div className="px-6 py-8 text-center sm:px-10 sm:py-10">
+      <div className={getCampaignResultPanelClassName(passed)}>
+        <div className="px-5 py-6 text-center sm:px-8 sm:py-8 lg:px-10">
           <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${passed ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>
             {passed ? <CheckCircle2 size={38} /> : <XCircle size={38} />}
           </div>
@@ -124,7 +137,7 @@ export function PracticeCampaignResult() {
           <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
             {passed ? "通关成功" : "挑战失败"}
           </h1>
-          <p className="mt-3 text-[15px] leading-7 text-slate-500">
+          <p className="mx-auto mt-3 max-w-[860px] text-[15px] leading-7 text-slate-500">
             {campaignLevel?.title || record?.questionTitle || "当前关卡"} 已完成结算。你可以继续前往下一关，或返回题目列表查看最新进度。
           </p>
 
@@ -168,14 +181,14 @@ export function PracticeCampaignResult() {
             </div>
           ) : null}
 
-          <div className="mt-8 rounded-[28px] border border-slate-200 bg-white px-5 py-5 text-left shadow-sm">
+          <div className="mt-7 rounded-[24px] border border-slate-200 bg-white px-5 py-4 text-left shadow-sm">
             <div className="text-lg font-black text-slate-900">{campaignChapter?.name || record?.questionCategoryName || "当前章节"}</div>
             <div className="mt-2 text-sm leading-7 text-slate-500">
               {passed ? "本次挑战已完成结算，可以继续前往下一关或重新练习。" : "本次挑战未通过，可以返回章节后重新尝试。"}
             </div>
           </div>
 
-          <div className="mt-8 rounded-[28px] border border-slate-200 bg-white px-5 py-5 text-left shadow-sm">
+          <div className="mt-7 rounded-[24px] border border-slate-200 bg-white px-5 py-5 text-left shadow-sm">
             <div className="mb-4 flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
                 <Lightbulb size={17} />
@@ -193,14 +206,14 @@ export function PracticeCampaignResult() {
             ) : answerReviews.length > 0 ? (
               <div className="space-y-4">
                 {answerReviews.map((answer, index) => (
-                  <div key={answer.id} className={`rounded-2xl border p-4 ${answer.isCorrect ? "border-emerald-100 bg-emerald-50/40" : "border-rose-100 bg-rose-50/40"}`}>
+                  <div key={answer.id} className={`min-w-0 rounded-2xl border p-4 ${answer.isCorrect ? "border-emerald-100 bg-emerald-50/40" : "border-rose-100 bg-rose-50/40"}`}>
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-black ${answer.isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                             {index + 1}
                           </span>
-                          <div className="text-sm font-black text-slate-900">{answer.title}</div>
+                          <div className="min-w-0 break-words text-sm font-black text-slate-900">{answer.title}</div>
                         </div>
                         <div className="mt-2 text-xs font-bold text-slate-400">{answer.questionType || "excel_template"}</div>
                       </div>
@@ -231,7 +244,7 @@ export function PracticeCampaignResult() {
                               <div className="font-bold">{rule.label || rule.target || `规则 ${ruleIndex + 1}`}</div>
                               <div className="mt-1 text-xs opacity-80">{rule.message || (rule.passed ? "校验通过" : "未通过")}</div>
                               {(rule.expected !== undefined || rule.actual !== undefined) && (
-                                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <div className="mt-3 grid gap-3 lg:grid-cols-2">
                                   <div className="rounded-lg border border-white/60 bg-white/80 p-3">
                                     <div className="mb-2 text-[11px] font-black uppercase tracking-[0.16em] opacity-70">预期</div>
                                     {renderRuleValue(rule.expected, rule.passed ? "emerald" : "rose")}
@@ -253,7 +266,7 @@ export function PracticeCampaignResult() {
                         <Lightbulb size={14} />
                         解析
                       </div>
-                      <div className="text-sm leading-7 text-teal-900/80">{answer.explanation || "暂无解析"}</div>
+                      <div className={getCampaignResultAnswerTextClassName()}>{answer.explanation || "暂无解析"}</div>
                     </div>
                   </div>
                 ))}
@@ -311,40 +324,36 @@ function formatReviewValue(value: unknown) {
   }
 }
 
-function renderReviewMatrix(matrix: unknown[][] | undefined, tone: "emerald" | "slate" | "rose" = "slate") {
+function renderReviewMatrix(matrix: unknown[][] | undefined, tone: CampaignResultMatrixTone = "slate") {
   if (!Array.isArray(matrix) || matrix.length === 0) {
     return <div className="text-xs text-slate-400">暂无数据</div>;
   }
 
-  const toneClassName = {
-    emerald: "border-emerald-200 bg-emerald-50/70 text-emerald-900",
-    slate: "border-slate-200 bg-slate-50 text-slate-700",
-    rose: "border-rose-200 bg-rose-50/70 text-rose-900",
-  }[tone];
-
   return (
-    <div className="space-y-2">
-      {matrix.map((row, rowIndex) => (
-        <div key={`review-row-${rowIndex}`} className="flex flex-wrap gap-2">
-          {row.map((cell, cellIndex) => (
-            <div
-              key={`review-cell-${rowIndex}-${cellIndex}`}
-              className={`min-w-[72px] rounded-lg border px-2.5 py-2 text-xs font-mono shadow-sm ${toneClassName}`}
-            >
-              {formatReviewValue(cell) || <span className="text-slate-300">空</span>}
-            </div>
-          ))}
-        </div>
-      ))}
+    <div className={getCampaignResultMatrixContainerClassName()}>
+      <div className={getCampaignResultMatrixInnerClassName()}>
+        {matrix.map((row, rowIndex) => (
+          <div key={`review-row-${rowIndex}`} className={getCampaignResultMatrixRowClassName()}>
+            {row.map((cell, cellIndex) => (
+              <div
+                key={`review-cell-${rowIndex}-${cellIndex}`}
+                className={getCampaignResultMatrixCellClassName(tone)}
+              >
+                {formatReviewValue(cell) || <span className="text-slate-300">空</span>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function renderRuleValue(value: unknown, tone: "emerald" | "slate" | "rose" = "slate") {
+function renderRuleValue(value: unknown, tone: CampaignResultMatrixTone = "slate") {
   if (Array.isArray(value)) {
     return renderReviewMatrix(value as unknown[][], tone);
   }
-  return <div className="break-all text-xs font-mono">{formatReviewValue(value) || "空"}</div>;
+  return <div className={getCampaignResultScalarValueClassName()}>{formatReviewValue(value) || "空"}</div>;
 }
 
 function hasAnyFormula(formulas: string[][] | undefined) {
