@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-19 18:08 Asia/Shanghai
+
+- Scope: Fix AI assistant image request 504 timeout by extending ExcelCC Nginx `/api/` proxy read/send timeout to 3600s.
+- Verification: `nginx -t` passed; `systemctl reload nginx` completed; effective `/etc/nginx/conf.d/kick.conf` `/api/` block now includes `proxy_connect_timeout 60s`, `proxy_read_timeout 3600s`, and `proxy_send_timeout 3600s`; public smoke checks for `https://www.excelcc.cn/`, `/api/public/home-overview`, `/practice`, and `/api/practice/campaign/chapters` returned 200.
+- Deploy: production Nginx config hotfix on `38.76.169.222`; no frontend/backend rebuild.
+- Server backup: `/etc/nginx/conf.d/kick.conf.20260519-100825.bak`
+- Notes: root cause was the ExcelCC `/api/` location using Nginx default upstream read timeout while image-based AI calls can take more than 60s; `/www/wwwroot/quick-translate` was not changed.
+
 ## 2026-05-19 17:57 Asia/Shanghai
 
 - Scope: Support AI assistant timeout configuration in minutes up to 60 minutes

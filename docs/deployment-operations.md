@@ -23,6 +23,17 @@
 - 后端环境文件：`/www/wwwroot/excelcc/kick-backend/.env.production`
 - 备份目录：`/www/wwwroot/excelcc/kick-deploy/backups`
 
+ExcelCC 的 `/api/` 反向代理需要保留长请求超时配置，AI 助手图片识别和长回答可能超过 Nginx 默认 60 秒：
+
+```nginx
+location /api/ {
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_pass http://kick_backend;
+}
+```
+
 ## 目录约定
 
 生产环境只允许以下目录参与发布：
