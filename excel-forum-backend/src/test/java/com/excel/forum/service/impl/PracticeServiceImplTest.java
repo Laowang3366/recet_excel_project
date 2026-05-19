@@ -133,6 +133,34 @@ class PracticeServiceImplTest {
     }
 
     @Test
+    void getPracticeQuestionDetailClearsConfiguredAnswerCellsFromStudentWorkbook() {
+        PracticeServiceImpl service = createService();
+
+        Question question = buildExcelQuestion();
+        QuestionExcelTemplate template = buildTemplate();
+        template.setAnswerSheet("Sheet1");
+        template.setAnswerRange("K10:P14");
+        ExcelWorkbookSnapshot workbook = buildWorkbookWithCells("Sheet1", Map.of(
+                "J10", cell("keep nearby prompt", null),
+                "K10", cell("#NAME?", "LET(m,K6,result,TAKE(result,5))"),
+                "L10", cell("#NAME?", "INDEX(K10#,1,2)"),
+                "P14", cell(1680, null)
+        ));
+
+        when(questionService.getOne(any(QueryWrapper.class), eq(false))).thenReturn(question);
+        when(questionExcelTemplateService.getByQuestionId(9L)).thenReturn(template);
+        when(excelTemplateGradingService.loadWorkbookSnapshot("/uploads/practice.xlsx")).thenReturn(workbook);
+
+        Map<String, Object> result = service.getPracticeQuestionDetail(9L);
+        ExcelWorkbookSnapshot studentWorkbook = (ExcelWorkbookSnapshot) result.get("templateWorkbook");
+        Map<String, ExcelWorkbookSnapshot.CellSnapshot> cells = studentWorkbook.getSheets().get(0).getCells();
+
+        assertThat(cells).containsKey("J10");
+        assertThat(cells).doesNotContainKeys("K10", "L10", "P14");
+        assertThat(workbook.getSheets().get(0).getCells()).containsKeys("K10", "L10", "P14");
+    }
+
+    @Test
     void submitPracticeAwardsQuestionRewardOnlyOnFirstPass() {
         PracticeServiceImpl service = createService();
 
@@ -354,13 +382,24 @@ class PracticeServiceImplTest {
         cell.setValue(value);
         cell.setFormula(formula);
 
+        return buildWorkbookWithCells(sheetName, Map.of(cellRef, cell));
+    }
+
+    private ExcelWorkbookSnapshot buildWorkbookWithCells(String sheetName, Map<String, ExcelWorkbookSnapshot.CellSnapshot> cells) {
         ExcelWorkbookSnapshot.SheetSnapshot sheet = new ExcelWorkbookSnapshot.SheetSnapshot();
         sheet.setName(sheetName);
-        sheet.getCells().put(cellRef, cell);
+        sheet.getCells().putAll(cells);
 
         ExcelWorkbookSnapshot workbook = new ExcelWorkbookSnapshot();
         workbook.getSheets().add(sheet);
         return workbook;
+    }
+
+    private ExcelWorkbookSnapshot.CellSnapshot cell(Object value, String formula) {
+        ExcelWorkbookSnapshot.CellSnapshot cell = new ExcelWorkbookSnapshot.CellSnapshot();
+        cell.setValue(value);
+        cell.setFormula(formula);
+        return cell;
     }
 
     private QuestionExcelTemplate buildTemplate() {

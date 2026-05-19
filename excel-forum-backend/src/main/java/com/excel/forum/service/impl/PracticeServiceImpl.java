@@ -897,10 +897,128 @@ public class PracticeServiceImpl implements PracticeService {
             item.put("version", safeInt(template.getVersion(), 1));
             item.put("gradingRuleSummary", excelTemplateGradingService.buildRuleSummary(template.getGradingRuleJson()));
             if (includeWorkbook) {
-                item.put("templateWorkbook", excelTemplateGradingService.loadWorkbookSnapshot(template.getTemplateFileUrl()));
+                item.put("templateWorkbook", loadStudentWorkbookSnapshot(template));
             }
         }
         return item;
+    }
+
+    private ExcelWorkbookSnapshot loadStudentWorkbookSnapshot(QuestionExcelTemplate template) {
+        ExcelWorkbookSnapshot workbook = excelTemplateGradingService.loadWorkbookSnapshot(template.getTemplateFileUrl());
+        return clearWorkbookRange(workbook, template.getAnswerSheet(), template.getAnswerRange());
+    }
+
+    private ExcelWorkbookSnapshot clearWorkbookRange(ExcelWorkbookSnapshot workbook, String sheetName, String rangeRef) {
+        ExcelWorkbookSnapshot next = cloneWorkbookSnapshot(workbook);
+        RangeRef range = parseRangeRef(rangeRef);
+        if (range == null || !StringUtils.hasText(sheetName)) {
+            return next;
+        }
+        ExcelWorkbookSnapshot.SheetSnapshot sheet = next.getSheets().stream()
+                .filter(item -> sheetName.equals(item.getName()))
+                .findFirst()
+                .orElse(null);
+        if (sheet == null || sheet.getCells() == null) {
+            return next;
+        }
+        for (int row = range.startRow(); row <= range.endRow(); row += 1) {
+            for (int col = range.startCol(); col <= range.endCol(); col += 1) {
+                sheet.getCells().remove(toCellRef(row, col));
+            }
+        }
+        return next;
+    }
+
+    private ExcelWorkbookSnapshot cloneWorkbookSnapshot(ExcelWorkbookSnapshot workbook) {
+        ExcelWorkbookSnapshot next = new ExcelWorkbookSnapshot();
+        if (workbook == null || workbook.getSheets() == null) {
+            return next;
+        }
+        for (ExcelWorkbookSnapshot.SheetSnapshot sourceSheet : workbook.getSheets()) {
+            ExcelWorkbookSnapshot.SheetSnapshot targetSheet = new ExcelWorkbookSnapshot.SheetSnapshot();
+            targetSheet.setName(sourceSheet.getName());
+            targetSheet.setRowCount(sourceSheet.getRowCount());
+            targetSheet.setColumnCount(sourceSheet.getColumnCount());
+            Map<String, ExcelWorkbookSnapshot.CellSnapshot> sourceCells = sourceSheet.getCells();
+            if (sourceCells != null) {
+                sourceCells.forEach((cellRef, sourceCell) -> {
+                    ExcelWorkbookSnapshot.CellSnapshot targetCell = new ExcelWorkbookSnapshot.CellSnapshot();
+                    targetCell.setValue(sourceCell.getValue());
+                    targetCell.setFormula(sourceCell.getFormula());
+                    targetCell.setDisplay(sourceCell.getDisplay());
+                    targetSheet.getCells().put(cellRef, targetCell);
+                });
+            }
+            next.getSheets().add(targetSheet);
+        }
+        return next;
+    }
+
+    private RangeRef parseRangeRef(String rangeRef) {
+        if (!StringUtils.hasText(rangeRef)) {
+            return null;
+        }
+        String normalized = rangeRef.trim();
+        int sheetSeparator = normalized.lastIndexOf('!');
+        if (sheetSeparator >= 0 && sheetSeparator + 1 < normalized.length()) {
+            normalized = normalized.substring(sheetSeparator + 1);
+        }
+        normalized = normalized.replace("$", "").toUpperCase(Locale.ROOT);
+        String[] parts = normalized.split(":");
+        CellRef start = parseCellRef(parts[0]);
+        CellRef end = parseCellRef(parts.length > 1 ? parts[1] : parts[0]);
+        if (start == null || end == null) {
+            return null;
+        }
+        return new RangeRef(
+                Math.min(start.row(), end.row()),
+                Math.min(start.col(), end.col()),
+                Math.max(start.row(), end.row()),
+                Math.max(start.col(), end.col())
+        );
+    }
+
+    private CellRef parseCellRef(String cellRef) {
+        if (!StringUtils.hasText(cellRef)) {
+            return null;
+        }
+        String normalized = cellRef.trim().toUpperCase(Locale.ROOT);
+        int index = 0;
+        int col = 0;
+        while (index < normalized.length() && Character.isLetter(normalized.charAt(index))) {
+            col = col * 26 + (normalized.charAt(index) - 'A' + 1);
+            index += 1;
+        }
+        if (index == 0 || index >= normalized.length()) {
+            return null;
+        }
+        int row;
+        try {
+            row = Integer.parseInt(normalized.substring(index));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+        if (row < 1 || col < 1) {
+            return null;
+        }
+        return new CellRef(row, col);
+    }
+
+    private String toCellRef(int row, int col) {
+        StringBuilder column = new StringBuilder();
+        int current = col;
+        while (current > 0) {
+            int remainder = (current - 1) % 26;
+            column.insert(0, (char) ('A' + remainder));
+            current = (current - 1) / 26;
+        }
+        return column + String.valueOf(row);
+    }
+
+    private record RangeRef(int startRow, int startCol, int endRow, int endCol) {
+    }
+
+    private record CellRef(int row, int col) {
     }
 
     private boolean hasUserPassedQuestion(Long userId, Long questionId) {
