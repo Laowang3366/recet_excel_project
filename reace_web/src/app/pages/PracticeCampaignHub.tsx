@@ -22,12 +22,14 @@ import { api } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import {
   canExpandChapterQuestions,
+  getCampaignProgressSessionKey,
   getCampaignQuestionListPath,
   getCampaignLevelStatusLabel,
   getChapterQuestionToggleLabel,
 } from "../lib/practice-campaign-ui";
 import { startCampaignLevel } from "../lib/practice-campaign";
 import { practiceKeys } from "../lib/query-keys";
+import { useSession } from "../lib/session";
 
 type CampaignChapter = {
   id: number | string;
@@ -60,20 +62,23 @@ type CampaignChapterDetailResponse = {
 
 export function PracticeCampaignHub() {
   const navigate = useNavigate();
+  const { user, token } = useSession();
   const [searchParams] = useSearchParams();
   const routeChapterId = searchParams.get("chapter") || null;
   const [expandedChapterId, setExpandedChapterId] = useState<number | string | null>(routeChapterId);
   const [startingLevelId, setStartingLevelId] = useState<number | string | null>(null);
+  const campaignSessionKey = getCampaignProgressSessionKey(user, token);
   const chaptersQuery = useQuery({
-    queryKey: practiceKeys.campaignChapters(),
+    queryKey: [...practiceKeys.campaignChapters(), campaignSessionKey],
     queryFn: () => api.get<CampaignChaptersResponse>("/api/practice/campaign/chapters", { silent: true }),
     refetchOnMount: "always",
   });
   const chapterDetailQuery = useQuery({
-    queryKey: practiceKeys.campaignChapter(expandedChapterId || "none"),
+    queryKey: [...practiceKeys.campaignChapter(expandedChapterId || "none"), campaignSessionKey],
     enabled: Boolean(expandedChapterId),
     queryFn: () => api.get<CampaignChapterDetailResponse>(`/api/practice/campaign/chapters/${expandedChapterId}`, { silent: true }),
     refetchOnMount: "always",
+    staleTime: 0,
   });
 
   const chapters = chaptersQuery.data?.chapters || [];

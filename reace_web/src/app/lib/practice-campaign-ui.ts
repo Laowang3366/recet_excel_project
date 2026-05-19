@@ -2,6 +2,10 @@ type ChapterLike = {
   unlocked?: boolean | null;
 };
 
+type SessionLike = {
+  id?: number | string | null;
+};
+
 export function canExpandChapterQuestions(chapter: ChapterLike | null | undefined) {
   return Boolean(chapter?.unlocked);
 }
@@ -30,6 +34,14 @@ export function getCampaignLevelStatusLabel(status?: string | null) {
     return "已通关";
   }
   return "可挑战";
+}
+
+export function getCampaignProgressSessionKey(user?: SessionLike | null, token?: string | null) {
+  const normalizedUserId = user?.id === null || user?.id === undefined ? "" : String(user.id).trim();
+  if (normalizedUserId) {
+    return `user:${normalizedUserId}`;
+  }
+  return token ? "auth-pending" : "guest";
 }
 
 export function getCampaignQuestionListPath(chapterId?: number | string | null) {
