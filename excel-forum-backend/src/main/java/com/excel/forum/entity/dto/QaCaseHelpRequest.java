@@ -10,4 +10,5 @@ public class QaCaseHelpRequest {
     private String answerSheet;
     private String answerRange;
     private String idealAnswerSnapshotJson;
+    private String status;
 }

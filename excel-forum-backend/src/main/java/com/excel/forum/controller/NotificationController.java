@@ -21,7 +21,7 @@ import java.util.Map;
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
-    private static final List<String> CURRENT_NOTIFICATION_TYPES = List.of("system", "site_notification", "feedback_result", "qa_case_answered");
+    private static final List<String> CURRENT_NOTIFICATION_TYPES = List.of("system", "site_notification", "feedback_result", "qa_case_answered", "qa_answer_accepted");
 
     private final NotificationService notificationService;
     private final SiteNotificationService siteNotificationService;
@@ -253,7 +253,7 @@ public class NotificationController {
         return switch (type) {
             case "system" -> "积分发放通知";
             case "feedback_result" -> "反馈处理结果";
-            case "qa_case_answered" -> "求助答疑通知";
+            case "qa_case_answered", "qa_answer_accepted" -> "求助答疑通知";
             case "site_notification" -> "站内通知";
             default -> "通知详情";
         };
@@ -265,7 +265,7 @@ public class NotificationController {
         }
         return switch (notification.getType()) {
             case "site_notification" -> notification.getRelatedId() == null ? null : "/notification/" + notification.getRelatedId();
-            case "qa_case_answered" -> notification.getRelatedId() == null ? "/qa/my" : "/qa/cases/" + notification.getRelatedId() + "#answers";
+            case "qa_case_answered", "qa_answer_accepted" -> notification.getRelatedId() == null ? "/qa/my" : "/qa/cases/" + notification.getRelatedId() + "#answers";
             default -> null;
         };
     }

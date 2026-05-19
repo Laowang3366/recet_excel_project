@@ -17,6 +17,14 @@ public class QaCaseHelpAnswer {
     private Long caseId;
     private Long userId;
     private String answerFileUrl;
+    private String status;
+    private Integer upVoteCount;
+    private Integer downVoteCount;
+    private Integer rewardPoints;
+    private LocalDateTime acceptedAt;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+    private LocalDateTime deletedAt;
 }

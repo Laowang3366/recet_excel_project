@@ -9,6 +9,7 @@ const visibleNotificationTypes = [
   "site_notification",
   "feedback_result",
   "qa_case_answered",
+  "qa_answer_accepted",
 ];
 
 export const notificationFilterTabs: Array<{

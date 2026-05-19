@@ -5,6 +5,7 @@ import {
   Coins,
   Gauge,
   Layers3,
+  MessageSquareText,
   PanelsTopLeft,
   Shield,
   Users,
@@ -22,7 +23,8 @@ export type AdminModuleKey =
   | "templates"
   | "points"
   | "levels"
-  | "assistant";
+  | "assistant"
+  | "qa";
 
 export type AdminModule = {
   key: AdminModuleKey;
@@ -43,6 +45,7 @@ export const ADMIN_MODULES: AdminModule[] = [
   { key: "points", label: "积分体系", path: "/admin/points", icon: Coins, roles: ["admin"] },
   { key: "levels", label: "等级体系", path: "/admin/levels", icon: Shield, roles: ["admin"] },
   { key: "assistant", label: "AI助手", path: "/admin/assistant", icon: Bot, roles: ["admin"] },
+  { key: "qa", label: "答疑管理", path: "/admin/qa", icon: MessageSquareText, roles: ["admin"] },
 ];
 
 export function hasAdminConsoleAccess(role?: string | null): role is AdminRole {

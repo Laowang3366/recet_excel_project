@@ -7,54 +7,79 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.excel.forum.entity.PracticeAnswer;
 import com.excel.forum.entity.PracticeRecord;
+import com.excel.forum.entity.PointsRecord;
 import com.excel.forum.entity.QaCaseHelp;
 import com.excel.forum.entity.QaCaseHelpAnswer;
+import com.excel.forum.entity.QaCaseHelpAnswerVote;
+import com.excel.forum.entity.QaCaseHelpFeedback;
 import com.excel.forum.entity.QaSolutionShare;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.AssistantChatRequest;
 import com.excel.forum.entity.dto.AssistantChatResponse;
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.entity.dto.QaAiDraftRequest;
+import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseFeedbackRequest;
 import com.excel.forum.entity.dto.QaCaseHelpRequest;
 import com.excel.forum.entity.dto.QaCaseSnapshotAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseVoteRequest;
 import com.excel.forum.entity.dto.QaSolutionShareRequest;
+import com.excel.forum.entity.dto.QaSolutionShareUpdateRequest;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
 import com.excel.forum.mapper.QaCaseHelpAnswerMapper;
+import com.excel.forum.mapper.QaCaseHelpAnswerVoteMapper;
+import com.excel.forum.mapper.QaCaseHelpFeedbackMapper;
 import com.excel.forum.mapper.QaCaseHelpMapper;
 import com.excel.forum.mapper.QaSolutionShareMapper;
+import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.AssistantService;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.NotificationService;
+import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.QaService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class QaServiceImpl implements QaService {
     private static final String STATUS_OPEN = "open";
     private static final String STATUS_ANSWERED = "answered";
+    private static final String STATUS_ACCEPTED = "accepted";
+    private static final String STATUS_ACTIVE = "active";
+    private static final String STATUS_CLOSED = "closed";
+    private static final String STATUS_DELETED = "deleted";
     private static final String STATUS_PUBLISHED = "published";
-    private static final List<String> CASE_STATUSES = List.of(STATUS_OPEN, STATUS_ANSWERED, "closed");
+    private static final String STATUS_UNPUBLISHED = "unpublished";
+    private static final List<String> CASE_STATUSES = List.of(STATUS_OPEN, STATUS_ANSWERED, STATUS_ACCEPTED, STATUS_CLOSED, STATUS_DELETED);
+    private static final List<String> SHARE_STATUSES = List.of(STATUS_PUBLISHED, STATUS_UNPUBLISHED, STATUS_DELETED);
     private static final List<String> THOUGHT_SOURCES = List.of("manual", "ai", "empty");
+    private static final Set<String> FEEDBACK_REASONS = Set.of("unclear_requirement", "missing_expected_answer", "bad_source_data", "too_hard", "other");
 
     private final QaSolutionShareMapper solutionShareMapper;
     private final QaCaseHelpMapper caseHelpMapper;
     private final QaCaseHelpAnswerMapper caseHelpAnswerMapper;
+    private final QaCaseHelpAnswerVoteMapper caseHelpAnswerVoteMapper;
+    private final QaCaseHelpFeedbackMapper caseHelpFeedbackMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final PracticeRecordMapper practiceRecordMapper;
+    private final UserMapper userMapper;
     private final UserService userService;
+    private final PointsRecordService pointsRecordService;
     private final NotificationService notificationService;
     private final AssistantService assistantService;
     private final ExcelTemplateGradingService excelTemplateGradingService;
@@ -67,6 +92,7 @@ public class QaServiceImpl implements QaService {
                 new Page<>(safePage(page), safeSize(size)),
                 new QueryWrapper<QaSolutionShare>()
                         .eq("status", STATUS_PUBLISHED)
+                        .isNull("deleted_at")
                         .orderByDesc("create_time")
         );
         return pagePayload(result, result.getRecords().stream().map(this::solutionListPayload).toList());
@@ -75,7 +101,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> getSolutionShareDetail(Long userId, Long shareId) {
         QaSolutionShare share = requireSolutionShare(shareId);
-        if (!STATUS_PUBLISHED.equals(share.getStatus())) {
+        if (!STATUS_PUBLISHED.equals(share.getStatus()) || share.getDeletedAt() != null) {
             throw new IllegalArgumentException("分享不存在");
         }
         incrementSolutionViews(share.getId());
@@ -103,6 +129,7 @@ public class QaServiceImpl implements QaService {
         share.setThoughtText(trimToNull(request == null ? null : request.getThoughtText()));
         share.setThoughtSource(resolveThoughtSource(request == null ? null : request.getThoughtSource(), share.getThoughtText()));
         share.setStatus(STATUS_PUBLISHED);
+        share.setDeletedAt(null);
 
         if (share.getId() == null) {
             solutionShareMapper.insert(share);
@@ -110,6 +137,37 @@ public class QaServiceImpl implements QaService {
             solutionShareMapper.updateById(share);
         }
         return solutionListPayload(share);
+    }
+
+    @Override
+    public Map<String, Object> updateSolutionShare(Long userId, Long shareId, QaSolutionShareUpdateRequest request) {
+        QaSolutionShare share = requireOwnedSolutionShare(userId, shareId);
+        if (request == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+        String title = trimToNull(request.getTitle());
+        if (title != null) {
+            share.setTitle(title);
+        }
+        share.setThoughtText(trimToNull(request.getThoughtText()));
+        share.setThoughtSource(resolveThoughtSource(request.getThoughtSource(), share.getThoughtText()));
+        String status = normalizeShareStatus(request.getStatus(), STATUS_PUBLISHED);
+        if (STATUS_DELETED.equals(status)) {
+            share.setStatus(STATUS_DELETED);
+            share.setDeletedAt(LocalDateTime.now());
+        } else {
+            share.setStatus(status);
+            share.setDeletedAt(null);
+        }
+        solutionShareMapper.updateById(share);
+        return solutionListPayload(share);
+    }
+
+    @Override
+    public Map<String, Object> deleteSolutionShare(Long userId, Long shareId) {
+        QaSolutionShare share = requireOwnedSolutionShare(userId, shareId);
+        softDeleteSolutionShare(share);
+        return Map.of("message", "解题分享已取消发布");
     }
 
     @Override
@@ -140,6 +198,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> listCases(Long userId, String status, Integer page, Integer size) {
         QueryWrapper<QaCaseHelp> wrapper = new QueryWrapper<>();
+        wrapper.isNull("deleted_at").ne("status", STATUS_DELETED);
         if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status)) {
             String normalizedStatus = normalizeCaseStatus(status);
             wrapper.eq("status", normalizedStatus);
@@ -156,6 +215,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> getCaseDetail(Long userId, Long caseId) {
         QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
         incrementCaseViews(qaCase.getId());
         Map<String, Object> payload = caseListPayload(qaCase, countCaseAnswers(qaCase.getId()));
         payload.put("description", qaCase.getDescription());
@@ -192,8 +252,44 @@ public class QaServiceImpl implements QaService {
     }
 
     @Override
+    public Map<String, Object> updateCase(Long userId, Long caseId, QaCaseHelpRequest request) {
+        QaCaseHelp qaCase = requireOwnedCase(userId, caseId);
+        if (request == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+        qaCase.setTitle(requireText(request.getTitle(), "求助标题不能为空"));
+        qaCase.setDescription(requireText(request.getDescription(), "需求描述不能为空"));
+        qaCase.setAnswerSheet(trimToNull(request.getAnswerSheet()));
+        qaCase.setAnswerRange(trimToNull(request.getAnswerRange()));
+        if (request.getIdealAnswerSnapshotJson() != null) {
+            qaCase.setIdealAnswerSnapshotJson(trimToNull(request.getIdealAnswerSnapshotJson()));
+        }
+        caseHelpMapper.updateById(qaCase);
+        return getCaseDetail(userId, caseId);
+    }
+
+    @Override
+    public Map<String, Object> closeCase(Long userId, Long caseId) {
+        QaCaseHelp qaCase = requireOwnedCase(userId, caseId);
+        if (STATUS_ACCEPTED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("已采纳的求助不能关闭");
+        }
+        qaCase.setStatus(STATUS_CLOSED);
+        caseHelpMapper.updateById(qaCase);
+        return caseListPayload(qaCase, countCaseAnswers(caseId));
+    }
+
+    @Override
+    public Map<String, Object> deleteCase(Long userId, Long caseId) {
+        QaCaseHelp qaCase = requireOwnedCase(userId, caseId);
+        softDeleteCase(qaCase);
+        return Map.of("message", "求助已删除");
+    }
+
+    @Override
     public PracticeQuestionWorkbookFile buildCaseWorkbookFile(Long userId, Long caseId) {
         QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
         byte[] content = fileStorageService.load(qaCase.getTemplateFileUrl());
         String extension = qaCase.getTemplateFileUrl().toLowerCase().endsWith(".xls") ? ".xls" : ".xlsx";
         String contentType = ".xls".equals(extension)
@@ -205,15 +301,20 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> submitCaseAnswer(Long userId, Long caseId, QaCaseAnswerRequest request) {
         QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseCanReceiveAnswer(qaCase);
         String answerFileUrl = requireExcelFileUrl(request == null ? null : request.getAnswerFileUrl(), "请上传答疑 Excel 文件");
 
         QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
         answer.setCaseId(caseId);
         answer.setUserId(userId);
         answer.setAnswerFileUrl(answerFileUrl);
+        answer.setStatus(STATUS_ACTIVE);
+        answer.setUpVoteCount(0);
+        answer.setDownVoteCount(0);
+        answer.setRewardPoints(0);
         caseHelpAnswerMapper.insert(answer);
 
-        if (!STATUS_ANSWERED.equals(qaCase.getStatus())) {
+        if (STATUS_OPEN.equals(qaCase.getStatus())) {
             QaCaseHelp update = new QaCaseHelp();
             update.setId(caseId);
             update.setStatus(STATUS_ANSWERED);
@@ -226,6 +327,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> submitCaseAnswerFromSnapshot(Long userId, Long caseId, QaCaseSnapshotAnswerRequest request) {
         QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseCanReceiveAnswer(qaCase);
         if (request == null || request.getWorkbook() == null) {
             throw new IllegalArgumentException("答疑工作簿不能为空");
         }
@@ -244,8 +346,152 @@ public class QaServiceImpl implements QaService {
     }
 
     @Override
+    public Map<String, Object> updateCaseAnswer(Long userId, Long caseId, Long answerId, QaCaseAnswerRequest request) {
+        QaCaseHelpAnswer answer = requireOwnedCaseAnswer(userId, answerId);
+        if (!Objects.equals(answer.getCaseId(), caseId)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        if (STATUS_ACCEPTED.equals(answer.getStatus())) {
+            throw new IllegalArgumentException("已采纳的答疑不能修改");
+        }
+        String answerFileUrl = requireExcelFileUrl(request == null ? null : request.getAnswerFileUrl(), "请上传答疑 Excel 文件");
+        answer.setAnswerFileUrl(answerFileUrl);
+        answer.setStatus(STATUS_ACTIVE);
+        caseHelpAnswerMapper.updateById(answer);
+        return caseAnswerPayload(answer);
+    }
+
+    @Override
+    public Map<String, Object> updateCaseAnswerFromSnapshot(Long userId, Long caseId, Long answerId, QaCaseSnapshotAnswerRequest request) {
+        QaCaseHelpAnswer answer = requireOwnedCaseAnswer(userId, answerId);
+        if (!Objects.equals(answer.getCaseId(), caseId)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        if (STATUS_ACCEPTED.equals(answer.getStatus())) {
+            throw new IllegalArgumentException("已采纳的答疑不能修改");
+        }
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        if (request == null || request.getWorkbook() == null) {
+            throw new IllegalArgumentException("答疑工作簿不能为空");
+        }
+        // 在线编辑覆盖已有答疑文件，但仍保存为 Excel 文件，避免把编辑器快照暴露成新的业务形态。
+        byte[] workbookFile = excelTemplateGradingService.buildWorkbookFileFromSnapshot(
+                qaCase.getTemplateFileUrl(),
+                request.getWorkbook()
+        );
+        String answerFileUrl = fileStorageService.store(
+                "qa-case-" + caseId + "-answer-" + answerId + ".xlsx",
+                workbookFile
+        );
+        answer.setAnswerFileUrl(answerFileUrl);
+        answer.setStatus(STATUS_ACTIVE);
+        caseHelpAnswerMapper.updateById(answer);
+        return caseAnswerPayload(answer);
+    }
+
+    @Override
+    public Map<String, Object> deleteCaseAnswer(Long userId, Long caseId, Long answerId) {
+        QaCaseHelpAnswer answer = requireOwnedCaseAnswer(userId, answerId);
+        if (!Objects.equals(answer.getCaseId(), caseId)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        if (STATUS_ACCEPTED.equals(answer.getStatus())) {
+            throw new IllegalArgumentException("已采纳的答疑不能删除");
+        }
+        softDeleteCaseAnswer(answer);
+        return Map.of("message", "答疑已删除");
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> acceptCaseAnswer(Long userId, Long caseId, Long answerId, QaCaseAcceptRequest request) {
+        QaCaseHelp qaCase = requireOwnedCase(userId, caseId);
+        if (STATUS_ACCEPTED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("该求助已采纳答疑");
+        }
+        if (STATUS_CLOSED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("已关闭的求助不能采纳");
+        }
+        QaCaseHelpAnswer answer = requireCaseAnswer(answerId);
+        if (!Objects.equals(answer.getCaseId(), caseId) || isDeletedAnswer(answer)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        int rewardPoints = Math.max(0, request == null || request.getRewardPoints() == null ? 0 : request.getRewardPoints());
+        if (rewardPoints > 0) {
+            transferRewardPoints(userId, answer.getUserId(), rewardPoints, qaCase, answer);
+        }
+
+        LocalDateTime acceptedAt = LocalDateTime.now();
+        answer.setStatus(STATUS_ACCEPTED);
+        answer.setRewardPoints(safeInt(answer.getRewardPoints()) + rewardPoints);
+        answer.setAcceptedAt(acceptedAt);
+        caseHelpAnswerMapper.updateById(answer);
+
+        qaCase.setStatus(STATUS_ACCEPTED);
+        qaCase.setAcceptedAnswerId(answerId);
+        qaCase.setAcceptedAt(acceptedAt);
+        caseHelpMapper.updateById(qaCase);
+
+        notificationService.createNotification(
+                answer.getUserId(),
+                "qa_answer_accepted",
+                "你的答疑「" + defaultText(qaCase.getTitle(), "案例求助") + "」已被采纳" + (rewardPoints > 0 ? "，获得 " + rewardPoints + " 积分" : ""),
+                qaCase.getId()
+        );
+        return caseAnswerPayload(answer);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> voteCaseAnswer(Long userId, Long caseId, Long answerId, QaCaseVoteRequest request) {
+        QaCaseHelpAnswer answer = requireCaseAnswer(answerId);
+        if (!Objects.equals(answer.getCaseId(), caseId) || isDeletedAnswer(answer)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        String voteType = normalizeVoteType(request == null ? null : request.getVoteType());
+        QaCaseHelpAnswerVote existing = caseHelpAnswerVoteMapper.selectOne(new QueryWrapper<QaCaseHelpAnswerVote>()
+                .eq("answer_id", answerId)
+                .eq("user_id", userId));
+        if (existing == null) {
+            existing = new QaCaseHelpAnswerVote();
+            existing.setAnswerId(answerId);
+            existing.setUserId(userId);
+            existing.setVoteType(voteType);
+            caseHelpAnswerVoteMapper.insert(existing);
+        } else {
+            existing.setVoteType(voteType);
+            caseHelpAnswerVoteMapper.updateById(existing);
+        }
+        refreshAnswerVoteCounts(answerId);
+        return caseAnswerPayload(requireCaseAnswer(answerId));
+    }
+
+    @Override
+    public Map<String, Object> createCaseFeedback(Long userId, Long caseId, QaCaseFeedbackRequest request) {
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        String reason = normalizeFeedbackReason(request == null ? null : request.getReason());
+        String detail = trimToNull(request == null ? null : request.getDetail());
+        if ("other".equals(reason) && detail == null) {
+            throw new IllegalArgumentException("请选择其它时需填写说明");
+        }
+        if (detail != null && detail.length() > 30) {
+            throw new IllegalArgumentException("反馈说明最多30字");
+        }
+        QaCaseHelpFeedback feedback = new QaCaseHelpFeedback();
+        feedback.setCaseId(caseId);
+        feedback.setUserId(userId);
+        feedback.setReason(reason);
+        feedback.setDetail(detail);
+        feedback.setStatus(STATUS_ACTIVE);
+        caseHelpFeedbackMapper.insert(feedback);
+        return feedbackPayload(feedback);
+    }
+
+    @Override
     public Map<String, Object> listCaseAnswers(Long userId, Long caseId) {
-        requireCase(caseId);
+        ensureCaseVisible(requireCase(caseId));
         return Map.of("answers", loadCaseAnswers(caseId));
     }
 
@@ -255,15 +501,15 @@ public class QaServiceImpl implements QaService {
         int safeSize = safeSize(size);
         Page<QaCaseHelp> myCases = caseHelpMapper.selectPage(
                 new Page<>(safePage, safeSize),
-                new QueryWrapper<QaCaseHelp>().eq("user_id", userId).orderByDesc("create_time")
+                new QueryWrapper<QaCaseHelp>().eq("user_id", userId).isNull("deleted_at").ne("status", STATUS_DELETED).orderByDesc("create_time")
         );
         Page<QaCaseHelpAnswer> myAnswers = caseHelpAnswerMapper.selectPage(
                 new Page<>(safePage, safeSize),
-                new QueryWrapper<QaCaseHelpAnswer>().eq("user_id", userId).orderByDesc("create_time")
+                new QueryWrapper<QaCaseHelpAnswer>().eq("user_id", userId).isNull("deleted_at").ne("status", STATUS_DELETED).orderByDesc("create_time")
         );
         Page<QaSolutionShare> myShares = solutionShareMapper.selectPage(
                 new Page<>(safePage, safeSize),
-                new QueryWrapper<QaSolutionShare>().eq("user_id", userId).orderByDesc("create_time")
+                new QueryWrapper<QaSolutionShare>().eq("user_id", userId).isNull("deleted_at").ne("status", STATUS_DELETED).orderByDesc("create_time")
         );
         Map<Long, Long> myCaseAnswerCounts = loadAnswerCounts(myCases.getRecords());
         return Map.of(
@@ -273,6 +519,133 @@ public class QaServiceImpl implements QaService {
                 "answers", pagePayload(myAnswers, myAnswers.getRecords().stream().map(this::caseAnswerPayload).toList()),
                 "shares", pagePayload(myShares, myShares.getRecords().stream().map(this::solutionListPayload).toList())
         );
+    }
+
+    @Override
+    public Map<String, Object> getAdminQaStats() {
+        long activeCases = caseHelpMapper.selectCount(new QueryWrapper<QaCaseHelp>().isNull("deleted_at").ne("status", STATUS_DELETED));
+        long acceptedCases = caseHelpMapper.selectCount(new QueryWrapper<QaCaseHelp>().isNull("deleted_at").eq("status", STATUS_ACCEPTED));
+        long activeAnswers = caseHelpAnswerMapper.selectCount(new QueryWrapper<QaCaseHelpAnswer>().isNull("deleted_at").ne("status", STATUS_DELETED));
+        long activeShares = solutionShareMapper.selectCount(new QueryWrapper<QaSolutionShare>().isNull("deleted_at").ne("status", STATUS_DELETED));
+        long pendingCases = caseHelpMapper.selectCount(new QueryWrapper<QaCaseHelp>()
+                .isNull("deleted_at")
+                .ne("status", STATUS_DELETED)
+                .ne("status", STATUS_ACCEPTED)
+                .ne("status", STATUS_CLOSED));
+        return Map.of(
+                "cases", activeCases,
+                "pendingCases", pendingCases,
+                "answeredCases", acceptedCases,
+                "answers", activeAnswers,
+                "solutionShares", activeShares
+        );
+    }
+
+    @Override
+    public Map<String, Object> adminListCases(String status, Integer page, Integer size) {
+        QueryWrapper<QaCaseHelp> wrapper = new QueryWrapper<>();
+        if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status)) {
+            wrapper.eq("status", normalizeCaseStatus(status));
+        }
+        wrapper.orderByDesc("create_time");
+        Page<QaCaseHelp> result = caseHelpMapper.selectPage(new Page<>(safePage(page), safeSize(size)), wrapper);
+        Map<Long, Long> answerCounts = loadAnswerCounts(result.getRecords());
+        return pagePayload(result, result.getRecords().stream()
+                .map(item -> caseListPayload(item, answerCounts.getOrDefault(item.getId(), 0L)))
+                .toList());
+    }
+
+    @Override
+    public Map<String, Object> adminUpdateCase(Long caseId, QaCaseHelpRequest request) {
+        QaCaseHelp qaCase = requireCaseForAdmin(caseId);
+        if (request == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+        qaCase.setTitle(requireText(request.getTitle(), "求助标题不能为空"));
+        qaCase.setDescription(requireText(request.getDescription(), "需求描述不能为空"));
+        qaCase.setAnswerSheet(trimToNull(request.getAnswerSheet()));
+        qaCase.setAnswerRange(trimToNull(request.getAnswerRange()));
+        if (request.getIdealAnswerSnapshotJson() != null) {
+            qaCase.setIdealAnswerSnapshotJson(trimToNull(request.getIdealAnswerSnapshotJson()));
+        }
+        if (StringUtils.hasText(request.getStatus())) {
+            qaCase.setStatus(normalizeCaseStatus(request.getStatus()));
+            if (STATUS_DELETED.equals(qaCase.getStatus()) && qaCase.getDeletedAt() == null) {
+                qaCase.setDeletedAt(LocalDateTime.now());
+            }
+        }
+        caseHelpMapper.updateById(qaCase);
+        return caseListPayload(qaCase, countCaseAnswers(caseId));
+    }
+
+    @Override
+    public Map<String, Object> adminDeleteCase(Long caseId) {
+        softDeleteCase(requireCaseForAdmin(caseId));
+        return Map.of("message", "求助已删除");
+    }
+
+    @Override
+    public Map<String, Object> adminListCaseAnswers(Long caseId, Integer page, Integer size) {
+        QueryWrapper<QaCaseHelpAnswer> wrapper = new QueryWrapper<>();
+        if (caseId != null && caseId > 0) {
+            wrapper.eq("case_id", caseId);
+        }
+        wrapper.orderByDesc("create_time");
+        Page<QaCaseHelpAnswer> result = caseHelpAnswerMapper.selectPage(new Page<>(safePage(page), safeSize(size)), wrapper);
+        return pagePayload(result, result.getRecords().stream().map(this::caseAnswerPayload).toList());
+    }
+
+    @Override
+    public Map<String, Object> adminDeleteCaseAnswer(Long answerId) {
+        softDeleteCaseAnswer(requireCaseAnswerForAdmin(answerId));
+        return Map.of("message", "答疑已删除");
+    }
+
+    @Override
+    public Map<String, Object> adminListSolutionShares(String status, Integer page, Integer size) {
+        QueryWrapper<QaSolutionShare> wrapper = new QueryWrapper<>();
+        if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status)) {
+            wrapper.eq("status", normalizeShareStatus(status, STATUS_PUBLISHED));
+        }
+        wrapper.orderByDesc("create_time");
+        Page<QaSolutionShare> result = solutionShareMapper.selectPage(new Page<>(safePage(page), safeSize(size)), wrapper);
+        return pagePayload(result, result.getRecords().stream().map(this::solutionListPayload).toList());
+    }
+
+    @Override
+    public Map<String, Object> adminUpdateSolutionShare(Long shareId, QaSolutionShareUpdateRequest request) {
+        QaSolutionShare share = requireSolutionShareForAdmin(shareId);
+        if (request == null) {
+            throw new IllegalArgumentException("请求参数不能为空");
+        }
+        if (StringUtils.hasText(request.getTitle())) {
+            share.setTitle(request.getTitle().trim());
+        }
+        share.setThoughtText(trimToNull(request.getThoughtText()));
+        share.setThoughtSource(resolveThoughtSource(request.getThoughtSource(), share.getThoughtText()));
+        share.setStatus(normalizeShareStatus(request.getStatus(), STATUS_PUBLISHED));
+        if (STATUS_DELETED.equals(share.getStatus()) && share.getDeletedAt() == null) {
+            share.setDeletedAt(LocalDateTime.now());
+        }
+        solutionShareMapper.updateById(share);
+        return solutionListPayload(share);
+    }
+
+    @Override
+    public Map<String, Object> adminDeleteSolutionShare(Long shareId) {
+        softDeleteSolutionShare(requireSolutionShareForAdmin(shareId));
+        return Map.of("message", "解题分享已下架");
+    }
+
+    @Override
+    public Map<String, Object> adminListFeedback(Long caseId, Integer page, Integer size) {
+        QueryWrapper<QaCaseHelpFeedback> wrapper = new QueryWrapper<>();
+        if (caseId != null && caseId > 0) {
+            wrapper.eq("case_id", caseId);
+        }
+        wrapper.orderByDesc("create_time");
+        Page<QaCaseHelpFeedback> result = caseHelpFeedbackMapper.selectPage(new Page<>(safePage(page), safeSize(size)), wrapper);
+        return pagePayload(result, result.getRecords().stream().map(this::feedbackPayload).toList());
     }
 
     private PracticeAnswer requireOwnedCorrectAnswer(Long userId, Long answerId) {
@@ -293,6 +666,37 @@ public class QaServiceImpl implements QaService {
         return answer;
     }
 
+    private QaCaseHelp requireOwnedCase(Long userId, Long caseId) {
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        if (!Objects.equals(qaCase.getUserId(), userId)) {
+            throw new IllegalArgumentException("只能操作自己的求助");
+        }
+        return qaCase;
+    }
+
+    private QaCaseHelpAnswer requireOwnedCaseAnswer(Long userId, Long answerId) {
+        QaCaseHelpAnswer answer = requireCaseAnswer(answerId);
+        if (isDeletedAnswer(answer)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        if (!Objects.equals(answer.getUserId(), userId)) {
+            throw new IllegalArgumentException("只能操作自己的答疑");
+        }
+        return answer;
+    }
+
+    private QaSolutionShare requireOwnedSolutionShare(Long userId, Long shareId) {
+        QaSolutionShare share = requireSolutionShare(shareId);
+        if (share.getDeletedAt() != null || STATUS_DELETED.equals(share.getStatus())) {
+            throw new IllegalArgumentException("分享不存在");
+        }
+        if (!Objects.equals(share.getUserId(), userId)) {
+            throw new IllegalArgumentException("只能操作自己的解题分享");
+        }
+        return share;
+    }
+
     private QaSolutionShare findShareByAnswerId(Long answerId) {
         return solutionShareMapper.selectOne(new QueryWrapper<QaSolutionShare>().eq("answer_id", answerId));
     }
@@ -308,6 +712,10 @@ public class QaServiceImpl implements QaService {
         return share;
     }
 
+    private QaSolutionShare requireSolutionShareForAdmin(Long shareId) {
+        return requireSolutionShare(shareId);
+    }
+
     private QaCaseHelp requireCase(Long caseId) {
         if (caseId == null || caseId <= 0) {
             throw new IllegalArgumentException("求助参数无效");
@@ -317,6 +725,101 @@ public class QaServiceImpl implements QaService {
             throw new IllegalArgumentException("求助不存在");
         }
         return qaCase;
+    }
+
+    private QaCaseHelp requireCaseForAdmin(Long caseId) {
+        return requireCase(caseId);
+    }
+
+    private QaCaseHelpAnswer requireCaseAnswer(Long answerId) {
+        if (answerId == null || answerId <= 0) {
+            throw new IllegalArgumentException("答疑参数无效");
+        }
+        QaCaseHelpAnswer answer = caseHelpAnswerMapper.selectById(answerId);
+        if (answer == null) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        return answer;
+    }
+
+    private QaCaseHelpAnswer requireCaseAnswerForAdmin(Long answerId) {
+        return requireCaseAnswer(answerId);
+    }
+
+    private void ensureCaseVisible(QaCaseHelp qaCase) {
+        if (qaCase.getDeletedAt() != null || STATUS_DELETED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("求助不存在");
+        }
+    }
+
+    private void ensureCaseCanReceiveAnswer(QaCaseHelp qaCase) {
+        ensureCaseVisible(qaCase);
+        if (STATUS_CLOSED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("求助已关闭");
+        }
+        if (STATUS_ACCEPTED.equals(qaCase.getStatus())) {
+            throw new IllegalArgumentException("求助已采纳答疑");
+        }
+    }
+
+    private boolean isDeletedAnswer(QaCaseHelpAnswer answer) {
+        return answer == null || answer.getDeletedAt() != null || STATUS_DELETED.equals(answer.getStatus());
+    }
+
+    private void softDeleteCase(QaCaseHelp qaCase) {
+        qaCase.setStatus(STATUS_DELETED);
+        qaCase.setDeletedAt(LocalDateTime.now());
+        caseHelpMapper.updateById(qaCase);
+    }
+
+    private void softDeleteCaseAnswer(QaCaseHelpAnswer answer) {
+        answer.setStatus(STATUS_DELETED);
+        answer.setDeletedAt(LocalDateTime.now());
+        caseHelpAnswerMapper.updateById(answer);
+    }
+
+    private void softDeleteSolutionShare(QaSolutionShare share) {
+        share.setStatus(STATUS_DELETED);
+        share.setDeletedAt(LocalDateTime.now());
+        solutionShareMapper.updateById(share);
+    }
+
+    private void transferRewardPoints(Long ownerId, Long answererId, int rewardPoints, QaCaseHelp qaCase, QaCaseHelpAnswer answer) {
+        if (Objects.equals(ownerId, answererId)) {
+            throw new IllegalArgumentException("不能悬赏给自己");
+        }
+        int deducted = userMapper.deductPoints(ownerId, rewardPoints);
+        if (deducted <= 0) {
+            throw new IllegalArgumentException("积分余额不足");
+        }
+        userMapper.addPoints(answererId, rewardPoints);
+        savePointsRecord(ownerId, -rewardPoints, "答疑悬赏支出", "采纳「" + defaultText(qaCase.getTitle(), "案例求助") + "」答疑 #" + answer.getId());
+        savePointsRecord(answererId, rewardPoints, "答疑悬赏收入", "答疑被采纳：" + defaultText(qaCase.getTitle(), "案例求助"));
+    }
+
+    private void savePointsRecord(Long userId, int change, String ruleName, String description) {
+        User user = userService.getById(userId);
+        PointsRecord record = new PointsRecord();
+        record.setUserId(userId);
+        record.setRuleName(ruleName);
+        record.setChange(change);
+        record.setBalance(user == null || user.getPoints() == null ? 0 : user.getPoints());
+        record.setDescription(description);
+        pointsRecordService.save(record);
+    }
+
+    private void refreshAnswerVoteCounts(Long answerId) {
+        long up = caseHelpAnswerVoteMapper.selectCount(new QueryWrapper<QaCaseHelpAnswerVote>()
+                .eq("answer_id", answerId)
+                .eq("vote_type", "up"));
+        long down = caseHelpAnswerVoteMapper.selectCount(new QueryWrapper<QaCaseHelpAnswerVote>()
+                .eq("answer_id", answerId)
+                .eq("vote_type", "down"));
+        QaCaseHelpAnswer update = new QaCaseHelpAnswer();
+        update.setId(answerId);
+        update.setUpVoteCount((int) up);
+        update.setDownVoteCount((int) down);
+        caseHelpAnswerMapper.updateById(update);
     }
 
     private void notifyCaseOwnerIfNeeded(QaCaseHelp qaCase, Long answererId) {
@@ -336,7 +839,11 @@ public class QaServiceImpl implements QaService {
 
     private List<Map<String, Object>> loadCaseAnswers(Long caseId) {
         return caseHelpAnswerMapper.selectList(
-                new QueryWrapper<QaCaseHelpAnswer>().eq("case_id", caseId).orderByDesc("create_time")
+                new QueryWrapper<QaCaseHelpAnswer>()
+                        .eq("case_id", caseId)
+                        .isNull("deleted_at")
+                        .ne("status", STATUS_DELETED)
+                        .orderByDesc("create_time")
         ).stream().map(this::caseAnswerPayload).toList();
     }
 
@@ -349,8 +856,10 @@ public class QaServiceImpl implements QaService {
         payload.put("title", share.getTitle());
         payload.put("thoughtText", share.getThoughtText());
         payload.put("thoughtSource", share.getThoughtSource());
+        payload.put("status", share.getStatus());
         payload.put("viewCount", safeInt(share.getViewCount()));
         payload.put("createTime", share.getCreateTime());
+        payload.put("updateTime", share.getUpdateTime());
         payload.put("author", userPayload(share.getUserId()));
         return payload;
     }
@@ -362,11 +871,14 @@ public class QaServiceImpl implements QaService {
         payload.put("title", qaCase.getTitle());
         payload.put("description", qaCase.getDescription());
         payload.put("status", qaCase.getStatus());
+        payload.put("acceptedAnswerId", qaCase.getAcceptedAnswerId());
+        payload.put("acceptedAt", qaCase.getAcceptedAt());
         payload.put("answerSheet", qaCase.getAnswerSheet());
         payload.put("answerRange", qaCase.getAnswerRange());
         payload.put("viewCount", safeInt(qaCase.getViewCount()));
         payload.put("answerCount", answerCount);
         payload.put("createTime", qaCase.getCreateTime());
+        payload.put("updateTime", qaCase.getUpdateTime());
         payload.put("author", userPayload(qaCase.getUserId()));
         return payload;
     }
@@ -377,8 +889,27 @@ public class QaServiceImpl implements QaService {
         payload.put("caseId", answer.getCaseId());
         payload.put("userId", answer.getUserId());
         payload.put("answerFileUrl", answer.getAnswerFileUrl());
+        payload.put("status", answer.getStatus());
+        payload.put("upVoteCount", safeInt(answer.getUpVoteCount()));
+        payload.put("downVoteCount", safeInt(answer.getDownVoteCount()));
+        payload.put("rewardPoints", safeInt(answer.getRewardPoints()));
+        payload.put("acceptedAt", answer.getAcceptedAt());
         payload.put("createTime", answer.getCreateTime());
+        payload.put("updateTime", answer.getUpdateTime());
         payload.put("author", userPayload(answer.getUserId()));
+        return payload;
+    }
+
+    private Map<String, Object> feedbackPayload(QaCaseHelpFeedback feedback) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", feedback.getId());
+        payload.put("caseId", feedback.getCaseId());
+        payload.put("userId", feedback.getUserId());
+        payload.put("reason", feedback.getReason());
+        payload.put("detail", feedback.getDetail());
+        payload.put("status", feedback.getStatus());
+        payload.put("createTime", feedback.getCreateTime());
+        payload.put("author", userPayload(feedback.getUserId()));
         return payload;
     }
 
@@ -420,7 +951,10 @@ public class QaServiceImpl implements QaService {
         if (caseId == null) {
             return 0;
         }
-        Long count = caseHelpAnswerMapper.selectCount(new QueryWrapper<QaCaseHelpAnswer>().eq("case_id", caseId));
+        Long count = caseHelpAnswerMapper.selectCount(new QueryWrapper<QaCaseHelpAnswer>()
+                .eq("case_id", caseId)
+                .isNull("deleted_at")
+                .ne("status", STATUS_DELETED));
         return count == null ? 0 : count;
     }
 
@@ -500,6 +1034,35 @@ public class QaServiceImpl implements QaService {
         String normalized = status == null ? STATUS_OPEN : status.trim().toLowerCase();
         if (!CASE_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("求助状态无效");
+        }
+        return normalized;
+    }
+
+    private String normalizeShareStatus(String status, String fallback) {
+        String normalized = status == null ? fallback : status.trim().toLowerCase();
+        if (!SHARE_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("分享状态无效");
+        }
+        return normalized;
+    }
+
+    private String normalizeVoteType(String voteType) {
+        String normalized = voteType == null ? "" : voteType.trim().toLowerCase();
+        if ("like".equals(normalized)) {
+            normalized = "up";
+        } else if ("dislike".equals(normalized)) {
+            normalized = "down";
+        }
+        if (!"up".equals(normalized) && !"down".equals(normalized)) {
+            throw new IllegalArgumentException("评价类型无效");
+        }
+        return normalized;
+    }
+
+    private String normalizeFeedbackReason(String reason) {
+        String normalized = reason == null ? "" : reason.trim().toLowerCase();
+        if (!FEEDBACK_REASONS.contains(normalized)) {
+            throw new IllegalArgumentException("反馈原因无效");
         }
         return normalized;
     }

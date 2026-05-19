@@ -22,6 +22,11 @@ export const adminKeys = {
   levelsLogs: (params: Record<string, unknown>) => ["admin", "levels", "logs", params] as const,
   assistantConfigs: () => ["admin", "assistant", "configs"] as const,
   assistantStats: (params: Record<string, unknown>) => ["admin", "assistant", "stats", params] as const,
+  qaStats: () => ["admin", "qa", "stats"] as const,
+  qaCases: (params: Record<string, unknown>) => ["admin", "qa", "cases", params] as const,
+  qaAnswers: (params: Record<string, unknown>) => ["admin", "qa", "answers", params] as const,
+  qaSolutionShares: (params: Record<string, unknown>) => ["admin", "qa", "solution-shares", params] as const,
+  qaFeedback: (params: Record<string, unknown>) => ["admin", "qa", "feedback", params] as const,
 };
 
 export const notificationKeys = {

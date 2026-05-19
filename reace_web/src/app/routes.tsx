@@ -47,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "points", lazy: lazyPage(() => import("./pages/AdminPoints"), "AdminPoints") },
       { path: "levels", lazy: lazyPage(() => import("./pages/AdminLevels"), "AdminLevels") },
       { path: "assistant", lazy: lazyPage(() => import("./pages/AdminAssistant"), "AdminAssistant") },
+      { path: "qa", lazy: lazyPage(() => import("./pages/AdminQa"), "AdminQa") },
       { path: "*", Component: AdminRedirect },
     ],
   },

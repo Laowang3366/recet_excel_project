@@ -22,9 +22,12 @@ public class QaCaseHelp {
     private String answerRange;
     private String idealAnswerSnapshotJson;
     private String status;
+    private Long acceptedAnswerId;
+    private LocalDateTime acceptedAt;
     private Integer viewCount;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+    private LocalDateTime deletedAt;
 }

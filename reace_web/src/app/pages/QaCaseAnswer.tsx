@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Download, FileSpreadsheet, UploadCloud } from "lucide-react";
-import { useNavigate, useParams } from "react-router";
+import { ArrowLeft, Download, FileSpreadsheet, Save, UploadCloud } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 import { api } from "../lib/api";
@@ -12,11 +12,13 @@ import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEd
 
 export function QaCaseAnswer() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [workbook, setWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [selectedSheetName, setSelectedSheetName] = useState("");
   const [loadingWorkbook, setLoadingWorkbook] = useState(false);
+  const answerId = searchParams.get("answerId");
 
   const caseQuery = useQuery({
     queryKey: qaKeys.caseDetail(id || "unknown"),
@@ -24,13 +26,16 @@ export function QaCaseAnswer() {
     queryFn: () => api.get<QaCaseHelp>(`/api/qa/cases/${id}`, { silent: true }),
   });
   const qaCase = caseQuery.data;
+  const editingAnswer = qaCase?.answers?.find((answer) => String(answer.id) === String(answerId));
+  const editingMode = Boolean(answerId);
 
   const loadWorkbook = async () => {
-    if (!qaCase?.templateFileUrl) return;
+    const fileUrl = editingMode ? editingAnswer?.answerFileUrl : qaCase?.templateFileUrl;
+    if (!fileUrl) return;
     try {
       setLoadingWorkbook(true);
       const snapshot = await api.get<ExcelWorkbookSnapshot>(
-        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(qaCase.templateFileUrl)}`,
+        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`,
         { silent: true },
       );
       setWorkbook(snapshot || { sheets: [] });
@@ -48,15 +53,35 @@ export function QaCaseAnswer() {
       formData.append("file", file);
       formData.append("scene", "reply_attachment");
       const upload = await api.post<{ url: string }>("/api/upload", formData, { silent: true });
+      if (editingMode && answerId) {
+        return api.put(`/api/qa/cases/${id}/answers/${answerId}`, { answerFileUrl: upload.url }, { silent: true });
+      }
       return api.post(`/api/qa/cases/${id}/answers`, { answerFileUrl: upload.url }, { silent: true });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qaKeys.all });
-      toast.success("答疑模板已上传");
+      toast.success(editingMode ? "答疑模板已更新" : "答疑模板已上传");
       navigate(`/qa/cases/${id}#answers`);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "上传失败");
+    },
+  });
+
+  const submitWorkbookMutation = useMutation({
+    mutationFn: () => {
+      if (editingMode && answerId) {
+        return api.put(`/api/qa/cases/${id}/answers/${answerId}/from-snapshot`, { workbook }, { silent: true });
+      }
+      return api.post(`/api/qa/cases/${id}/answers/from-snapshot`, { workbook }, { silent: true });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qaKeys.all });
+      toast.success(editingMode ? "在线答疑已覆盖" : "在线答疑已提交");
+      navigate(`/qa/cases/${id}#answers`);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "提交失败");
     },
   });
 
@@ -85,11 +110,11 @@ export function QaCaseAnswer() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
               <FileSpreadsheet size={14} />
-              案例答疑
+              {editingMode ? "编辑答疑" : "案例答疑"}
             </div>
             <h1 className="mt-3 text-2xl font-black text-slate-900">{qaCase?.title || "案例求助"}</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              在线仅提供表格预览。请下载模板到 WPS/Excel 作答后上传，最终提交内容统一保存为 Excel 文件。
+              可在线快速编辑后提交，也可以下载模板到 WPS/Excel 作答后上传。最终提交内容统一保存为 Excel 文件。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -103,7 +128,7 @@ export function QaCaseAnswer() {
             </button>
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-black text-sky-700 transition hover:bg-sky-100">
               <UploadCloud size={16} />
-              上传答疑模板
+              {editingMode ? "上传覆盖模板" : "上传答疑模板"}
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -117,18 +142,22 @@ export function QaCaseAnswer() {
           </div>
         </div>
 
-        {workbook.sheets.length === 0 ? (
+        {editingMode && !editingAnswer ? (
+          <div className="mt-6 rounded-[24px] border border-dashed border-rose-200 bg-rose-50 px-6 py-14 text-center text-sm font-bold text-rose-500">
+            未找到可编辑的答疑记录
+          </div>
+        ) : workbook.sheets.length === 0 ? (
           <div className="mt-6 rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center">
             <div className="text-sm font-bold text-slate-500">
-              {loadingWorkbook ? "正在加载模板预览..." : "点击下方按钮预览求助模板"}
+              {loadingWorkbook ? "正在加载模板..." : editingMode ? "点击下方按钮加载你的答疑模板" : "点击下方按钮加载求助模板"}
             </div>
             <button
               type="button"
               onClick={() => void loadWorkbook()}
-              disabled={loadingWorkbook || !qaCase?.templateFileUrl}
+              disabled={loadingWorkbook || (editingMode ? !editingAnswer?.answerFileUrl : !qaCase?.templateFileUrl)}
               className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
             >
-              预览模板
+              加载模板
             </button>
           </div>
         ) : (
@@ -138,12 +167,20 @@ export function QaCaseAnswer() {
               onWorkbookChange={setWorkbook}
               selectedSheetName={selectedSheetName}
               onSelectedSheetNameChange={setSelectedSheetName}
-              readOnly
+              readOnly={false}
               viewportClassName="h-[630px]"
             />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
               <div className="text-xs font-bold text-slate-500">当前工作表：{selectedSheetName || "-"}</div>
-              <div className="text-xs font-bold text-slate-400">答疑提交请使用右上角上传 Excel 模板</div>
+              <button
+                type="button"
+                onClick={() => submitWorkbookMutation.mutate()}
+                disabled={submitWorkbookMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <Save size={16} />
+                {editingMode ? "保存覆盖" : "提交在线答疑"}
+              </button>
             </div>
           </div>
         )}

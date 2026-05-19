@@ -19,6 +19,8 @@ public interface QaCaseHelpAnswerMapper extends BaseMapper<QaCaseHelpAnswer> {
             <foreach collection="caseIds" item="caseId" open="(" separator="," close=")">
                 #{caseId}
             </foreach>
+            AND deleted_at IS NULL
+            AND status != 'deleted'
             GROUP BY case_id
             </script>
             """)

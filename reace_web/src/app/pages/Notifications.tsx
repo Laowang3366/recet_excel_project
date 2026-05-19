@@ -50,6 +50,7 @@ const typeConfig: Record<string, { icon: LucideIcon; label: string; color: strin
   site_notification: { icon: Radio, label: "系统公告", color: "text-slate-600", bg: "bg-slate-50 border-slate-100" },
   feedback_result: { icon: Bell, label: "反馈处理", color: "text-teal-600", bg: "bg-teal-50 border-teal-100" },
   qa_case_answered: { icon: MessageSquareText, label: "答疑通知", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
+  qa_answer_accepted: { icon: MessageSquareText, label: "答疑采纳", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
 };
 
 function getTypeConfig(type: string) {
@@ -59,6 +60,7 @@ function getTypeConfig(type: string) {
 function hasLink(notification: NotificationItem): boolean {
   if (notification.type === "site_notification" && notification.relatedId) return true;
   if (notification.type === "qa_case_answered" && notification.relatedId) return true;
+  if (notification.type === "qa_answer_accepted" && notification.relatedId) return true;
   return false;
 }
 
@@ -233,6 +235,7 @@ export function Notifications() {
       case "site_notification":
         return notification.relatedId ? `/notification/${notification.relatedId}` : null;
       case "qa_case_answered":
+      case "qa_answer_accepted":
         return notification.relatedId ? `/qa/cases/${notification.relatedId}#answers` : "/qa/my";
       default:
         return null;

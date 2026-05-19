@@ -141,6 +141,7 @@ export function Layout() {
       case "feedback_result":
         return "/notifications";
       case "qa_case_answered":
+      case "qa_answer_accepted":
         return notification.relatedId ? `/qa/cases/${notification.relatedId}#answers` : "/qa/my";
       default:
         return "/notifications";

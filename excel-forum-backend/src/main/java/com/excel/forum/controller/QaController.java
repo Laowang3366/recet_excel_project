@@ -2,10 +2,14 @@ package com.excel.forum.controller;
 
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.entity.dto.QaAiDraftRequest;
+import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseFeedbackRequest;
 import com.excel.forum.entity.dto.QaCaseHelpRequest;
 import com.excel.forum.entity.dto.QaCaseSnapshotAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseVoteRequest;
 import com.excel.forum.entity.dto.QaSolutionShareRequest;
+import com.excel.forum.entity.dto.QaSolutionShareUpdateRequest;
 import com.excel.forum.service.QaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -14,8 +18,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +56,19 @@ public class QaController {
         return ResponseEntity.ok(qaService.shareSolution(userId, request));
     }
 
+    @PutMapping("/solution-shares/{id}")
+    public ResponseEntity<?> updateSolutionShare(
+            @RequestAttribute Long userId,
+            @PathVariable Long id,
+            @RequestBody QaSolutionShareUpdateRequest request) {
+        return ResponseEntity.ok(qaService.updateSolutionShare(userId, id, request));
+    }
+
+    @DeleteMapping("/solution-shares/{id}")
+    public ResponseEntity<?> deleteSolutionShare(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.deleteSolutionShare(userId, id));
+    }
+
     @PostMapping("/solution-shares/ai-draft")
     public ResponseEntity<?> generateSolutionThoughtDraft(
             @RequestAttribute Long userId,
@@ -71,6 +90,24 @@ public class QaController {
             @RequestAttribute Long userId,
             @RequestBody QaCaseHelpRequest request) {
         return ResponseEntity.ok(qaService.createCase(userId, request));
+    }
+
+    @PutMapping("/cases/{id}")
+    public ResponseEntity<?> updateCase(
+            @RequestAttribute Long userId,
+            @PathVariable Long id,
+            @RequestBody QaCaseHelpRequest request) {
+        return ResponseEntity.ok(qaService.updateCase(userId, id, request));
+    }
+
+    @PostMapping("/cases/{id}/close")
+    public ResponseEntity<?> closeCase(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.closeCase(userId, id));
+    }
+
+    @DeleteMapping("/cases/{id}")
+    public ResponseEntity<?> deleteCase(@RequestAttribute Long userId, @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.deleteCase(userId, id));
     }
 
     @GetMapping("/cases/{id}")
@@ -100,12 +137,64 @@ public class QaController {
         return ResponseEntity.ok(qaService.submitCaseAnswer(userId, id, request));
     }
 
+    @PutMapping("/cases/{caseId}/answers/{answerId}")
+    public ResponseEntity<?> updateCaseAnswer(
+            @RequestAttribute Long userId,
+            @PathVariable Long caseId,
+            @PathVariable Long answerId,
+            @RequestBody QaCaseAnswerRequest request) {
+        return ResponseEntity.ok(qaService.updateCaseAnswer(userId, caseId, answerId, request));
+    }
+
+    @DeleteMapping("/cases/{caseId}/answers/{answerId}")
+    public ResponseEntity<?> deleteCaseAnswer(
+            @RequestAttribute Long userId,
+            @PathVariable Long caseId,
+            @PathVariable Long answerId) {
+        return ResponseEntity.ok(qaService.deleteCaseAnswer(userId, caseId, answerId));
+    }
+
+    @PostMapping("/cases/{caseId}/answers/{answerId}/accept")
+    public ResponseEntity<?> acceptCaseAnswer(
+            @RequestAttribute Long userId,
+            @PathVariable Long caseId,
+            @PathVariable Long answerId,
+            @RequestBody(required = false) QaCaseAcceptRequest request) {
+        return ResponseEntity.ok(qaService.acceptCaseAnswer(userId, caseId, answerId, request));
+    }
+
+    @PostMapping("/cases/{caseId}/answers/{answerId}/vote")
+    public ResponseEntity<?> voteCaseAnswer(
+            @RequestAttribute Long userId,
+            @PathVariable Long caseId,
+            @PathVariable Long answerId,
+            @RequestBody QaCaseVoteRequest request) {
+        return ResponseEntity.ok(qaService.voteCaseAnswer(userId, caseId, answerId, request));
+    }
+
+    @PostMapping("/cases/{id}/feedback")
+    public ResponseEntity<?> createCaseFeedback(
+            @RequestAttribute Long userId,
+            @PathVariable Long id,
+            @RequestBody QaCaseFeedbackRequest request) {
+        return ResponseEntity.ok(qaService.createCaseFeedback(userId, id, request));
+    }
+
     @PostMapping("/cases/{id}/answers/from-snapshot")
     public ResponseEntity<?> submitCaseAnswerFromSnapshot(
             @RequestAttribute Long userId,
             @PathVariable Long id,
             @RequestBody QaCaseSnapshotAnswerRequest request) {
         return ResponseEntity.ok(qaService.submitCaseAnswerFromSnapshot(userId, id, request));
+    }
+
+    @PutMapping("/cases/{caseId}/answers/{answerId}/from-snapshot")
+    public ResponseEntity<?> updateCaseAnswerFromSnapshot(
+            @RequestAttribute Long userId,
+            @PathVariable Long caseId,
+            @PathVariable Long answerId,
+            @RequestBody QaCaseSnapshotAnswerRequest request) {
+        return ResponseEntity.ok(qaService.updateCaseAnswerFromSnapshot(userId, caseId, answerId, request));
     }
 
     @GetMapping("/cases/{id}/answers")

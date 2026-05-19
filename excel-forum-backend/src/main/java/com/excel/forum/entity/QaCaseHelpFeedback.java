@@ -10,22 +10,16 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("qa_solution_share")
-public class QaSolutionShare {
+@TableName("qa_case_help_feedback")
+public class QaCaseHelpFeedback {
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long caseId;
     private Long userId;
-    private Long recordId;
-    private Long answerId;
-    private Long questionId;
-    private String title;
-    private String thoughtText;
-    private String thoughtSource;
+    private String reason;
+    private String detail;
     private String status;
-    private Integer viewCount;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updateTime;
     private LocalDateTime deletedAt;
 }
