@@ -77,9 +77,9 @@ export function FastWorkbookFallbackEditor({
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-black text-emerald-900">
           <ClipboardList size={16} />
-          快速编辑模式
+          {readOnly ? "表格预览" : "快速编辑模式"}
           <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-emerald-700">
-            完整编辑器加载中
+            {readOnly ? "只读" : "完整编辑器加载中"}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">

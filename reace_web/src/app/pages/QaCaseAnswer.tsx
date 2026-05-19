@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Download, FileSpreadsheet, UploadCloud } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
@@ -8,11 +8,7 @@ import { api } from "../lib/api";
 import type { ExcelWorkbookSnapshot } from "../lib/excel";
 import type { QaCaseHelp } from "../lib/qa";
 import { qaKeys } from "../lib/query-keys";
-import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
-
-const ExcelWorkbookEditor = lazy(() =>
-  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
-);
+import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
 
 export function QaCaseAnswer() {
   const { id } = useParams();
@@ -21,7 +17,6 @@ export function QaCaseAnswer() {
   const [workbook, setWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [selectedSheetName, setSelectedSheetName] = useState("");
   const [loadingWorkbook, setLoadingWorkbook] = useState(false);
-  const snapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
 
   const caseQuery = useQuery({
     queryKey: qaKeys.caseDetail(id || "unknown"),
@@ -33,7 +28,6 @@ export function QaCaseAnswer() {
   const loadWorkbook = async () => {
     if (!qaCase?.templateFileUrl) return;
     try {
-      void preloadExcelWorkbookEditor();
       setLoadingWorkbook(true);
       const snapshot = await api.get<ExcelWorkbookSnapshot>(
         `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(qaCase.templateFileUrl)}`,
@@ -47,23 +41,6 @@ export function QaCaseAnswer() {
       setLoadingWorkbook(false);
     }
   };
-
-  const submitSnapshotMutation = useMutation({
-    mutationFn: () => {
-      const latestWorkbook = snapshotGetterRef.current?.() || workbook;
-      return api.post(`/api/qa/cases/${id}/answers/from-snapshot`, {
-        workbook: latestWorkbook,
-      }, { silent: true });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: qaKeys.all });
-      toast.success("答疑模板已提交");
-      navigate(`/qa/cases/${id}#answers`);
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "提交失败");
-    },
-  });
 
   const uploadAnswerMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -112,7 +89,7 @@ export function QaCaseAnswer() {
             </div>
             <h1 className="mt-3 text-2xl font-black text-slate-900">{qaCase?.title || "案例求助"}</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              可以在网站内编辑后提交，也可以下载模板到 WPS/Excel 作答后上传。最终提交内容统一保存为 Excel 文件。
+              在线仅提供表格预览。请下载模板到 WPS/Excel 作答后上传，最终提交内容统一保存为 Excel 文件。
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -143,52 +120,30 @@ export function QaCaseAnswer() {
         {workbook.sheets.length === 0 ? (
           <div className="mt-6 rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center">
             <div className="text-sm font-bold text-slate-500">
-              {loadingWorkbook ? "正在加载模板..." : "点击下方按钮在网站内打开模板作答"}
+              {loadingWorkbook ? "正在加载模板预览..." : "点击下方按钮预览求助模板"}
             </div>
             <button
               type="button"
               onClick={() => void loadWorkbook()}
-              onMouseEnter={() => void preloadExcelWorkbookEditor()}
-              onFocus={() => void preloadExcelWorkbookEditor()}
               disabled={loadingWorkbook || !qaCase?.templateFileUrl}
               className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
             >
-              网站内作答
+              预览模板
             </button>
           </div>
         ) : (
           <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-200">
-            <Suspense fallback={(
-              <FastWorkbookFallbackEditor
-                workbook={workbook}
-                onWorkbookChange={setWorkbook}
-                selectedSheetName={selectedSheetName}
-                onSelectedSheetNameChange={setSelectedSheetName}
-                viewportClassName="h-[630px]"
-              />
-            )}>
-              <ExcelWorkbookEditor
-                workbook={workbook}
-                onWorkbookChange={setWorkbook}
-                selectedSheetName={selectedSheetName}
-                onSelectedSheetNameChange={setSelectedSheetName}
-                onSnapshotCaptureReady={(capture) => {
-                  snapshotGetterRef.current = capture;
-                }}
-                className="h-[700px]"
-                viewportClassName="h-[630px]"
-              />
-            </Suspense>
+            <FastWorkbookFallbackEditor
+              workbook={workbook}
+              onWorkbookChange={setWorkbook}
+              selectedSheetName={selectedSheetName}
+              onSelectedSheetNameChange={setSelectedSheetName}
+              readOnly
+              viewportClassName="h-[630px]"
+            />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
               <div className="text-xs font-bold text-slate-500">当前工作表：{selectedSheetName || "-"}</div>
-              <button
-                type="button"
-                onClick={() => submitSnapshotMutation.mutate()}
-                disabled={submitSnapshotMutation.isPending}
-                className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
-              >
-                {submitSnapshotMutation.isPending ? "提交中..." : "提交网站作答模板"}
-              </button>
+              <div className="text-xs font-bold text-slate-400">答疑提交请使用右上角上传 Excel 模板</div>
             </div>
           </div>
         )}

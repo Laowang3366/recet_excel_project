@@ -1,20 +1,16 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Lightbulb, MessageSquareText, UploadCloud } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { api } from "../lib/api";
-import type { ExcelRangeSelection, ExcelWorkbookSnapshot } from "../lib/excel";
-import { extractRangeAnswerSnapshot, selectionToRangeRef } from "../lib/excel";
+import type { ExcelWorkbookSnapshot } from "../lib/excel";
+import { detectFormulaAnswerRegion, extractRangeAnswerSnapshot, parseRangeRef } from "../lib/excel";
 import { formatDateTime } from "../lib/format";
 import { formatQaStatus, type QaCaseHelp, type QaPageResponse, type QaSolutionShare } from "../lib/qa";
 import { qaKeys } from "../lib/query-keys";
-import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
-
-const ExcelWorkbookEditor = lazy(() =>
-  preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
-);
+import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEditor";
 
 type QaTab = "cases" | "solutions";
 
@@ -27,9 +23,8 @@ export function QaCenter() {
   const [templateFileUrl, setTemplateFileUrl] = useState("");
   const [workbook, setWorkbook] = useState<ExcelWorkbookSnapshot>({ sheets: [] });
   const [selectedSheetName, setSelectedSheetName] = useState("");
-  const [selection, setSelection] = useState<ExcelRangeSelection | null>(null);
+  const [answerRangeText, setAnswerRangeText] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
-  const snapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
 
   const casesQuery = useQuery({
     queryKey: qaKeys.cases({ page: 1, size: 20 }),
@@ -42,10 +37,9 @@ export function QaCenter() {
 
   const createCaseMutation = useMutation({
     mutationFn: () => {
-      const latestWorkbook = snapshotGetterRef.current?.() || workbook;
-      const answerRange = selectionToRangeRef(selection);
+      const answerRange = answerRangeText.trim().toUpperCase();
       const idealAnswerSnapshotJson = answerRange && selectedSheetName
-        ? JSON.stringify(extractRangeAnswerSnapshot(latestWorkbook, selectedSheetName, answerRange))
+        ? JSON.stringify(extractRangeAnswerSnapshot(workbook, selectedSheetName, answerRange))
         : "";
       return api.post("/api/qa/cases", {
         title: caseTitle.trim(),
@@ -64,7 +58,7 @@ export function QaCenter() {
       setTemplateFileUrl("");
       setWorkbook({ sheets: [] });
       setSelectedSheetName("");
-      setSelection(null);
+      setAnswerRangeText("");
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "发布求助失败");
@@ -74,7 +68,6 @@ export function QaCenter() {
   const handleUploadTemplate = async (file: File | null) => {
     if (!file) return;
     try {
-      void preloadExcelWorkbookEditor();
       setTemplateLoading(true);
       const formData = new FormData();
       formData.append("file", file);
@@ -84,11 +77,12 @@ export function QaCenter() {
         `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(upload.url)}`,
         { silent: true },
       );
+      const detectedAnswer = detectFormulaAnswerRegion(snapshot, { mode: "dynamic_array" });
       setTemplateFileUrl(upload.url);
       setWorkbook(snapshot || { sheets: [] });
-      setSelectedSheetName(snapshot?.sheets?.[0]?.name || "");
-      setSelection(null);
-      toast.success("模板上传完成，请在表格中保留理想答案并选择答案区域");
+      setSelectedSheetName(detectedAnswer?.sheetName || snapshot?.sheets?.[0]?.name || "");
+      setAnswerRangeText((detectedAnswer?.dynamicSpillRange || detectedAnswer?.rangeRef || "").toUpperCase());
+      toast.success(detectedAnswer ? "模板上传完成，已自动识别理想答案区域" : "模板上传完成，请填写理想答案区域");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "模板上传失败");
     } finally {
@@ -107,6 +101,14 @@ export function QaCenter() {
     }
     if (!templateFileUrl) {
       toast.error("请先上传 Excel 模板");
+      return;
+    }
+    if (!selectedSheetName) {
+      toast.error("请选择理想答案工作表");
+      return;
+    }
+    if (!parseRangeRef(answerRangeText)) {
+      toast.error("请输入有效的理想答案区域，例如 K10:P14");
       return;
     }
     createCaseMutation.mutate();
@@ -211,11 +213,7 @@ export function QaCenter() {
                 rows={4}
                 className="w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
               />
-              <label
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-black text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50"
-                onMouseEnter={() => void preloadExcelWorkbookEditor()}
-                onFocus={() => void preloadExcelWorkbookEditor()}
-              >
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-black text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50">
                 <FileSpreadsheet size={18} />
                 {templateFileUrl ? "重新上传 Excel 模板" : "上传 Excel 模板"}
                 <input
@@ -233,35 +231,39 @@ export function QaCenter() {
               </div>
             ) : workbook.sheets.length > 0 ? (
               <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <Suspense fallback={(
-                  <FastWorkbookFallbackEditor
-                    workbook={workbook}
-                    onWorkbookChange={setWorkbook}
-                    selectedSheetName={selectedSheetName}
-                    onSelectedSheetNameChange={setSelectedSheetName}
-                    viewportClassName="h-[360px]"
-                  />
-                )}>
-                  <ExcelWorkbookEditor
-                    workbook={workbook}
-                    onWorkbookChange={setWorkbook}
-                    selectedSheetName={selectedSheetName}
-                    onSelectedSheetNameChange={setSelectedSheetName}
-                    selection={selection}
-                    onSelectionChange={setSelection}
-                    selectionEnabled
-                    showConfirmSelectionButton
-                    confirmSelectionLabel="确认理想答案区域"
-                    onConfirmSelection={() => toast.success("理想答案区域已记录")}
-                    onSnapshotCaptureReady={(capture) => {
-                      snapshotGetterRef.current = capture;
-                    }}
-                    className="h-[430px]"
-                    viewportClassName="h-[360px]"
-                  />
-                </Suspense>
+                <div className="grid gap-3 border-b border-slate-100 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <label className="space-y-1 text-xs font-black text-slate-500">
+                    理想答案工作表
+                    <select
+                      value={selectedSheetName}
+                      onChange={(event) => setSelectedSheetName(event.target.value)}
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    >
+                      {workbook.sheets.map((sheet) => (
+                        <option key={sheet.name} value={sheet.name}>{sheet.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-xs font-black text-slate-500">
+                    理想答案区域
+                    <input
+                      value={answerRangeText}
+                      onChange={(event) => setAnswerRangeText(event.target.value.toUpperCase())}
+                      placeholder="例如 K10:P14"
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    />
+                  </label>
+                </div>
+                <FastWorkbookFallbackEditor
+                  workbook={workbook}
+                  onWorkbookChange={setWorkbook}
+                  selectedSheetName={selectedSheetName}
+                  onSelectedSheetNameChange={setSelectedSheetName}
+                  readOnly
+                  viewportClassName="h-[360px]"
+                />
                 <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500">
-                  当前区域：{selectedSheetName || "-"} / {selectionToRangeRef(selection) || "-"}
+                  当前区域：{selectedSheetName || "-"} / {answerRangeText.trim().toUpperCase() || "-"}
                 </div>
               </div>
             ) : null}
