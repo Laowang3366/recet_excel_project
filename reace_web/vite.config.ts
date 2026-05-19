@@ -110,14 +110,17 @@ export default defineConfig({
           ) {
             return 'univer-sheets';
           }
-          if (
-            packageName === '@univerjs/core' ||
-            packageName === '@univerjs/engine-render' ||
-            packageName === '@univerjs/docs' ||
-            packageName === '@univerjs/network' ||
-            packageName === '@univerjs/rpc'
-          ) {
+          if (packageName === '@univerjs/core') {
+            return 'univer-core';
+          }
+          if (packageName === '@univerjs/engine-render') {
             return 'univer-render-core';
+          }
+          if (packageName === '@univerjs/docs') {
+            return 'univer-docs-core';
+          }
+          if (packageName === '@univerjs/network' || packageName === '@univerjs/rpc') {
+            return 'univer-network';
           }
           if (packageName === 'rxjs') {
             return 'rxjs-vendor';

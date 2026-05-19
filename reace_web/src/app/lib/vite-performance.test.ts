@@ -33,6 +33,7 @@ describe("vite performance configuration", () => {
     expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets-ui/lib/es/index.js")).toBe("univer-sheets-ui");
     expect(resolveChunk("D:/repo/node_modules/@univerjs/ui/lib/es/index.js")).toBe("univer-ui-core");
     expect(resolveChunk("D:/repo/node_modules/@univerjs/sheets/lib/es/index.js")).toBe("univer-sheets");
-    expect(resolveChunk("D:/repo/node_modules/@univerjs/core/lib/es/index.js")).toBe("univer-render-core");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/core/lib/es/index.js")).toBe("univer-core");
+    expect(resolveChunk("D:/repo/node_modules/@univerjs/network/lib/es/index.js")).toBe("univer-network");
   });
 });
