@@ -10,6 +10,7 @@ import com.excel.forum.service.PracticeCampaignService;
 import com.excel.forum.service.QuestionCategoryService;
 import com.excel.forum.service.QuestionExcelTemplateService;
 import com.excel.forum.service.QuestionService;
+import com.excel.forum.util.QuestionDifficultyCatalog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -214,10 +215,11 @@ public class AdminQuestionController {
             target.setQuestionCategoryId(request.getQuestionCategoryId());
         }
         if (request.getDifficulty() != null || target.getId() == null) {
-            target.setDifficulty(request.getDifficulty());
-        }
-        if (request.getPoints() != null || target.getId() == null) {
-            target.setPoints(request.getPoints());
+            int difficulty = QuestionDifficultyCatalog.normalizeDifficulty(request.getDifficulty());
+            target.setDifficulty(difficulty);
+            target.setPoints(QuestionDifficultyCatalog.resolvePoints(difficulty));
+        } else if (target.getDifficulty() != null) {
+            target.setPoints(QuestionDifficultyCatalog.resolvePoints(target.getDifficulty()));
         }
         if (request.getExplanation() != null || target.getId() == null) {
             target.setExplanation(request.getExplanation());

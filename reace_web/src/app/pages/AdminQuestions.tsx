@@ -7,11 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
-import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
+import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson } from "./AdminConsoleShared";
+import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson, applyQuestionDifficulty, normalizeQuestionDifficulty, resolveQuestionPointsByDifficulty, QUESTION_DIFFICULTY_POINT_OPTIONS } from "./AdminConsoleShared";
 
 const ExcelWorkbookEditor = lazy(() =>
   preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
@@ -212,7 +212,7 @@ export function AdminQuestions() {
       title: item.title || "",
       questionCategoryId: item.questionCategoryId || "",
       difficulty: item.difficulty ?? 1,
-      points: item.points ?? 0,
+      points: resolveQuestionPointsByDifficulty(item.difficulty ?? 1),
       explanation: item.explanation || "",
       enabled: item.enabled ?? true,
       templateFileUrl: item.templateFileUrl || "",
@@ -313,12 +313,14 @@ export function AdminQuestions() {
       toast.error(`检测函数公式已开启，${visibleCells}${suffix} 必须填写公式`);
       return;
     }
+    const resolvedDifficulty = normalizeQuestionDifficulty(form.difficulty);
+    const resolvedPoints = resolveQuestionPointsByDifficulty(resolvedDifficulty);
     const payload = {
       title: form.title,
       type: "excel_template",
       questionCategoryId: toNullableNumber(form.questionCategoryId),
-      difficulty: Number(form.difficulty || 1),
-      points: Number(form.points || 0),
+      difficulty: resolvedDifficulty,
+      points: resolvedPoints,
       explanation: form.explanation,
       enabled: form.enabled,
       templateFileUrl: form.templateFileUrl,
@@ -608,13 +610,18 @@ export function AdminQuestions() {
     : (primaryRangeRef || "未选择");
   const sheetOptions = templateWorkbook.sheets || [];
   const templateEditorResetKey = `${form.templateFileUrl || "empty"}:${selectedSheetName || "none"}:${sheetOptions.length}:${templateLoadError || "ok"}`;
-  const currentPreviewWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
-  const answerPreview = extractDateAwareRangeAnswerSnapshot(
-    currentPreviewWorkbook,
-    primarySheetName,
-    isTemplateEditMode ? (selectionToRangeRef(selection) || primaryRangeRef) : primaryRangeRef,
-  );
   const previewRangeRef = isTemplateEditMode ? (selectionToRangeRef(selection) || primaryRangeRef) : primaryRangeRef;
+  const currentPreviewWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
+  const storedAnswerPreview = !isTemplateEditMode
+    ? extractStoredAnswerSnapshot(form.answerSnapshotJson, primarySheetName, previewRangeRef)
+    : { values: [], formulas: [] };
+  const answerPreview = storedAnswerPreview.values.length > 0
+    ? storedAnswerPreview
+    : extractDateAwareRangeAnswerSnapshot(
+      currentPreviewWorkbook,
+      primarySheetName,
+      previewRangeRef,
+    );
   const previewRange = previewRangeRef ? parseRangeRef(previewRangeRef) : null;
   const persistedRange = primaryRangeRef ? parseRangeRef(primaryRangeRef) : null;
   const persistedFocusRange = primarySheetName && persistedRange
@@ -758,11 +765,9 @@ export function AdminQuestions() {
           <FilterField label="难度">
             <select value={difficultyFilter} onChange={(e) => { setDifficultyFilter(e.target.value); setPage(1); }} className={inputClassName()}>
               <option value="">全部难度</option>
-              <option value="1">难度 1</option>
-              <option value="2">难度 2</option>
-              <option value="3">难度 3</option>
-              <option value="4">难度 4</option>
-              <option value="5">难度 5</option>
+              {QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => (
+                <option key={item.difficulty} value={item.difficulty}>难度 {item.difficulty}</option>
+              ))}
             </select>
           </FilterField>
           <div className="flex items-end gap-2">
@@ -998,8 +1003,27 @@ export function AdminQuestions() {
             </select>
           </Field>
           <Field label="题型"><input value={formatQuestionType("excel_template")} readOnly className={inputClassName()} /></Field>
-          <Field label="难度"><input type="number" value={form.difficulty} onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))} className={inputClassName()} /></Field>
-          <Field label="奖励积分"><input type="number" value={form.points} onChange={(e) => setForm((prev) => ({ ...prev, points: e.target.value }))} className={inputClassName()} /></Field>
+          <Field label="难度">
+            <select
+              value={String(normalizeQuestionDifficulty(form.difficulty))}
+              onChange={(e) => setForm((prev) => applyQuestionDifficulty(prev, e.target.value))}
+              className={inputClassName()}
+            >
+              {QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => (
+                <option key={item.difficulty} value={item.difficulty}>
+                  难度 {item.difficulty} · {item.points} 积分
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="奖励积分">
+            <input
+              type="number"
+              value={resolveQuestionPointsByDifficulty(form.difficulty)}
+              readOnly
+              className={`${inputClassName()} bg-slate-50 text-slate-500`}
+            />
+          </Field>
         </div>
         <div className="grid gap-4 md:grid-cols-[220px,1fr]">
           <Field label="判题模式">

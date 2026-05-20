@@ -666,6 +666,48 @@ export function extractDateAwareRangeAnswerSnapshot(
   );
 }
 
+function normalizeAnswerSnapshotRows(snapshot: ExcelAnswerSnapshot): ExcelAnswerSnapshot {
+  const rowCount = Math.max(snapshot.values?.length || 0, snapshot.formulas?.length || 0);
+  const values: unknown[][] = [];
+  const formulas: string[][] = [];
+  const displays: string[][] = [];
+  const numberFormats: string[][] = [];
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const valueRow = snapshot.values?.[rowIndex] || [];
+    const formulaRow = snapshot.formulas?.[rowIndex] || [];
+    const displayRow = snapshot.displays?.[rowIndex] || [];
+    const numberFormatRow = snapshot.numberFormats?.[rowIndex] || [];
+    const colCount = Math.max(valueRow.length, formulaRow.length, displayRow.length, numberFormatRow.length);
+    values.push(Array.from({ length: colCount }, (_, colIndex) => valueRow[colIndex] ?? ""));
+    formulas.push(Array.from({ length: colCount }, (_, colIndex) => normalizeExcelFormulaText(formulaRow[colIndex])));
+    displays.push(Array.from({ length: colCount }, (_, colIndex) => displayRow[colIndex] ?? ""));
+    numberFormats.push(Array.from({ length: colCount }, (_, colIndex) => numberFormatRow[colIndex] ?? ""));
+  }
+
+  return { values, formulas, displays, numberFormats };
+}
+
+export function extractStoredAnswerSnapshot(
+  answerSnapshotJson: string | null | undefined,
+  sheetName: string | null | undefined,
+  rangeRef: string | null | undefined,
+): ExcelAnswerSnapshot {
+  if (!answerSnapshotJson) return { values: [], formulas: [] };
+  try {
+    const parsed = JSON.parse(answerSnapshotJson) as ExcelAnswerSnapshot | ExcelWorkbookSnapshot;
+    if (parsed && Array.isArray((parsed as ExcelAnswerSnapshot).values)) {
+      return normalizeAnswerSnapshotRows(parsed as ExcelAnswerSnapshot);
+    }
+    if (parsed && Array.isArray((parsed as ExcelWorkbookSnapshot).sheets)) {
+      return extractDateAwareRangeAnswerSnapshot(parsed as ExcelWorkbookSnapshot, sheetName, rangeRef);
+    }
+  } catch {
+    return { values: [], formulas: [] };
+  }
+  return { values: [], formulas: [] };
+}
+
 export function formatAnswerPreviewCellDisplay(
   value: unknown,
   formula: string | null | undefined,

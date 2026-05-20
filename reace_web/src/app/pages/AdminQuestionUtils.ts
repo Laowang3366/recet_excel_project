@@ -1,11 +1,48 @@
 import type { AdminQuestionForm, QuestionDynamicArrayRuleForm } from "./AdminConsoleTypes";
 
+export const QUESTION_DIFFICULTY_POINT_OPTIONS = [
+  { difficulty: 1, points: 12 },
+  { difficulty: 2, points: 15 },
+  { difficulty: 3, points: 18 },
+  { difficulty: 4, points: 20 },
+  { difficulty: 5, points: 22 },
+  { difficulty: 6, points: 24 },
+  { difficulty: 7, points: 26 },
+  { difficulty: 8, points: 28 },
+  { difficulty: 9, points: 30 },
+  { difficulty: 10, points: 32 },
+] as const;
+
+const QUESTION_DIFFICULTY_POINTS = new Map<number, number>(
+  QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => [item.difficulty, item.points]),
+);
+
+export function normalizeQuestionDifficulty(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(10, Math.max(1, Math.round(parsed)));
+}
+
+export function resolveQuestionPointsByDifficulty(value: unknown) {
+  const difficulty = normalizeQuestionDifficulty(value);
+  return QUESTION_DIFFICULTY_POINTS.get(difficulty) ?? 12;
+}
+
+export function applyQuestionDifficulty(form: AdminQuestionForm, value: unknown): AdminQuestionForm {
+  const difficulty = normalizeQuestionDifficulty(value);
+  return {
+    ...form,
+    difficulty,
+    points: resolveQuestionPointsByDifficulty(difficulty),
+  };
+}
+
 export function defaultQuestionForm(): AdminQuestionForm {
   return {
     title: "",
     questionCategoryId: "",
     difficulty: 1,
-    points: 0,
+    points: resolveQuestionPointsByDifficulty(1),
     explanation: "",
     enabled: true,
     templateFileUrl: "",

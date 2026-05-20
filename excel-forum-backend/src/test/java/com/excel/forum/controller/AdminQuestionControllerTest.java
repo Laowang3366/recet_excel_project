@@ -19,10 +19,16 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.util.List;
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -104,5 +110,39 @@ class AdminQuestionControllerTest {
         mockMvc.perform(get("/api/admin/questions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questions[0].idealAnswerImageUrl").value("/uploads/questions/ideal.png"));
+    }
+
+    @Test
+    void createQuestionDerivesPointsFromDifficulty() throws Exception {
+        doAnswer(invocation -> {
+            Question question = invocation.getArgument(0);
+            question.setId(18L);
+            return null;
+        }).when(questionService).save(any(Question.class));
+        when(excelTemplateGradingService.normalizeAnswerSnapshotJson(anyString(), anyString(), anyString(), anyBoolean(), anyString()))
+                .thenReturn("{\"values\":[[1]],\"formulas\":[[\"\"]]}");
+        when(excelTemplateGradingService.buildRuleJson(anyString(), anyString(), anyString(), anyBoolean(), any()))
+                .thenReturn("{}");
+        when(excelTemplateGradingService.buildExpectedSnapshotJson(anyString(), anyString(), anyString(), anyBoolean(), anyString(), anyString(), any()))
+                .thenReturn("{}");
+
+        mockMvc.perform(post("/api/admin/questions")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title":"自动积分题",
+                                  "questionCategoryId":3,
+                                  "difficulty":7,
+                                  "points":999,
+                                  "templateFileUrl":"/uploads/demo.xlsx",
+                                  "answerSheet":"Sheet1",
+                                  "answerRange":"B2",
+                                  "answerSnapshotJson":"{}",
+                                  "checkFormula":false
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.difficulty").value(7))
+                .andExpect(jsonPath("$.points").value(26));
     }
 }

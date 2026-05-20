@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   convertWorkbookSelectionToDateFormat,
   extractDateAwareRangeAnswerSnapshot,
+  extractStoredAnswerSnapshot,
   extractRangeAnswerSnapshot,
   findMissingFormulaCellRefs,
   formatAnswerPreviewCellDisplay,
@@ -196,5 +197,18 @@ describe("excel answer preview", () => {
     expect(snapshot.numberFormats?.[1]?.[0]).toBe("yyyy-mm-dd");
     expect(snapshot.displays?.[1]?.[3]).toBe("27800");
     expect(snapshot.numberFormats?.[1]?.[3]).toBe("");
+  });
+
+  it("uses stored dynamic-array answer snapshots for readonly preview", () => {
+    const snapshot = extractStoredAnswerSnapshot(JSON.stringify({
+      values: [["张敏", "硬件"], ["王悦", "硬件"]],
+      formulas: [["LET(ids,FILTER(A1:A9,A1:A9<>\"\"),ids)", ""], ["", ""]],
+      displays: [["张敏", "硬件"], ["王悦", "硬件"]],
+      numberFormats: [["", ""], ["", ""]],
+    }), "Sheet1", "K10:L11");
+
+    expect(snapshot.values).toEqual([["张敏", "硬件"], ["王悦", "硬件"]]);
+    expect(snapshot.formulas?.[0]?.[0]).toBe("LET(ids,FILTER(A1:A9,A1:A9<>\"\"),ids)");
+    expect(snapshot.displays?.[1]?.[1]).toBe("硬件");
   });
 });
