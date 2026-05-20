@@ -339,7 +339,7 @@ export function PracticeDetail() {
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 text-sm font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
               >
                 <Eye size={16} />
-                查看参考图
+                查看参考答案
               </button>
             ) : null}
             <button
@@ -488,14 +488,14 @@ export function PracticeDetail() {
           <div className="w-[min(980px,calc(100vw-2rem))] rounded-[28px] bg-white p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-base font-black text-slate-900">理想答案参考图</div>
+                <div className="text-base font-black text-slate-900">参考答案</div>
                 <div className="mt-1 text-xs font-medium text-slate-500">按图中目标效果在答题区域内用公式实现。</div>
               </div>
               <button
                 type="button"
                 onClick={() => setIdealAnswerImageOpen(false)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900"
-                aria-label="关闭参考图"
+                aria-label="关闭参考答案"
               >
                 <X size={18} />
               </button>
@@ -503,7 +503,7 @@ export function PracticeDetail() {
             <div className="max-h-[72vh] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <img
                 src={idealAnswerImageUrl}
-                alt="理想答案参考图"
+                alt="参考答案图片"
                 className="mx-auto max-h-[68vh] max-w-full object-contain"
               />
             </div>

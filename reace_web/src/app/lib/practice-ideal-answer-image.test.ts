@@ -10,7 +10,7 @@ describe("practice ideal answer reference image", () => {
     const source = practiceDetailSource();
 
     expect(source).toContain("idealAnswerImageUrl");
-    expect(source).toContain("查看参考图");
+    expect(source).toContain("查看参考答案");
     expect(source).toContain("normalizeResourceUrl");
   });
 
