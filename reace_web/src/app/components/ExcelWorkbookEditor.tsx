@@ -4,19 +4,29 @@ import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import type { IWorkbookData } from "@univerjs/core";
 import type { FWorkbook } from "@univerjs/preset-sheets-core";
 import "@univerjs/preset-sheets-core/lib/index.css";
-import { Expand, Minimize2 } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, Copy, Expand, Minimize2 } from "lucide-react";
 import {
   ExcelRangeSelection,
   ExcelWorkbookSnapshot,
+  convertWorkbookSelectionToDateFormat,
   clearInferredDynamicArraySpillChildren,
+  findWorkbookErrorCells,
+  getCellSnapshot,
+  getExcelCellErrorInfo,
+  getSheetSnapshot,
+  normalizeExcelFormulaText,
   normalizeSelection,
   parseRangeRef,
   parseSheetAndRange,
   resolveExcelCellNumberFormat,
   selectionToRangeRef,
+  toCellRef,
+  type ExcelCellErrorInfo,
+  type ExcelWorkbookErrorCell,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
 import { getStoredUser } from "../lib/session-store";
+import { AssistantWidget } from "./layout/AssistantWidget";
 
 type ExcelWorkbookEditorProps = {
   workbook: ExcelWorkbookSnapshot;
@@ -51,6 +61,15 @@ type UniverBinding = {
   captureSnapshot: () => ExcelWorkbookSnapshot;
   syncWorkbookSnapshot: () => void;
   disposables: Array<{ dispose: () => void }>;
+};
+
+type EditorCellInspector = {
+  sheetName: string;
+  cellRef: string;
+  display: string;
+  formula: string;
+  error: ExcelCellErrorInfo | null;
+  workbookErrors: ExcelWorkbookErrorCell[];
 };
 
 function isSameSelection(
@@ -88,7 +107,8 @@ function workbookSnapshotToUniverData(workbook: ExcelWorkbookSnapshot): Partial<
 }
 
 function workbookCellSnapshotToUniverValue(cell: ExcelWorkbookSnapshot["sheets"][number]["cells"][string]) {
-  const formula = cell?.formula ? `=${cell.formula}` : "";
+  const normalizedFormula = normalizeExcelFormulaText(cell?.formula);
+  const formula = normalizedFormula ? `=${normalizedFormula}` : "";
   if (formula) return formula;
   const value = cell?.value;
   const numberFormat = resolveExcelCellNumberFormat(cell);
@@ -96,6 +116,31 @@ function workbookCellSnapshotToUniverValue(cell: ExcelWorkbookSnapshot["sheets"]
     return { v: value, s: { n: { pattern: numberFormat } } };
   }
   return value;
+}
+
+function resolveEditorCellInspector(
+  workbook: ExcelWorkbookSnapshot | null | undefined,
+  selection: ExcelRangeSelection | null | undefined,
+  fallbackSheetName: string,
+): EditorCellInspector {
+  const sheetName = selection?.sheetName || fallbackSheetName || workbook?.sheets?.[0]?.name || "";
+  const sheet = getSheetSnapshot(workbook, sheetName);
+  const cellRef = selection ? toCellRef(selection.startRow, selection.startCol) : "A1";
+  const cell = getCellSnapshot(sheet, cellRef);
+  const formula = normalizeExcelFormulaText(cell?.formula);
+  const display = cell?.display !== null && cell?.display !== undefined
+    ? String(cell.display)
+    : cell?.value !== null && cell?.value !== undefined
+      ? String(cell.value)
+      : "";
+  return {
+    sheetName,
+    cellRef,
+    display,
+    formula,
+    error: getExcelCellErrorInfo(cell),
+    workbookErrors: findWorkbookErrorCells(workbook, 8),
+  };
 }
 
 function applyWorkbookSnapshotToUniver(workbookFacade: FWorkbook, snapshot: ExcelWorkbookSnapshot) {
@@ -175,17 +220,36 @@ export function ExcelWorkbookEditor({
   const latestOnSelectedSheetNameChangeRef = useRef(onSelectedSheetNameChange);
   const latestOnWorkbookChangeRef = useRef(onWorkbookChange);
   const lastFocusedRangeKeyRef = useRef("");
+  const latestEditorSnapshotRef = useRef<ExcelWorkbookSnapshot>(workbook);
   const [instanceVersion, setInstanceVersion] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [editorNotice, setEditorNotice] = useState("");
+  const [cellInspector, setCellInspector] = useState<EditorCellInspector>(() =>
+    resolveEditorCellInspector(workbook, selection, selectedSheetName),
+  );
 
   const workbookKey = useMemo(() => JSON.stringify(workbook), [workbook]);
 
+  const refreshCellInspector = (
+    nextWorkbook: ExcelWorkbookSnapshot | null | undefined,
+    nextSelection: ExcelRangeSelection | null | undefined = latestSelectionRef.current,
+  ) => {
+    setCellInspector(resolveEditorCellInspector(
+      nextWorkbook,
+      nextSelection,
+      latestSelectedSheetNameRef.current,
+    ));
+  };
+
   useEffect(() => {
     latestSelectionRef.current = selection;
+    refreshCellInspector(workbook, selection);
   }, [selection]);
 
   useEffect(() => {
     latestSelectedSheetNameRef.current = selectedSheetName;
+    refreshCellInspector(workbook, latestSelectionRef.current);
   }, [selectedSheetName]);
 
   useEffect(() => {
@@ -231,6 +295,7 @@ export function ExcelWorkbookEditor({
       hydratingRef.current = true;
       applyWorkbookSnapshotToUniver(univerWorkbook, workbook);
       hydratingRef.current = false;
+      latestEditorSnapshotRef.current = workbook;
       lastAppliedExternalRef.current = workbookKey;
       lastInternalSnapshotRef.current = workbookKey;
       const formulaEngine = univerAPI.getFormula?.();
@@ -244,7 +309,9 @@ export function ExcelWorkbookEditor({
         if (hydratingRef.current) return;
         const nextSnapshot = captureUniverWorkbookSnapshot(univerWorkbook, snapshotOptions);
         const nextKey = JSON.stringify(nextSnapshot);
+        latestEditorSnapshotRef.current = nextSnapshot;
         lastInternalSnapshotRef.current = nextKey;
+        refreshCellInspector(nextSnapshot);
         latestOnWorkbookChangeRef.current?.(nextSnapshot);
       };
 
@@ -255,22 +322,29 @@ export function ExcelWorkbookEditor({
           latestOnSelectedSheetNameChangeRef.current?.(activeSheet.getSheetName());
         }
         const activeRange = univerWorkbook.getActiveRange();
-        if (activeRange && latestOnSelectionChangeRef.current && latestSelectionEnabledRef.current) {
+        let nextSelection: ExcelRangeSelection | null = null;
+        if (activeRange) {
           const parsed = parseSheetAndRange(activeRange.getA1Notation(true));
           const range = parseRangeRef(parsed.rangeRef);
           if (range) {
-            const nextSelection = normalizeSelection(
+            nextSelection = normalizeSelection(
               parsed.sheetName || activeSheet?.getSheetName() || "",
               range.startRow,
               range.startCol,
               range.endRow,
               range.endCol,
             );
-            if (!isSameSelection(latestSelectionRef.current, nextSelection)) {
+            if (
+              latestOnSelectionChangeRef.current
+              && latestSelectionEnabledRef.current
+              && !isSameSelection(latestSelectionRef.current, nextSelection)
+            ) {
               latestOnSelectionChangeRef.current(nextSelection);
             }
+            latestSelectionRef.current = nextSelection;
           }
         }
+        refreshCellInspector(latestEditorSnapshotRef.current, nextSelection);
       };
 
       const disposables: Array<{ dispose: () => void }> = [
@@ -339,6 +413,8 @@ export function ExcelWorkbookEditor({
 
   useEffect(() => {
     const binding = bindingRef.current;
+    latestEditorSnapshotRef.current = workbook;
+    refreshCellInspector(workbook, latestSelectionRef.current);
     if (!binding) return;
     if (lastInternalSnapshotRef.current === workbookKey || lastAppliedExternalRef.current === workbookKey) {
       lastAppliedExternalRef.current = workbookKey;
@@ -419,6 +495,47 @@ export function ExcelWorkbookEditor({
     }, 0);
   };
 
+  const handleConvertSelectionToDateFormat = () => {
+    const binding = bindingRef.current;
+    const activeSelection = latestSelectionRef.current;
+    if (!binding || !activeSelection) {
+      setEditorNotice("请先框选需要转换的日期单元格");
+      return;
+    }
+
+    const sourceSnapshot = binding.captureSnapshot();
+    const result = convertWorkbookSelectionToDateFormat(sourceSnapshot, activeSelection);
+    if (result.changed === 0) {
+      setEditorNotice("当前选区未识别到可转换的日期");
+      refreshCellInspector(sourceSnapshot, activeSelection);
+      return;
+    }
+
+    const nextKey = JSON.stringify(result.workbook);
+    latestEditorSnapshotRef.current = result.workbook;
+    lastInternalSnapshotRef.current = nextKey;
+    latestOnWorkbookChangeRef.current?.(result.workbook);
+    refreshCellInspector(result.workbook, activeSelection);
+    setEditorNotice(`已转换 ${result.changed} 个日期单元格`);
+    window.setTimeout(() => {
+      setInstanceVersion((current) => current + 1);
+    }, 0);
+  };
+
+  const handleCopyActiveFormula = async () => {
+    const text = cellInspector.formula ? `=${cellInspector.formula}` : cellInspector.display;
+    if (!text.trim()) {
+      setEditorNotice("当前单元格没有可复制内容");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setEditorNotice("已复制当前单元格内容");
+    } catch {
+      setEditorNotice("复制失败，请手动选择公式内容");
+    }
+  };
+
   useEffect(() => {
     if (!requestFullscreenVersion || !shellRef.current) return;
     if (document.fullscreenElement !== shellRef.current) {
@@ -429,6 +546,9 @@ export function ExcelWorkbookEditor({
   const resolvedViewportClassName = viewportClassName || (isFullscreen
     ? "h-[calc(100vh-3.5rem)] w-full"
     : "h-[640px] max-h-[70vh] w-full");
+  const activeFormulaText = cellInspector.formula ? `=${cellInspector.formula}` : "";
+  const activeCellLabel = `${cellInspector.sheetName || "Sheet"} / ${cellInspector.cellRef}`;
+  const visibleErrors = cellInspector.workbookErrors;
 
   const editorShell = (
     <div
@@ -441,6 +561,38 @@ export function ExcelWorkbookEditor({
           Excel Editor
         </div>
         <div className="flex items-center gap-2">
+          {isFullscreen && (
+            <>
+              <button
+                type="button"
+                onClick={handleConvertSelectionToDateFormat}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+              >
+                <CalendarDays size={14} />
+                日期格式
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectorOpen((current) => !current)}
+                className={`inline-flex h-9 items-center justify-center gap-2 rounded-full border px-3 text-xs font-bold transition ${
+                  visibleErrors.length > 0
+                    ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                }`}
+              >
+                <AlertTriangle size={14} />
+                公式诊断{visibleErrors.length > 0 ? ` ${visibleErrors.length}` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditorNotice("点击编辑器右侧的 AI助手，可在全屏内提问并上传截图")}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 text-xs font-bold text-sky-700 transition hover:bg-sky-100"
+              >
+                <Bot size={14} />
+                AI助手
+              </button>
+            </>
+          )}
           {isFullscreen && showConfirmSelectionButton && (
             <button
               type="button"
@@ -461,6 +613,60 @@ export function ExcelWorkbookEditor({
         </div>
       </div>
       <div ref={containerRef} className={resolvedViewportClassName} />
+      {isFullscreen && inspectorOpen && (
+        <div className="pointer-events-auto absolute right-4 top-16 z-30 w-[min(34rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                当前单元格
+              </div>
+              <div className="mt-1 text-sm font-bold text-slate-900">{activeCellLabel}</div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyActiveFormula}
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
+            >
+              <Copy size={13} />
+              复制
+            </button>
+          </div>
+
+          <textarea
+            readOnly
+            value={activeFormulaText || cellInspector.display || "当前单元格暂无公式或显示值"}
+            className="mt-3 min-h-20 max-h-72 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-5 text-slate-800 outline-none"
+          />
+
+          {cellInspector.error && (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+              <div className="font-black">{cellInspector.cellRef}：{cellInspector.error.code} {cellInspector.error.title}</div>
+              <div className="mt-1 leading-5">{cellInspector.error.description}</div>
+            </div>
+          )}
+
+          {visibleErrors.length > 0 && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="text-xs font-black text-amber-800">错误单元格</div>
+              <div className="mt-2 grid max-h-28 grid-cols-2 gap-2 overflow-auto text-xs">
+                {visibleErrors.map((item) => (
+                  <div key={`${item.sheetName}:${item.cellRef}`} className="rounded-lg bg-white/80 px-2 py-1.5 text-amber-800">
+                    <span className="font-black">{item.cellRef}</span>
+                    <span className="ml-1">{item.code}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {editorNotice && (
+            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700">
+              {editorNotice}
+            </div>
+          )}
+        </div>
+      )}
+      {isFullscreen && <AssistantWidget />}
     </div>
   );
 

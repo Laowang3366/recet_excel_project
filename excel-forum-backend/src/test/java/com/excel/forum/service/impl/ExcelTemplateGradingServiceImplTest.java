@@ -99,10 +99,10 @@ class ExcelTemplateGradingServiceImplTest {
     @Test
     void parseAnswerSnapshotNormalizesExcelCompatibilityFormulaPrefixes() {
         ExcelTemplateAnswerSnapshot snapshot = service.parseAnswerSnapshot(
-                "{\"values\":[[46113]],\"formulas\":[[\"_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlpm.m)\"]]}"
+                "{\"values\":[[46113]],\"formulas\":[[\"_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlws.FILTER(A1:A9,A1:A9<>\\\"\\\"),_xlpm.m)\"]]}"
         );
 
-        assertThat(snapshot.getFormulas()).isEqualTo(List.of(List.of("LET(m,K6,r,L6,m)")));
+        assertThat(snapshot.getFormulas()).isEqualTo(List.of(List.of("LET(m,K6,r,L6,FILTER(A1:A9,A1:A9<>\"\"),m)")));
     }
 
     @Test

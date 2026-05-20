@@ -86,7 +86,8 @@ export function normalizeExcelFormulaText(formula: string | null | undefined) {
   return mapFormulaOutsideStringLiterals(normalized, (text) =>
     text
       .replace(/_xlfn\./gi, "")
-      .replace(/_xlpm\./gi, ""),
+      .replace(/_xlpm\./gi, "")
+      .replace(/_xlws\./gi, ""),
   ).trim();
 }
 
@@ -202,6 +203,137 @@ export function getCellDisplayValue(cell: ExcelCellSnapshot | undefined) {
 }
 
 const excelDateDisplayPattern = /^(?:\d{4}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/;
+const excelSerialEpochMs = Date.UTC(1899, 11, 30);
+const dayMs = 24 * 60 * 60 * 1000;
+
+export type ExcelCellErrorInfo = {
+  code: string;
+  title: string;
+  description: string;
+};
+
+export type ExcelWorkbookErrorCell = ExcelCellErrorInfo & {
+  sheetName: string;
+  cellRef: string;
+};
+
+const excelErrorInfo: Record<string, ExcelCellErrorInfo> = {
+  "#NAME?": {
+    code: "#NAME?",
+    title: "无效名称",
+    description: "函数名、命名区域或外部兼容前缀未被当前编辑器识别。",
+  },
+  "#VALUE!": {
+    code: "#VALUE!",
+    title: "值类型错误",
+    description: "公式参数类型不匹配，常见于文本、日期、数字混用。",
+  },
+  "#REF!": {
+    code: "#REF!",
+    title: "引用无效",
+    description: "公式引用了不存在或已被删除的单元格区域。",
+  },
+  "#DIV/0!": {
+    code: "#DIV/0!",
+    title: "除数为零",
+    description: "公式中存在除以 0 或空值作为除数的情况。",
+  },
+  "#NUM!": {
+    code: "#NUM!",
+    title: "数值无效",
+    description: "公式计算得到的数字超出范围或参数数值不合法。",
+  },
+  "#N/A": {
+    code: "#N/A",
+    title: "未找到匹配",
+    description: "查找类公式没有找到匹配值。",
+  },
+  "#NULL!": {
+    code: "#NULL!",
+    title: "交叉区域为空",
+    description: "公式中两个区域没有交集。",
+  },
+  "#SPILL!": {
+    code: "#SPILL!",
+    title: "数组溢出受阻",
+    description: "动态数组公式需要向外溢出，但目标区域被内容占用。",
+  },
+  "#CALC!": {
+    code: "#CALC!",
+    title: "计算错误",
+    description: "动态数组或 Lambda 类公式计算失败。",
+  },
+};
+
+function toDatePartsFromExcelSerial(serial: number) {
+  const date = new Date(excelSerialEpochMs + Math.round(serial) * dayMs);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
+function formatDateParts(parts: { year: number; month: number; day: number }) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function excelSerialFromDateParts(year: number, month: number, day: number) {
+  const time = Date.UTC(year, month - 1, day);
+  if (Number.isNaN(time)) return null;
+  const normalized = new Date(time);
+  if (
+    normalized.getUTCFullYear() !== year
+    || normalized.getUTCMonth() + 1 !== month
+    || normalized.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return Math.round((time - excelSerialEpochMs) / dayMs);
+}
+
+function parseExcelDateText(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const yearFirst = trimmed.match(/^(\d{4})[-/年](\d{1,2})(?:[-/月](\d{1,2})日?)?(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (yearFirst) {
+    const year = Number(yearFirst[1]);
+    const month = Number(yearFirst[2]);
+    const day = Number(yearFirst[3] || "1");
+    const serial = excelSerialFromDateParts(year, month, day);
+    return serial ? { serial, display: formatDateParts({ year, month, day }) } : null;
+  }
+
+  const slashDate = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (slashDate) {
+    const month = Number(slashDate[1]);
+    const day = Number(slashDate[2]);
+    const rawYear = Number(slashDate[3]);
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+    const serial = excelSerialFromDateParts(year, month, day);
+    return serial ? { serial, display: formatDateParts({ year, month, day }) } : null;
+  }
+
+  const asNumber = Number(trimmed);
+  if (Number.isFinite(asNumber) && asNumber >= 1 && asNumber <= 100000) {
+    const parts = toDatePartsFromExcelSerial(asNumber);
+    return parts ? { serial: Math.round(asNumber), display: formatDateParts(parts) } : null;
+  }
+
+  return null;
+}
+
+function parseExcelDateCell(cell: ExcelCellSnapshot | undefined) {
+  if (!cell || normalizeExcelFormulaText(cell.formula)) return null;
+  if (typeof cell.value === "number" && Number.isFinite(cell.value) && cell.value >= 1 && cell.value <= 100000) {
+    const parts = toDatePartsFromExcelSerial(cell.value);
+    return parts ? { serial: Math.round(cell.value), display: formatDateParts(parts) } : null;
+  }
+  const rawText = cell.value === null || cell.value === undefined ? cell.display : cell.value;
+  return parseExcelDateText(String(rawText ?? ""));
+}
 
 export function resolveExcelCellNumberFormat(cell: ExcelCellSnapshot | null | undefined) {
   const explicit = typeof cell?.numberFormat === "string" ? cell.numberFormat.trim() : "";
@@ -211,6 +343,73 @@ export function resolveExcelCellNumberFormat(cell: ExcelCellSnapshot | null | un
   const display = cell.display === null || cell.display === undefined ? "" : String(cell.display).trim();
   if (!display || display === String(cell.value)) return "";
   return excelDateDisplayPattern.test(display) ? "yyyy-mm-dd" : "";
+}
+
+export function getExcelCellErrorInfo(cell: ExcelCellSnapshot | null | undefined): ExcelCellErrorInfo | null {
+  const candidates = [cell?.display, cell?.value]
+    .map((value) => (value === null || value === undefined ? "" : String(value).trim().toUpperCase()))
+    .filter(Boolean);
+  for (const code of Object.keys(excelErrorInfo)) {
+    if (candidates.some((value) => value === code || value.startsWith(`${code} `))) {
+      return excelErrorInfo[code];
+    }
+  }
+  return null;
+}
+
+export function findWorkbookErrorCells(
+  workbook: ExcelWorkbookSnapshot | null | undefined,
+  limit = 12,
+): ExcelWorkbookErrorCell[] {
+  const errors: ExcelWorkbookErrorCell[] = [];
+  for (const sheet of workbook?.sheets || []) {
+    const entries = Object.entries(sheet.cells || {}).sort(([left], [right]) => {
+      const leftRef = parseCellRef(left);
+      const rightRef = parseCellRef(right);
+      if (!leftRef || !rightRef) return left.localeCompare(right);
+      return leftRef.row - rightRef.row || leftRef.col - rightRef.col;
+    });
+    for (const [cellRef, cell] of entries) {
+      const error = getExcelCellErrorInfo(cell);
+      if (!error) continue;
+      errors.push({ ...error, sheetName: sheet.name, cellRef });
+      if (errors.length >= limit) return errors;
+    }
+  }
+  return errors;
+}
+
+export function convertWorkbookSelectionToDateFormat(
+  workbook: ExcelWorkbookSnapshot | null | undefined,
+  selection: ExcelRangeSelection | null | undefined,
+) {
+  const next = cloneWorkbookSnapshot(workbook);
+  let changed = 0;
+  if (!selection) {
+    return { workbook: next, changed };
+  }
+  const sheet = getSheetSnapshot(next, selection.sheetName);
+  if (!sheet) {
+    return { workbook: next, changed };
+  }
+
+  for (let row = selection.startRow; row <= selection.endRow; row += 1) {
+    for (let col = selection.startCol; col <= selection.endCol; col += 1) {
+      const cellRef = toCellRef(row, col);
+      const cell = sheet.cells[cellRef];
+      const dateValue = parseExcelDateCell(cell);
+      if (!dateValue) continue;
+      sheet.cells[cellRef] = {
+        value: dateValue.serial,
+        formula: null,
+        display: dateValue.display,
+        numberFormat: "yyyy-mm-dd",
+      };
+      changed += 1;
+    }
+  }
+
+  return { workbook: next, changed };
 }
 
 export function updateWorkbookCell(workbook: ExcelWorkbookSnapshot, sheetName: string, cellRef: string, rawValue: string) {

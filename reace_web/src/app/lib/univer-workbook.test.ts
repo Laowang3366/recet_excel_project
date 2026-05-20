@@ -118,7 +118,7 @@ describe("univerDataToWorkbookSnapshot", () => {
             6: {
               10: {
                 v: "#NAME?",
-                f: "=_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlpm.m)",
+                f: "=_xlfn.LET(_xlpm.m,K6,_xlpm.r,L6,_xlws.FILTER(A1:A9,A1:A9<>\"\"),_xlpm.m)",
               },
             },
           },
@@ -127,8 +127,10 @@ describe("univerDataToWorkbookSnapshot", () => {
     } as unknown as IWorkbookData);
 
     const sheet = snapshot.sheets[0];
-    expect(sheet.cells.K7.formula).toBe("LET(m,K6,r,L6,m)");
-    expect(extractRangeAnswerSnapshot(snapshot, "Sheet1", "K7").formulas).toEqual([["LET(m,K6,r,L6,m)"]]);
+    expect(sheet.cells.K7.formula).toBe("LET(m,K6,r,L6,FILTER(A1:A9,A1:A9<>\"\"),m)");
+    expect(extractRangeAnswerSnapshot(snapshot, "Sheet1", "K7").formulas).toEqual([[
+      "LET(m,K6,r,L6,FILTER(A1:A9,A1:A9<>\"\"),m)",
+    ]]);
   });
 
   it("keeps number format metadata for formatted date cells", () => {

@@ -1034,7 +1034,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
     private String replaceExcelCompatibilityPrefixes(String formula) {
         return formula
                 .replaceAll("(?i)_xlfn\\.", "")
-                .replaceAll("(?i)_xlpm\\.", "");
+                .replaceAll("(?i)_xlpm\\.", "")
+                .replaceAll("(?i)_xlws\\.", "");
     }
 
     private Path resolveLocalPath(String fileUrl) {
