@@ -17,6 +17,9 @@ const ExcelWorkbookEditor = lazy(() =>
   preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
 );
 
+const practiceDetailHeaderClassName = "mb-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start";
+const practiceDetailActionBarClassName = "flex flex-wrap items-center gap-2 xl:w-[720px] xl:justify-end";
+
 type PracticeCampaignLevelState = {
   id?: number | string | null;
   title?: string | null;
@@ -308,17 +311,17 @@ export function PracticeDetail() {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#eef6ff_0%,#f8fafc_22%,#ffffff_100%)] pb-16">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate(backTo, { replace: true })} className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:text-slate-900">
+        <div className={practiceDetailHeaderClassName}>
+          <div className="flex min-w-0 items-center gap-4">
+            <button onClick={() => navigate(backTo, { replace: true })} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:text-slate-900">
               <ArrowLeft size={18} />
             </button>
-            <div>
+            <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-600">
                 <FileSpreadsheet size={14} />
                 {campaignChapter?.name ? `${campaignChapter.name}` : "Excel 模板题"}
               </div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">{campaignLevel?.title || question.title}</h1>
+              <h1 className="break-words text-2xl font-black tracking-tight text-slate-900">{campaignLevel?.title || question.title}</h1>
               {campaignLevel ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-black tracking-[0.14em] text-slate-400">
                   <span className="rounded-full bg-slate-100 px-3 py-1">{campaignLevel.levelType}</span>
@@ -328,12 +331,12 @@ export function PracticeDetail() {
               ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className={practiceDetailActionBarClassName}>
             {idealAnswerImageUrl ? (
               <button
                 type="button"
                 onClick={() => setIdealAnswerImageOpen(true)}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 text-sm font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 text-sm font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
               >
                 <Eye size={16} />
                 查看参考图
@@ -343,7 +346,7 @@ export function PracticeDetail() {
               type="button"
               onClick={() => void handleDownloadQuestion()}
               disabled={downloadingQuestion}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Download size={16} />
               {downloadingQuestion ? "下载中..." : "WPS/下载题目"}
@@ -352,12 +355,12 @@ export function PracticeDetail() {
               type="button"
               onClick={() => void handleOpenExcelDesktop()}
               disabled={openingExternally}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-5 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ExternalLink size={16} />
               {openingExternally ? "打开中..." : "Excel 365 打开"}
             </button>
-            <label className={`inline-flex h-12 items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-5 text-sm font-black text-cyan-700 shadow-sm transition hover:bg-cyan-100 ${importingWorkbook ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+            <label className={`inline-flex h-12 items-center justify-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-4 text-sm font-black text-cyan-700 shadow-sm transition hover:bg-cyan-100 ${importingWorkbook ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
               <UploadCloud size={16} />
               {importingWorkbook ? "导入中..." : "导入答卷"}
               <input
@@ -373,7 +376,7 @@ export function PracticeDetail() {
               type="button"
               onClick={() => void handleSubmit()}
               disabled={submitting}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-900 px-6 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-slate-900 px-5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CheckCircle2 size={16} />
               {submitting ? "提交中..." : "提交答卷"}
