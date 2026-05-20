@@ -223,11 +223,13 @@ export function ExcelWorkbookEditor({
   const latestEditorSnapshotRef = useRef<ExcelWorkbookSnapshot>(workbook);
   const [instanceVersion, setInstanceVersion] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [formulaBarHeight, setFormulaBarHeight] = useState(56);
   const [editorNotice, setEditorNotice] = useState("");
   const [cellInspector, setCellInspector] = useState<EditorCellInspector>(() =>
     resolveEditorCellInspector(workbook, selection, selectedSheetName),
   );
+  const lastErrorSignatureRef = useRef("");
 
   const workbookKey = useMemo(() => JSON.stringify(workbook), [workbook]);
 
@@ -482,7 +484,35 @@ export function ExcelWorkbookEditor({
     await shellRef.current.requestFullscreen();
   };
 
+  const clearActiveEditorOperation = () => {
+    if (inspectorOpen) {
+      setInspectorOpen(false);
+      return true;
+    }
+    if (editorNotice) {
+      setEditorNotice("");
+      return true;
+    }
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && shellRef.current?.contains(activeElement)) {
+      if (activeElement !== shellRef.current && activeElement !== document.body) {
+        activeElement.blur();
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleFullscreenEscape = (event: KeyboardEvent | React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.key !== "Escape" || document.fullscreenElement !== shellRef.current) return false;
+    if (!clearActiveEditorOperation()) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  };
+
   const handleEditorKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (handleFullscreenEscape(event)) return;
     if (event.defaultPrevented || (event.key !== "Backspace" && event.key !== "Delete")) return;
     if (!latestOnWorkbookChangeRef.current || isEditableKeyboardTarget(event.target)) return;
     const binding = bindingRef.current;
@@ -536,6 +566,22 @@ export function ExcelWorkbookEditor({
     }
   };
 
+  const handleFormulaBarResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = formulaBarHeight;
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = Math.min(220, Math.max(40, startHeight + moveEvent.clientY - startY));
+      setFormulaBarHeight(nextHeight);
+    };
+    const handlePointerUp = () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+  };
+
   useEffect(() => {
     if (!requestFullscreenVersion || !shellRef.current) return;
     if (document.fullscreenElement !== shellRef.current) {
@@ -544,11 +590,41 @@ export function ExcelWorkbookEditor({
   }, [requestFullscreenVersion]);
 
   const resolvedViewportClassName = viewportClassName || (isFullscreen
-    ? "h-[calc(100vh-3.5rem)] w-full"
+    ? "min-h-0 flex-1 w-full"
     : "h-[640px] max-h-[70vh] w-full");
   const activeFormulaText = cellInspector.formula ? `=${cellInspector.formula}` : "";
   const activeCellLabel = `${cellInspector.sheetName || "Sheet"} / ${cellInspector.cellRef}`;
   const visibleErrors = cellInspector.workbookErrors;
+  const visibleErrorSignature = visibleErrors
+    .map((item) => `${item.sheetName}:${item.cellRef}:${item.code}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!isFullscreen) {
+      lastErrorSignatureRef.current = "";
+      setInspectorOpen(false);
+      return;
+    }
+    if (visibleErrors.length === 0) {
+      lastErrorSignatureRef.current = "";
+      return;
+    }
+    if (visibleErrorSignature !== lastErrorSignatureRef.current) {
+      lastErrorSignatureRef.current = visibleErrorSignature;
+      setInspectorOpen(true);
+    }
+  }, [isFullscreen, visibleErrors.length, visibleErrorSignature]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleDocumentEscape = (event: KeyboardEvent) => {
+      handleFullscreenEscape(event);
+    };
+    document.addEventListener("keydown", handleDocumentEscape, true);
+    return () => {
+      document.removeEventListener("keydown", handleDocumentEscape, true);
+    };
+  }, [isFullscreen, inspectorOpen, editorNotice]);
 
   const editorShell = (
     <div
@@ -612,6 +688,40 @@ export function ExcelWorkbookEditor({
           </button>
         </div>
       </div>
+      {isFullscreen && (
+        <div className="shrink-0 border-b border-slate-200 bg-white">
+          <div className="flex items-center gap-3 px-4 pt-2">
+            <div className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
+              {activeCellLabel}
+            </div>
+            <button
+              type="button"
+              onClick={handleCopyActiveFormula}
+              className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 text-[11px] font-bold text-slate-600 transition hover:bg-white hover:text-slate-900"
+            >
+              <Copy size={12} />
+              复制
+            </button>
+            <div className="min-w-0 flex-1 text-xs font-medium text-slate-400">
+              可拖动下方横条调整公式栏高度
+            </div>
+          </div>
+          <textarea
+            readOnly
+            value={activeFormulaText || cellInspector.display || "当前单元格暂无公式或显示值"}
+            style={{ height: formulaBarHeight }}
+            className="mx-4 mt-2 block w-[calc(100%-2rem)] resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs leading-5 text-slate-800 outline-none"
+          />
+          <div
+            role="separator"
+            aria-label="调整公式栏高度"
+            className="group flex h-3 cursor-row-resize items-center justify-center"
+            onPointerDown={handleFormulaBarResizeStart}
+          >
+            <span className="h-1 w-16 rounded-full bg-slate-200 transition group-hover:bg-slate-400" />
+          </div>
+        </div>
+      )}
       <div ref={containerRef} className={resolvedViewportClassName} />
       {isFullscreen && inspectorOpen && (
         <div className="pointer-events-auto absolute right-4 top-16 z-30 w-[min(34rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur">

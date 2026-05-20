@@ -110,6 +110,9 @@ public class AdminQuestionController {
         if (!StringUtils.hasText(request.getTemplateFileUrl()) && existingTemplate != null) {
             request.setTemplateFileUrl(existingTemplate.getTemplateFileUrl());
         }
+        if (request.getIdealAnswerImageUrl() == null && existingTemplate != null) {
+            request.setIdealAnswerImageUrl(existingTemplate.getIdealAnswerImageUrl());
+        }
         if (!StringUtils.hasText(request.getAnswerSheet()) && existingTemplate != null) {
             request.setAnswerSheet(existingTemplate.getAnswerSheet());
         }
@@ -230,6 +233,7 @@ public class AdminQuestionController {
     private QuestionExcelTemplate buildQuestionExcelTemplate(Long questionId, AdminQuestionRequest request, QuestionExcelTemplate target) {
         target.setQuestionId(questionId);
         target.setTemplateFileUrl(request.getTemplateFileUrl());
+        target.setIdealAnswerImageUrl(normalizeOptionalText(request.getIdealAnswerImageUrl()));
         target.setAnswerSheet(request.getAnswerSheet());
         target.setAnswerRange(request.getAnswerRange());
         target.setAnswerSnapshotJson(request.getAnswerSnapshotJson());
@@ -262,6 +266,7 @@ public class AdminQuestionController {
         response.put("updateTime", question.getUpdateTime());
         if (template != null) {
             response.put("templateFileUrl", template.getTemplateFileUrl());
+            response.put("idealAnswerImageUrl", template.getIdealAnswerImageUrl());
             response.put("answerSheet", template.getAnswerSheet());
             response.put("answerRange", template.getAnswerRange());
             response.put("answerSnapshotJson", template.getAnswerSnapshotJson());
@@ -273,5 +278,12 @@ public class AdminQuestionController {
             response.put("gradingRuleSummary", excelTemplateGradingService.buildRuleSummary(template.getGradingRuleJson()));
         }
         return response;
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 }

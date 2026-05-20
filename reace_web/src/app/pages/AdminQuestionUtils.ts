@@ -9,6 +9,7 @@ export function defaultQuestionForm(): AdminQuestionForm {
     explanation: "",
     enabled: true,
     templateFileUrl: "",
+    idealAnswerImageUrl: "",
     answerSheet: "",
     answerRange: "",
     answerSnapshotJson: "",

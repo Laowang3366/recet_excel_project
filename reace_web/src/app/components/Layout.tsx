@@ -26,6 +26,7 @@ import {
   getVisibleNotificationTypeFilter,
   shouldRenderNotificationItem,
 } from "../lib/notification-display";
+import { buildNotificationReturnPath } from "../lib/notification-return";
 import { useIsMobile } from "./ui/use-mobile";
 import { ONLINE_LITE_MODE, isLiteAllowedPath } from "../lib/site-mode";
 import { AssistantWidget } from "./layout/AssistantWidget";
@@ -118,6 +119,9 @@ export function Layout() {
   const unreadNotificationCount = unreadNotificationsQuery.data?.count || 0;
   const checkinStatusQuery = useCheckinStatusQuery(isAuthenticated);
   const checkinStatus = checkinStatusQuery.data;
+  const currentReturnPath = `${location.pathname}${location.search}${location.hash}`;
+  const resolveNotificationCenterLink = (path: string) =>
+    buildNotificationReturnPath(currentReturnPath, path);
 
   const markAllNotificationsReadMutation = useMutation({
     mutationFn: () => api.put("/api/notifications/read-all", {}),
@@ -134,13 +138,14 @@ export function Layout() {
   });
 
   const resolveNotificationLink = (notification: LayoutNotification) => {
+    const withReturn = (path: string) => buildNotificationReturnPath(currentReturnPath, path);
     switch (notification.type) {
       case "site_notification":
-        return notification.relatedId ? `/notification/${notification.relatedId}` : "/notifications";
+        return notification.relatedId ? withReturn(`/notification/${notification.relatedId}`) : withReturn("/notifications");
       case "system":
         return "/points-history";
       case "feedback_result":
-        return "/notifications";
+        return withReturn("/notifications");
       case "qa_case_answered":
       case "qa_answer_accepted":
         return notification.relatedId ? `/qa/cases/${notification.relatedId}#answers` : "/qa/my";
@@ -405,6 +410,7 @@ export function Layout() {
                 await markNotificationReadMutation.mutateAsync(id);
               }}
               resolveNotificationLink={resolveNotificationLink}
+              resolveNotificationCenterLink={resolveNotificationCenterLink}
             />
 
             <AccountMenu

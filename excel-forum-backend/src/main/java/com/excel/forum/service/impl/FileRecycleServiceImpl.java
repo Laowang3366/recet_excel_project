@@ -62,7 +62,8 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         }
         LocalDateTime now = LocalDateTime.now();
         List<RecycleFile> files = moveFiles(RESOURCE_QUESTION, question.getId(), List.of(
-                new RecycleFile("questionTemplate", template == null ? null : template.getTemplateFileUrl(), null)
+                new RecycleFile("questionTemplate", template == null ? null : template.getTemplateFileUrl(), null),
+                new RecycleFile("idealAnswerImage", template == null ? null : template.getIdealAnswerImageUrl(), null)
         ));
         FileRecycleItem item = createRecycleItem(
                 RESOURCE_QUESTION,
@@ -340,6 +341,10 @@ public class FileRecycleServiceImpl implements FileRecycleService {
             String restoredFile = restoredFiles.get("questionTemplate");
             if (StringUtils.hasText(restoredFile)) {
                 template.setTemplateFileUrl(restoredFile);
+            }
+            String restoredReferenceImage = restoredFiles.get("idealAnswerImage");
+            if (StringUtils.hasText(restoredReferenceImage)) {
+                template.setIdealAnswerImageUrl(restoredReferenceImage);
             }
             questionExcelTemplateMapper.updateById(template);
             questionExcelTemplateMapper.update(null, new UpdateWrapper<QuestionExcelTemplate>()

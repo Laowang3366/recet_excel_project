@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bell, FileText, Download, Trash2, Clock, Share2, Eye, Users, AlertCircle, Link as LinkIcon } from "lucide-react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { ApiError, api } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { normalizeAvatarUrl, normalizeImageUrl, parseJsonText } from "../lib/mappers";
 import { notificationKeys } from "../lib/query-keys";
+import { resolveNotificationReturnTarget } from "../lib/notification-return";
 import { openGlobalConfirm } from "../components/GlobalConfirmPromptDialog";
 
 function formatNotificationKind(value?: string | null) {
@@ -65,8 +66,10 @@ type NotificationDetailResponse = {
 
 export function NotificationDetail() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { id } = useParams();
+  const returnTarget = resolveNotificationReturnTarget(location.search, "/notifications");
 
   const notificationQuery = useQuery({
     queryKey: notificationKeys.detail(id || "unknown"),
@@ -116,14 +119,14 @@ export function NotificationDetail() {
     const confirmed = await openGlobalConfirm({ message: "确认删除此通知？", destructive: true, confirmLabel: "确认删除" });
     if (!confirmed) return;
     queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-    navigate("/notifications", { replace: true });
+    navigate(returnTarget, { replace: true });
   };
 
   // 通知不存在或已被删除（API 返回 null 表示请求失败）
   if (!isLoading && !notification) {
     return (
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 pb-20">
-        <button onClick={() => navigate("/notifications", { replace: true })} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 group">
+        <button onClick={() => navigate(returnTarget, { replace: true })} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 group">
           <ArrowLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" />
           <span className="font-bold text-[14px]">返回通知中心</span>
         </button>
@@ -134,7 +137,7 @@ export function NotificationDetail() {
           <h2 className="text-xl font-extrabold text-slate-800 mb-2">通知不存在</h2>
           <p className="text-sm text-slate-500 mb-8">该通知可能已被删除或您没有访问权限</p>
           <div className="flex gap-3">
-            <button onClick={() => navigate("/notifications", { replace: true })} className="px-5 py-2.5 text-sm font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors">
+            <button onClick={() => navigate(returnTarget, { replace: true })} className="px-5 py-2.5 text-sm font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors">
               返回通知中心
             </button>
             <button onClick={handleBackDelete} className="px-5 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors">
@@ -167,7 +170,7 @@ export function NotificationDetail() {
     await api.delete(`/api/notifications/${notification.id}`);
     toast.success("通知已删除");
     queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-    navigate("/notifications", { replace: true });
+    navigate(returnTarget, { replace: true });
   };
 
   const readCount = notification.readCount || 0;
@@ -176,7 +179,7 @@ export function NotificationDetail() {
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8 pb-20">
       {/* 返回导航 */}
-      <button onClick={() => navigate("/notifications", { replace: true })} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 group">
+      <button onClick={() => navigate(returnTarget, { replace: true })} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 group">
         <ArrowLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" />
         <span className="font-bold text-[14px]">返回通知中心</span>
       </button>

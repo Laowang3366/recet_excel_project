@@ -1,12 +1,13 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { ArrowLeft, CheckCircle2, Clock3, Download, ExternalLink, FileSpreadsheet, Sparkles, Target, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, Download, ExternalLink, Eye, FileSpreadsheet, Sparkles, Target, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { api, downloadFile } from "../lib/api";
 import { handleLoginRequiredError } from "../lib/auth-required";
 import { ExcelWorkbookSnapshot, normalizeSelection, parseRangeRef } from "../lib/excel";
 import { formatDuration } from "../lib/format";
+import { normalizeResourceUrl } from "../lib/mappers";
 import { buildExcelDesktopUri, resolveAbsoluteDownloadUrl, sanitizeWorkbookFileName } from "../lib/practice-external-workbook";
 import { getPracticeDetailEditorKey, getPracticeQuestionRequirement } from "../lib/practice-campaign-ui";
 import { practiceKeys } from "../lib/query-keys";
@@ -49,6 +50,7 @@ type PracticeQuestionDetail = {
   explanation?: string | null;
   answerSheet?: string | null;
   answerRange?: string | null;
+  idealAnswerImageUrl?: string | null;
   templateWorkbook?: ExcelWorkbookSnapshot | null;
   difficulty?: number | string | null;
   score?: number | null;
@@ -96,6 +98,7 @@ export function PracticeDetail() {
   const [downloadingQuestion, setDownloadingQuestion] = useState(false);
   const [openingExternally, setOpeningExternally] = useState(false);
   const [importingWorkbook, setImportingWorkbook] = useState(false);
+  const [idealAnswerImageOpen, setIdealAnswerImageOpen] = useState(false);
   const editorSnapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
   const answerImportInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -121,6 +124,7 @@ export function PracticeDetail() {
   const editorKey = getPracticeDetailEditorKey(question?.id);
   const questionRequirement = getPracticeQuestionRequirement(question);
   const workbookFileName = sanitizeWorkbookFileName(campaignLevel?.title || question?.title);
+  const idealAnswerImageUrl = normalizeResourceUrl(question?.idealAnswerImageUrl);
 
   useEffect(() => {
     if (!question?.templateWorkbook?.sheets?.length) return;
@@ -325,6 +329,16 @@ export function PracticeDetail() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {idealAnswerImageUrl ? (
+              <button
+                type="button"
+                onClick={() => setIdealAnswerImageOpen(true)}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 text-sm font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+              >
+                <Eye size={16} />
+                查看参考图
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void handleDownloadQuestion()}
@@ -466,6 +480,33 @@ export function PracticeDetail() {
           </div>
         </div>
       </div>
+      {idealAnswerImageOpen && idealAnswerImageUrl ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-8">
+          <div className="w-[min(980px,calc(100vw-2rem))] rounded-[28px] bg-white p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-base font-black text-slate-900">理想答案参考图</div>
+                <div className="mt-1 text-xs font-medium text-slate-500">按图中目标效果在答题区域内用公式实现。</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIdealAnswerImageOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:text-slate-900"
+                aria-label="关闭参考图"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[72vh] overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <img
+                src={idealAnswerImageUrl}
+                alt="理想答案参考图"
+                className="mx-auto max-h-[68vh] max-w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

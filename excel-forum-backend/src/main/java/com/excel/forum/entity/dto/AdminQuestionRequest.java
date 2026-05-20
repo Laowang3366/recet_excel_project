@@ -15,6 +15,7 @@ public class AdminQuestionRequest {
     private String explanation;
     private Boolean enabled;
     private String templateFileUrl;
+    private String idealAnswerImageUrl;
     private String answerSheet;
     private String answerRange;
     private String answerSnapshotJson;

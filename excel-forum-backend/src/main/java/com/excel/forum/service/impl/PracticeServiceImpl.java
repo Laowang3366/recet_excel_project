@@ -916,6 +916,7 @@ public class PracticeServiceImpl implements PracticeService {
         item.put("categoryName", categoryName);
         if (template != null) {
             item.put("templateFileUrl", template.getTemplateFileUrl());
+            item.put("idealAnswerImageUrl", template.getIdealAnswerImageUrl());
             item.put("answerSheet", template.getAnswerSheet());
             item.put("answerRange", template.getAnswerRange());
             item.put("checkFormula", Boolean.TRUE.equals(template.getCheckFormula()));

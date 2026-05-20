@@ -20,4 +20,14 @@ describe("admin questions layout", () => {
     expect(source).toContain("enabledFilter");
     expect(source).toContain("difficultyFilter");
   });
+
+  it("supports uploading an ideal answer reference image", () => {
+    const source = adminQuestionsSource();
+
+    expect(source).toContain("idealAnswerImageUrl");
+    expect(source).toContain("理想答案参考图");
+    expect(source).toContain("handleIdealAnswerImageUpload");
+    expect(source).toContain("handleIdealAnswerImagePaste");
+    expect(source).toContain("Ctrl+V 粘贴图片");
+  });
 });

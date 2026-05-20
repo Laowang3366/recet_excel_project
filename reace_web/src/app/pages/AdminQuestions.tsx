@@ -1,13 +1,14 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, type ClipboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { ChevronDown, ChevronRight, Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, RotateCcw, Search, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ChevronDown, ChevronRight, Edit3, FileSpreadsheet, ImagePlus, LoaderCircle, MousePointer2, Plus, RotateCcw, Search, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, detectFormulaAnswerRegion, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
+import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
 import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson } from "./AdminConsoleShared";
@@ -56,6 +57,7 @@ export function AdminQuestions() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateLoadError, setTemplateLoadError] = useState("");
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const [uploadingIdealAnswerImage, setUploadingIdealAnswerImage] = useState(false);
   const [isTemplateEditMode, setIsTemplateEditMode] = useState(true);
   const [isSelectingAnswerRange, setIsSelectingAnswerRange] = useState(false);
   const [formulaDetectionNotice, setFormulaDetectionNotice] = useState("");
@@ -214,6 +216,7 @@ export function AdminQuestions() {
       explanation: item.explanation || "",
       enabled: item.enabled ?? true,
       templateFileUrl: item.templateFileUrl || "",
+      idealAnswerImageUrl: item.idealAnswerImageUrl || "",
       answerSheet: item.answerSheet || "",
       answerRange: item.answerRange || "",
       answerSnapshotJson: item.answerSnapshotJson || "",
@@ -306,6 +309,7 @@ export function AdminQuestions() {
       explanation: form.explanation,
       enabled: form.enabled,
       templateFileUrl: form.templateFileUrl,
+      idealAnswerImageUrl: form.idealAnswerImageUrl,
       answerSheet: resolvedSheetName,
       answerRange: resolvedRange,
       answerSnapshotJson: JSON.stringify(answerSnapshot),
@@ -336,6 +340,7 @@ export function AdminQuestions() {
         explanation: item.explanation,
         enabled: nextEnabled,
         templateFileUrl: item.templateFileUrl,
+        idealAnswerImageUrl: item.idealAnswerImageUrl,
         answerSheet: item.answerSheet,
         answerRange: item.answerRange,
         answerSnapshotJson: item.answerSnapshotJson,
@@ -534,6 +539,45 @@ export function AdminQuestions() {
     } finally {
       setUploadingTemplate(false);
     }
+  };
+
+  const uploadIdealAnswerImageFile = async (file: File) => {
+    const isSupportedImage = /^image\/(png|jpe?g|webp|gif)$/i.test(file.type) || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+    if (!isSupportedImage) {
+      toast.error("参考图仅支持 png、jpg、jpeg、webp 或 gif");
+      return;
+    }
+    setUploadingIdealAnswerImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("scene", "question_reference_image");
+      const uploadResult = await api.post<{ url: string }>("/api/upload", formData);
+      if (!uploadResult?.url) {
+        throw new Error("参考图上传失败");
+      }
+      setForm((prev) => ({ ...prev, idealAnswerImageUrl: uploadResult.url }));
+      toast.success("理想答案参考图已上传");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "参考图上传失败");
+    } finally {
+      setUploadingIdealAnswerImage(false);
+    }
+  };
+
+  const handleIdealAnswerImageUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    await uploadIdealAnswerImageFile(file);
+  };
+
+  const handleIdealAnswerImagePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    if (!isTemplateEditMode || uploadingIdealAnswerImage) return;
+    const imageItem = Array.from(event.clipboardData.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
+    const imageFile = imageItem?.getAsFile() || Array.from(event.clipboardData.files).find((file) => file.type.startsWith("image/"));
+    if (!imageFile) return;
+    event.preventDefault();
+    void uploadIdealAnswerImageFile(imageFile);
   };
 
   const isDynamicArrayMode = form.gradingMode === "dynamic_array";
@@ -1016,6 +1060,59 @@ export function AdminQuestions() {
               ) : null}
             </div>
           )}
+          <div
+            className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 outline-none transition focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100"
+            tabIndex={isTemplateEditMode ? 0 : -1}
+            onPaste={handleIdealAnswerImagePaste}
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-black text-slate-900">理想答案参考图</div>
+                <div className="mt-1 text-xs text-slate-500">可选。支持上传或点击此区域后 Ctrl+V 粘贴图片，用户仍需在表格中用公式实现。</div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {form.idealAnswerImageUrl ? (
+                  <button
+                    type="button"
+                    disabled={!isTemplateEditMode}
+                    onClick={() => setForm((prev) => ({ ...prev, idealAnswerImageUrl: "" }))}
+                    className={secondaryButtonClassName()}
+                  >
+                    <X size={14} />
+                    移除
+                  </button>
+                ) : null}
+                <label className={`${secondaryButtonClassName()} cursor-pointer ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}>
+                  {uploadingIdealAnswerImage ? <LoaderCircle size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                  上传参考图
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    disabled={!isTemplateEditMode || uploadingIdealAnswerImage}
+                    onChange={(e) => void handleIdealAnswerImageUpload(e.target.files)}
+                  />
+                </label>
+              </div>
+            </div>
+            {form.idealAnswerImageUrl ? (
+              <div className="grid gap-3 md:grid-cols-[180px,1fr]">
+                <img
+                  src={normalizeResourceUrl(form.idealAnswerImageUrl)}
+                  alt="理想答案参考图"
+                  className="h-28 w-full rounded-xl border border-slate-200 object-contain bg-slate-50"
+                />
+                <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                  <div className="mb-1 text-slate-700">图片地址</div>
+                  <div className="break-all">{form.idealAnswerImageUrl}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-400">
+                暂未上传参考图
+              </div>
+            )}
+          </div>
           {sheetOptions.length > 0 && (
             <div className="grid gap-4 md:grid-cols-4">
               <Field label={isDynamicArrayMode ? "首条规则工作表" : "答题工作表"}>

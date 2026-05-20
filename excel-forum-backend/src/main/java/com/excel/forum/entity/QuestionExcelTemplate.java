@@ -16,6 +16,7 @@ public class QuestionExcelTemplate {
     private Long id;
     private Long questionId;
     private String templateFileUrl;
+    private String idealAnswerImageUrl;
     private String answerSheet;
     private String answerRange;
     private String answerSnapshotJson;

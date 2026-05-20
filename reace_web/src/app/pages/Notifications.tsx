@@ -16,7 +16,7 @@ import {
   MessageSquareText,
   type LucideIcon,
 } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
@@ -32,6 +32,7 @@ import {
   type NotificationCounts,
   type NotificationTabId,
 } from "../lib/notification-display";
+import { buildNotificationReturnPath, resolveNotificationReturnTarget } from "../lib/notification-return";
 
 const PAGE_SIZE = 7;
 
@@ -81,6 +82,7 @@ function useNotificationCounts() {
 
 export function Notifications() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const initialTab = useMemo(() => {
@@ -145,15 +147,15 @@ export function Notifications() {
 
   const switchTab = (tabId: NotificationTabId) => {
     setActiveTab(tabId);
-    setSearchParams(tabId === "all" ? {} : { tab: tabId });
+    const nextParams = new URLSearchParams();
+    const returnTo = searchParams.get("returnTo");
+    if (tabId !== "all") nextParams.set("tab", tabId);
+    if (returnTo) nextParams.set("returnTo", returnTo);
+    setSearchParams(nextParams);
   };
 
   const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-    navigate("/");
+    navigate(resolveNotificationReturnTarget(location.search, "/"), { replace: true });
   };
 
   // 标记全部已读
@@ -248,7 +250,8 @@ export function Notifications() {
     }
     const link = resolveNotificationLink(notification);
     if (link) {
-      navigate(link);
+      const returnTarget = resolveNotificationReturnTarget(location.search, "/");
+      navigate(buildNotificationReturnPath(returnTarget, link));
     } else {
       setExpandedId(expandedId === notification.id ? null : notification.id);
     }

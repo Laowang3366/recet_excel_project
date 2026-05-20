@@ -132,6 +132,7 @@ export type AdminQuestionForm = {
   explanation: string;
   enabled: boolean;
   templateFileUrl: string;
+  idealAnswerImageUrl: string;
   answerSheet: string;
   answerRange: string;
   answerSnapshotJson: string;

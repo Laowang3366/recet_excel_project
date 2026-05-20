@@ -31,6 +31,7 @@ type NotificationDropdownProps = {
   onMarkAllRead: () => Promise<void>;
   onMarkRead: (id: number) => Promise<void>;
   resolveNotificationLink: (notification: LayoutNotification) => string;
+  resolveNotificationCenterLink: (path: string) => string;
 };
 
 function renderCountBadge(count: number) {
@@ -56,6 +57,7 @@ export function NotificationDropdown({
   onMarkAllRead,
   onMarkRead,
   resolveNotificationLink,
+  resolveNotificationCenterLink,
 }: NotificationDropdownProps) {
   if (!compact && !isAuthenticated) return null;
 
@@ -109,7 +111,7 @@ export function NotificationDropdown({
                 type="button"
                 onClick={() => {
                   onOpenChange(false);
-                  onNavigate("/notifications?tab=points");
+                  onNavigate(resolveNotificationCenterLink("/notifications?tab=points"));
                 }}
                 className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-50"
               >
@@ -119,7 +121,7 @@ export function NotificationDropdown({
                 type="button"
                 onClick={() => {
                   onOpenChange(false);
-                  onNavigate("/notifications?tab=announcements");
+                  onNavigate(resolveNotificationCenterLink("/notifications?tab=announcements"));
                 }}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
               >
@@ -154,7 +156,7 @@ export function NotificationDropdown({
             </div>
             <div className="border-t border-gray-50 bg-slate-50 p-3 text-center">
               <Link
-                to="/notifications"
+                to={resolveNotificationCenterLink("/notifications")}
                 onClick={() => onOpenChange(false)}
                 className="text-[13px] font-bold text-slate-600 transition-colors hover:text-slate-900"
               >
