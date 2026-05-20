@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { LitePageFrame } from "../components/LiteSurface";
 import { api } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { useSession } from "../lib/session";
 
 type AssistantResponse = {
@@ -279,7 +280,7 @@ export function Assistant() {
   const handleSubmit = async () => {
     if (!isAuthenticated) {
       toast.info("请先登录后再使用 AI 助手");
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath());
       return;
     }
     const content = message.trim();

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
+import { buildCurrentAuthRedirectPath } from "../../lib/auth-redirect";
 import { getAssistantErrorMessage } from "../../lib/assistant-errors";
 import { preloadPublicRoute } from "../../lib/route-preload";
 import { useSession } from "../../lib/session";
@@ -469,7 +470,7 @@ export function AssistantWidget({ onOpen }: AssistantWidgetProps) {
     if (assistantChatMutation.isPending) return;
     if (!isAuthenticated) {
       toast.info("请先登录后再使用 AI 助手");
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath(location));
       return;
     }
     if (!content && assistantAttachments.length === 0) {

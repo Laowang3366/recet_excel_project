@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { CheckCircle2, Sparkles, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { getDefaultAdminPath } from "../admin/config";
 import { inputClassName, primaryButtonClassName, secondaryButtonClassName } from "../admin/shared";
 import type { AdminConfirmRequest, AdminDialogController, AdminDialogRequest, AdminPromptRequest } from "./AdminConsoleTypes";
@@ -21,7 +22,7 @@ export async function adminRequest<T>(
     if (error instanceof ApiError) {
       if (error.status === 401) {
         showAdminError("登录已过期，请重新登录");
-        navigate("/auth", { replace: true });
+        navigate(buildCurrentAuthRedirectPath(), { replace: true });
         return null;
       }
       if (error.status === 403) {

@@ -25,6 +25,7 @@ type NotificationDropdownProps = {
   unreadCount: number;
   items: LayoutNotification[];
   rootRef: RefObject<HTMLDivElement>;
+  loginPath: string;
   onOpenChange: (open: boolean) => void;
   onNavigate: (path: string) => void;
   onMarkAllRead: () => Promise<void>;
@@ -49,6 +50,7 @@ export function NotificationDropdown({
   unreadCount,
   items,
   rootRef,
+  loginPath,
   onOpenChange,
   onNavigate,
   onMarkAllRead,
@@ -63,7 +65,7 @@ export function NotificationDropdown({
 
   const handleOpen = () => {
     if (!isAuthenticated) {
-      onNavigate("/auth");
+      onNavigate(loginPath);
       return;
     }
     onOpenChange(!open);

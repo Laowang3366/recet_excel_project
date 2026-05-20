@@ -10,6 +10,7 @@ import { motion } from "motion/react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { hasAdminConsoleAccess } from "../admin/config";
 import { api } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import {
   getAppShellClassName,
   getLitePublicNavigationClassName,
@@ -159,19 +160,19 @@ export function Layout() {
 
   const openPropsDialog = useCallback(() => {
     if (!isAuthenticated) {
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath(location));
       return;
     }
     setPropsOpen(true);
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, location, navigate]);
 
   const openCheckinDialog = useCallback(() => {
     if (!isAuthenticated) {
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath(location));
       return;
     }
     setCheckinOpen(true);
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, location, navigate]);
 
   useEffect(() => {
     const handleOpenProps = () => {
@@ -394,6 +395,7 @@ export function Layout() {
               unreadCount={unreadNotificationCount}
               items={notificationItems}
               rootRef={notificationRef}
+              loginPath={buildCurrentAuthRedirectPath(location)}
               onOpenChange={setShowNotifications}
               onNavigate={navigate}
               onMarkAllRead={async () => {

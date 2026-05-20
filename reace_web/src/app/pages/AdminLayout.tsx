@@ -5,6 +5,7 @@ import { useSession } from "../lib/session";
 import { canAccessAdminPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
 import { getAdminAvatarSrc, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
 import { secondaryButtonClassName } from "../admin/shared";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { AdminDialogHost } from "./AdminConsoleShared";
 
 export function AdminLayout() {
@@ -18,7 +19,7 @@ export function AdminLayout() {
   useEffect(() => {
     if (loading) return;
     if (!isAuthenticated) {
-      navigate("/auth", { replace: true });
+      navigate(buildCurrentAuthRedirectPath(location), { replace: true });
       return;
     }
     if (!hasAdminConsoleAccess(user?.role)) {

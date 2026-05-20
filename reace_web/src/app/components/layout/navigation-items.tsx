@@ -17,6 +17,7 @@ import {
   publicNavItems,
   resolveActiveNavItem,
 } from "../../lib/site-navigation";
+import { buildAuthRedirectPath } from "../../lib/auth-redirect";
 
 type PublicNavItem = (typeof publicNavItems)[number];
 
@@ -69,7 +70,7 @@ export function buildLayoutNavigation(pathname: string, isAuthenticated: boolean
   const mobileBottomNavItems: LayoutMobileBottomNavItem[] = liteMobileBottomNavItems.map((item) => ({
     key: item.key,
     name: item.shortName,
-    path: item.key === "profile" && !isAuthenticated ? "/auth" : item.path,
+    path: item.key === "profile" && !isAuthenticated ? buildAuthRedirectPath(item.path) : item.path,
     icon: navIconMap[item.key],
   }));
 

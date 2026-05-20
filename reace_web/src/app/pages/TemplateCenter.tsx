@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ModuleSearch } from "../components/layout/ModuleSearch";
 import { LitePageFrame, LitePanel } from "../components/LiteSurface";
 import { api, downloadFile } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { pointsKeys, templateKeys } from "../lib/query-keys";
 import { filterTemplatesBySearch, formatTemplateCost, formatTemplateDifficulty } from "../lib/template-center";
@@ -124,7 +125,7 @@ export function TemplateCenter() {
       return;
     }
     if (!isAuthenticated) {
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath());
       return;
     }
     void downloadMutation.mutateAsync(item.id);
@@ -150,7 +151,7 @@ export function TemplateCenter() {
             type="button"
             onClick={() => {
               if (!isAuthenticated) {
-                navigate("/auth");
+                navigate(buildCurrentAuthRedirectPath());
                 return;
               }
               navigate("/templates/records");

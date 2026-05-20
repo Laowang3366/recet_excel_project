@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { LitePageFrame, LitePanel } from "../components/LiteSurface";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { api } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { formatNumber } from "../lib/format";
 import { normalizeAvatarUrl } from "../lib/mappers";
 import {
@@ -200,7 +201,7 @@ export function ProfileCenter() {
       setIsAccountOpen(false);
       await logout();
       toast.success("密码已修改，请重新登录");
-      navigate("/auth", { replace: true });
+      navigate(buildCurrentAuthRedirectPath(), { replace: true });
     },
   });
 

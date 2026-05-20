@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { isLoginRequiredResponse } from "./auth-errors";
+import { buildCurrentAuthRedirectPath } from "./auth-redirect";
 import { clearStoredSession, getStoredToken } from "./session-store";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
@@ -79,7 +80,7 @@ export async function downloadFile(path: string, fallbackFileName = "download", 
           action: {
             label: "去登录",
             onClick: () => {
-              window.location.assign("/auth");
+              window.location.assign(buildCurrentAuthRedirectPath());
             },
           },
         });
@@ -139,7 +140,7 @@ async function apiRequestInternal<T = unknown>(path: string, options: RequestOpt
           action: {
             label: "去登录",
             onClick: () => {
-              window.location.assign("/auth");
+              window.location.assign(buildCurrentAuthRedirectPath());
             },
           },
         });

@@ -17,6 +17,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { LiteHero, LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
 import { api } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { pointsKeys, toolsKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
@@ -97,7 +98,7 @@ export function Tools() {
 
   const handleConvert = () => {
     if (!isAuthenticated) {
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath());
       return;
     }
     if (!selectedFile) {

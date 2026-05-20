@@ -37,6 +37,7 @@ import {
 } from "../admin/shared";
 import { hasAdminConsoleAccess } from "../admin/config";
 import { api, ApiError } from "../lib/api";
+import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { adminKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
 
@@ -895,7 +896,7 @@ function AdminTableSwitch({
 function handleAdminError(error: unknown, navigate: ReturnType<typeof useNavigate>) {
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      navigate("/auth");
+      navigate(buildCurrentAuthRedirectPath());
       return;
     }
     if (error.status === 403) {

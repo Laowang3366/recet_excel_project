@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { Activity, Mail, Lock, User, ArrowRight, CheckCircle2, Circle, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence, type Variants } from "motion/react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { api } from "../lib/api";
+import { resolveAuthRedirect } from "../lib/auth-redirect";
 import { getRememberedAuth, storeRememberedAuth } from "../lib/session-store";
 import { useSession } from "../lib/session";
 
@@ -26,8 +27,10 @@ export function Auth() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const location = useLocation();
   const navigate = useNavigate();
   const { login, register } = useSession();
+  const redirectTarget = useMemo(() => resolveAuthRedirect(location.search), [location.search]);
   const passwordChecks = getPasswordChecks(password);
   const passedPasswordChecks = passwordChecks.filter((item) => item.passed).length;
   const passwordStrength = getPasswordStrength(passedPasswordChecks, password.length > 0);
@@ -58,7 +61,7 @@ export function Auth() {
         });
       }
       toast.success(`${isLogin ? "登录" : "注册"}成功，正在跳转...`);
-      navigate("/");
+      navigate(redirectTarget, { replace: true });
     } finally {
       setSubmitting(false);
     }
