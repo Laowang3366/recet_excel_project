@@ -142,7 +142,7 @@ export function MyQaCenter() {
   const confirmCloseCase = async (item: QaCaseHelp) => {
     const confirmed = await openGlobalConfirm({
       title: "关闭求助",
-      message: "关闭后其他用户将不能继续提交答疑，已有答疑和通知仍保留。",
+      message: "关闭后将停止接收新的答疑。",
       confirmLabel: "关闭",
     });
     if (confirmed) closeCaseMutation.mutate(item);
@@ -151,7 +151,7 @@ export function MyQaCenter() {
   const confirmDeleteCase = async (item: QaCaseHelp) => {
     const confirmed = await openGlobalConfirm({
       title: "删除求助",
-      message: "删除会隐藏前台列表，但不会物理删除文件和历史通知。",
+      message: "删除后将从你的求助列表移除。",
       confirmLabel: "删除",
       destructive: true,
     });
@@ -161,7 +161,7 @@ export function MyQaCenter() {
   const confirmDeleteAnswer = async (item: QaCaseAnswer) => {
     const confirmed = await openGlobalConfirm({
       title: "删除答疑",
-      message: "删除后该答疑不会在前台展示，原始文件仍保留用于审计。",
+      message: "删除后将从你的答疑列表移除。",
       confirmLabel: "删除",
       destructive: true,
     });
@@ -171,7 +171,7 @@ export function MyQaCenter() {
   const confirmDeleteShare = async (item: QaSolutionShare) => {
     const confirmed = await openGlobalConfirm({
       title: "取消发布",
-      message: "取消后其他用户将不能继续查看该解题分享。",
+      message: "取消发布后，该解题分享将不再公开展示。",
       confirmLabel: "取消发布",
       destructive: true,
     });

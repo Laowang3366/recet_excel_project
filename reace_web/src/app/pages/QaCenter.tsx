@@ -128,7 +128,7 @@ export function QaCenter() {
             </div>
             <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">案例求助与解题分享</h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-white/62">
-              上传真实 Excel 场景求助，或查看其他用户分享的答案和解题思路。这里保留做题平台的轻量结构，不扩展论坛功能。
+              上传真实 Excel 场景求助，查看可复用的答案和解题思路。
             </p>
           </div>
           <Link
@@ -197,7 +197,7 @@ export function QaCenter() {
               发起案例求助
             </div>
             <div className="mt-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-              请先在 Excel 模板中输入理想答案，再上传模板。其他用户将能查看需求、理想答案并提交答疑模板。
+              请上传包含示例答案的 Excel 模板，答疑者会基于模板提交处理结果。
             </div>
             <div className="mt-4 space-y-3">
               <input

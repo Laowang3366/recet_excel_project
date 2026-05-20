@@ -121,7 +121,7 @@ export function QaCaseDetail() {
   const confirmAcceptAnswer = async (answer: QaCaseAnswer) => {
     const input = await openGlobalPrompt({
       title: "采纳答疑",
-      message: "采纳后该求助才会显示为已答疑。可输入悬赏积分，留空或 0 表示不悬赏。",
+      message: "确认采纳这个答疑结果。可输入悬赏积分，留空或 0 表示不悬赏。",
       label: "悬赏积分",
       defaultValue: "0",
       confirmLabel: "采纳",
@@ -138,7 +138,7 @@ export function QaCaseDetail() {
   const confirmDeleteAnswer = async (answer: QaCaseAnswer) => {
     const confirmed = await openGlobalConfirm({
       title: "删除答疑",
-      message: "删除后该答疑不会在前台展示，原始文件仍保留用于审计。",
+      message: "删除后将从答疑记录中移除。",
       confirmLabel: "删除",
       destructive: true,
     });

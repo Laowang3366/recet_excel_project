@@ -180,7 +180,7 @@ export function AdminQa() {
   const confirmDeleteCase = async (item: QaCaseHelp) => {
     const confirmed = await openAdminConfirm({
       title: "删除求助",
-      message: "删除会隐藏前台列表，但不会物理删除模板文件。",
+      message: "删除后该求助将不再展示。",
       confirmLabel: "确认删除",
       destructive: true,
     });
@@ -190,7 +190,7 @@ export function AdminQa() {
   const confirmCloseCase = async (item: QaCaseHelp) => {
     const confirmed = await openAdminConfirm({
       title: "关闭求助",
-      message: "关闭后前台用户将不能继续提交答疑。",
+      message: "关闭后将停止接收新的答疑。",
       confirmLabel: "确认关闭",
     });
     if (!confirmed) return;
@@ -209,7 +209,7 @@ export function AdminQa() {
   const confirmDeleteAnswer = async (item: QaCaseAnswer) => {
     const confirmed = await openAdminConfirm({
       title: "删除答疑",
-      message: "删除后前台不再展示该答疑，文件仍保留用于审计。",
+      message: "删除后该答疑将不再展示。",
       confirmLabel: "确认删除",
       destructive: true,
     });
@@ -219,7 +219,7 @@ export function AdminQa() {
   const confirmDeleteShare = async (item: QaSolutionShare) => {
     const confirmed = await openAdminConfirm({
       title: "下架分享",
-      message: "下架后用户无法继续查看该解题分享。",
+      message: "下架后该解题分享将不再公开展示。",
       confirmLabel: "确认下架",
       destructive: true,
     });
