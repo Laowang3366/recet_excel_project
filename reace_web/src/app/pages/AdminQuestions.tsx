@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ChevronDown, ChevronRight, Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, RotateCcw, Search, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
@@ -21,6 +21,11 @@ export function AdminQuestions() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [questionCategoryId, setQuestionCategoryId] = useState("");
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [enabledFilter, setEnabledFilter] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState("");
+  const [campaignConfigExpanded, setCampaignConfigExpanded] = useState(false);
   const [dailyChallengeForm, setDailyChallengeForm] = useState<DailyChallengeForm>({
     challengeDate: "",
     levelId: "",
@@ -54,13 +59,25 @@ export function AdminQuestions() {
   const [formulaDetectionNotice, setFormulaDetectionNotice] = useState("");
   const [editorFullscreenVersion, setEditorFullscreenVersion] = useState(0);
   const editorSnapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
-  const size = 10;
+  const size = 20;
   const query = new URLSearchParams({ page: String(page), size: String(size), type: "excel_template" });
   if (questionCategoryId) query.set("questionCategoryId", questionCategoryId);
+  if (keyword.trim()) query.set("keyword", keyword.trim());
+  if (enabledFilter) query.set("enabled", enabledFilter);
+  if (difficultyFilter) query.set("difficulty", difficultyFilter);
   const queryString = query.toString();
+  const questionListQueryKey = adminKeys.questions({
+    page,
+    size,
+    type: "excel_template",
+    questionCategoryId,
+    keyword,
+    enabledFilter,
+    difficultyFilter,
+  });
 
   const questionsQuery = useQuery({
-    queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }),
+    queryKey: questionListQueryKey,
     enabled: Boolean(role),
     queryFn: async () => {
       const result = await adminRequest<AdminQuestionsResponse>(api.get(`/api/admin/questions?${queryString}`, { silent: true }), navigate, role);
@@ -301,7 +318,7 @@ export function AdminQuestions() {
     if (!result) return;
     setOpen(false);
     showAdminSuccess(formatAdminEntityMessage("题目", editing?.title || result?.title || form.title, editing ? "已更新" : "已创建"));
-    await queryClient.invalidateQueries({ queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }) });
+    await queryClient.invalidateQueries({ queryKey: questionListQueryKey });
   };
 
   const toggleEnabled = async (item: AdminQuestionRecord, nextEnabled: boolean) => {
@@ -331,7 +348,7 @@ export function AdminQuestions() {
     );
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("题目", item.title, nextEnabled ? "已启用" : "已停用"));
-    await queryClient.invalidateQueries({ queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }) });
+    await queryClient.invalidateQueries({ queryKey: questionListQueryKey });
   };
 
   const remove = async (item: AdminQuestionRecord) => {
@@ -347,7 +364,7 @@ export function AdminQuestions() {
       successMessage: formatAdminEntityMessage("题目", item.title, "已删除"),
       staleMessage: `题目《${item.title}》不存在，列表已刷新`,
       errorLabel: "删除题目",
-      onRefresh: () => queryClient.invalidateQueries({ queryKey: adminKeys.questions({ page, size, type: "excel_template", questionCategoryId }) }).then(() => undefined),
+      onRefresh: () => queryClient.invalidateQueries({ queryKey: questionListQueryKey }).then(() => undefined),
     });
   };
 
@@ -581,166 +598,135 @@ export function AdminQuestions() {
       void document.exitFullscreen();
     }
   };
+  const applyQuestionKeyword = () => {
+    setKeyword(keywordDraft.trim());
+    setPage(1);
+  };
+  const resetQuestionFilters = () => {
+    setQuestionCategoryId("");
+    setKeywordDraft("");
+    setKeyword("");
+    setEnabledFilter("");
+    setDifficultyFilter("");
+    setPage(1);
+  };
+  const hasQuestionFilters = Boolean(questionCategoryId || keyword || enabledFilter || difficultyFilter);
+  const visibleQuestionCount = records.length;
 
   return (
     <AdminPageShell
       title="题库管理"
       description="管理 Excel 模板题，配置答题区域、标准答案与判题方式。"
     >
-      <AdminSection title="闯关每日挑战配置">
-        <FilterBar>
-          <FilterField label="挑战日期">
-            <input
-              type="date"
-              value={dailyChallengeForm.challengeDate}
-              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, challengeDate: e.target.value }))}
-              className={inputClassName()}
-            />
-          </FilterField>
-          <FilterField label="挑战关卡">
-            <select
-              value={dailyChallengeForm.levelId}
-              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, levelId: e.target.value }))}
-              className={inputClassName()}
-            >
-              <option value="">请选择关卡</option>
-              {campaignLevels.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.chapterName} / {item.title}
-                </option>
-              ))}
-            </select>
-          </FilterField>
-          <FilterField label="奖励经验">
-            <input
-              type="number"
-              value={dailyChallengeForm.rewardExp}
-              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardExp: e.target.value }))}
-              className={inputClassName()}
-            />
-          </FilterField>
-          <FilterField label="奖励积分">
-            <input
-              type="number"
-              value={dailyChallengeForm.rewardPoints}
-              onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardPoints: e.target.value }))}
-              className={inputClassName()}
-            />
-          </FilterField>
-          <div className="flex items-end">
-            <button type="button" onClick={() => void submitDailyChallenge()} className={primaryButtonClassName()}>
-              <Sparkles size={14} />
-              保存每日挑战
-            </button>
-          </div>
-        </FilterBar>
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-          当前每日挑战会展示在闯关大厅的“每日挑战”入口中。未配置时，前台会自动回退到当前可挑战关卡。
-        </div>
-      </AdminSection>
-
-      <AdminSection title="闯关关卡配置" description="统一调整关卡类型、目标时间、奖励经验、奖励积分和首通额外奖励。">
-        <div className="mt-5">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>关卡</TableHead>
-                <TableHead>章节 / 题目</TableHead>
-                <TableHead>类型 / 难度</TableHead>
-                <TableHead>目标 / 奖励</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {campaignLevels.map((item) => (
-                <TableRow key={`campaign-level-${item.id}`}>
-                  <TableCell>
-                    <div className="font-bold text-slate-800">{item.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">ID {item.id}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium text-slate-700">{item.chapterName || "-"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.questionTitle || "-"}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div>{item.levelType || "normal"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.difficulty || "easy"}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div>目标 {item.targetTimeSeconds || 0}s</div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      经验 {item.rewardExp || 0} · 积分 {item.rewardPoints || 0} · 首通 {item.firstPassBonus || 0}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <AdminTableSwitch
-                      checked={Boolean(item.enabled)}
-                      onCheckedChange={(next) => {
-                        openLevelConfig({ ...item, enabled: next });
-                        setLevelConfigForm((prev) => ({ ...prev, enabled: next }));
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <button type="button" onClick={() => openLevelConfig(item)} className={secondaryButtonClassName()}>
-                      <Edit3 size={14} />
-                      配置
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {campaignLevels.length === 0 && <AdminEmptyState message="暂无闯关关卡数据。" />}
-        </div>
-      </AdminSection>
-
       <AdminSection title="题目列表" actions={<AddButton onClick={openCreate}>新增题目</AddButton>}>
+        <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] px-4 py-3">
+            <div className="text-xs text-[#8c8c8c]">题目总数</div>
+            <div className="mt-1 text-2xl font-semibold text-[#262626]">{total}</div>
+          </div>
+          <div className="rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] px-4 py-3">
+            <div className="text-xs text-[#8c8c8c]">当前页</div>
+            <div className="mt-1 text-2xl font-semibold text-[#262626]">{visibleQuestionCount}</div>
+          </div>
+          <div className="rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] px-4 py-3">
+            <div className="text-xs text-[#8c8c8c]">题目分类</div>
+            <div className="mt-1 text-2xl font-semibold text-[#262626]">{questionCategories.length}</div>
+          </div>
+          <div className="rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] px-4 py-3">
+            <div className="text-xs text-[#8c8c8c]">每页展示</div>
+            <div className="mt-1 text-2xl font-semibold text-[#262626]">{size}</div>
+          </div>
+        </div>
+
         <FilterBar>
+          <FilterField label="题目搜索">
+            <div className="flex gap-2">
+              <input
+                value={keywordDraft}
+                onChange={(e) => setKeywordDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyQuestionKeyword();
+                }}
+                placeholder="输入题目标题或 ID"
+                className={inputClassName()}
+              />
+              <button type="button" onClick={applyQuestionKeyword} className={primaryButtonClassName()}>
+                <Search size={14} />
+                搜索
+              </button>
+            </div>
+          </FilterField>
           <FilterField label="题目分类">
             <select value={questionCategoryId} onChange={(e) => { setQuestionCategoryId(e.target.value); setPage(1); }} className={inputClassName()}>
               <option value="">全部</option>
               {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </FilterField>
+          <FilterField label="状态">
+            <select value={enabledFilter} onChange={(e) => { setEnabledFilter(e.target.value); setPage(1); }} className={inputClassName()}>
+              <option value="">全部状态</option>
+              <option value="true">已启用</option>
+              <option value="false">已停用</option>
+            </select>
+          </FilterField>
+          <FilterField label="难度">
+            <select value={difficultyFilter} onChange={(e) => { setDifficultyFilter(e.target.value); setPage(1); }} className={inputClassName()}>
+              <option value="">全部难度</option>
+              <option value="1">难度 1</option>
+              <option value="2">难度 2</option>
+              <option value="3">难度 3</option>
+              <option value="4">难度 4</option>
+              <option value="5">难度 5</option>
+            </select>
+          </FilterField>
+          <div className="flex items-end gap-2">
+            <button type="button" onClick={resetQuestionFilters} disabled={!hasQuestionFilters && !keywordDraft} className={secondaryButtonClassName()}>
+              <RotateCcw size={14} />
+              重置
+            </button>
+          </div>
         </FilterBar>
 
-        <div className="mt-5">
+        <div className="mt-4 overflow-hidden rounded-[2px] border border-[#f0f0f0]">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-[#fafafa]">
               <TableRow>
                 <TableHead>题目</TableHead>
                 <TableHead>工作表 / 区域</TableHead>
                 <TableHead>难度 / 奖励</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>操作</TableHead>
+                <TableHead className="sticky right-0 bg-[#fafafa] text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {records.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="max-w-[320px]">
-                    <div className="font-bold text-slate-800">{item.title}</div>
+                  <TableCell className="max-w-[520px] py-2">
+                    <div className="line-clamp-1 font-bold text-slate-800">{item.title}</div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span>ID {item.id}</span>
+                      <span>·</span>
                       <span>{item.questionCategoryName || "未分类"}</span>
                       <span>·</span>
                       <span>{formatQuestionType(item.type || "excel_template")}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
                     <div className="font-medium text-slate-700">{item.answerSheet || "-"}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.answerRange || "未配置区域"}</div>
                   </TableCell>
-                  <TableCell>{item.difficulty || 1} / {item.points || 0}</TableCell>
-                  <TableCell>
+                  <TableCell className="py-2">
+                    <div>难度 {item.difficulty || 1}</div>
+                    <div className="mt-1 text-xs text-slate-400">积分 {item.points || 0}</div>
+                  </TableCell>
+                  <TableCell className="py-2">
                     <AdminTableSwitch
                       checked={Boolean(item.enabled)}
                       onCheckedChange={(next) => void toggleEnabled(item, next)}
                     />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
+                  <TableCell className="sticky right-0 bg-white py-2">
+                    <div className="flex justify-end gap-2">
                       <button type="button" onClick={() => void openEdit(item)} className={secondaryButtonClassName()}><Edit3 size={14} />编辑</button>
                       <button type="button" onClick={() => remove(item)} className={secondaryButtonClassName()}><Trash2 size={14} />删除</button>
                     </div>
@@ -750,11 +736,143 @@ export function AdminQuestions() {
             </TableBody>
           </Table>
           {records.length === 0 && <AdminEmptyState message="暂无题目数据。" />}
-          <div className="mt-4">
+        </div>
+        <div className="mt-4">
             <AdminPagination current={page} size={size} total={total} onChange={setPage} />
-          </div>
         </div>
       </AdminSection>
+
+      <section className="rounded-[2px] border border-[#f0f0f0] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+        <button
+          type="button"
+          onClick={() => setCampaignConfigExpanded((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <span>
+            <span className="text-[16px] font-medium text-[#262626]">闯关配置</span>
+            <span className="ml-3 text-sm text-[#8c8c8c]">每日挑战和 {campaignLevels.length} 个关卡配置，默认收起以便优先管理题目。</span>
+          </span>
+          <span className={secondaryButtonClassName()}>
+            {campaignConfigExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {campaignConfigExpanded ? "收起配置" : "展开配置"}
+          </span>
+        </button>
+      </section>
+
+      {campaignConfigExpanded ? (
+        <>
+          <AdminSection title="闯关每日挑战配置">
+            <FilterBar>
+              <FilterField label="挑战日期">
+                <input
+                  type="date"
+                  value={dailyChallengeForm.challengeDate}
+                  onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, challengeDate: e.target.value }))}
+                  className={inputClassName()}
+                />
+              </FilterField>
+              <FilterField label="挑战关卡">
+                <select
+                  value={dailyChallengeForm.levelId}
+                  onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, levelId: e.target.value }))}
+                  className={inputClassName()}
+                >
+                  <option value="">请选择关卡</option>
+                  {campaignLevels.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.chapterName} / {item.title}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="奖励经验">
+                <input
+                  type="number"
+                  value={dailyChallengeForm.rewardExp}
+                  onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardExp: e.target.value }))}
+                  className={inputClassName()}
+                />
+              </FilterField>
+              <FilterField label="奖励积分">
+                <input
+                  type="number"
+                  value={dailyChallengeForm.rewardPoints}
+                  onChange={(e) => setDailyChallengeForm((prev) => ({ ...prev, rewardPoints: e.target.value }))}
+                  className={inputClassName()}
+                />
+              </FilterField>
+              <div className="flex items-end">
+                <button type="button" onClick={() => void submitDailyChallenge()} className={primaryButtonClassName()}>
+                  <Sparkles size={14} />
+                  保存每日挑战
+                </button>
+              </div>
+            </FilterBar>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+              当前每日挑战会展示在闯关大厅的“每日挑战”入口中。未配置时，前台会自动回退到当前可挑战关卡。
+            </div>
+          </AdminSection>
+
+          <AdminSection title="闯关关卡配置" description="统一调整关卡类型、目标时间、奖励经验、奖励积分和首通额外奖励。">
+            <div className="mt-5 max-h-[520px] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-[#fafafa]">
+                  <TableRow>
+                    <TableHead>关卡</TableHead>
+                    <TableHead>章节 / 题目</TableHead>
+                    <TableHead>类型 / 难度</TableHead>
+                    <TableHead>目标 / 奖励</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead className="sticky right-0 bg-[#fafafa] text-right">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {campaignLevels.map((item) => (
+                    <TableRow key={`campaign-level-${item.id}`}>
+                      <TableCell>
+                        <div className="font-bold text-slate-800">{item.title}</div>
+                        <div className="mt-1 text-xs text-slate-400">ID {item.id}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-slate-700">{item.chapterName || "-"}</div>
+                        <div className="mt-1 text-xs text-slate-400">{item.questionTitle || "-"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div>{item.levelType || "normal"}</div>
+                        <div className="mt-1 text-xs text-slate-400">{item.difficulty || "easy"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div>目标 {item.targetTimeSeconds || 0}s</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          经验 {item.rewardExp || 0} · 积分 {item.rewardPoints || 0} · 首通 {item.firstPassBonus || 0}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <AdminTableSwitch
+                          checked={Boolean(item.enabled)}
+                          onCheckedChange={(next) => {
+                            openLevelConfig({ ...item, enabled: next });
+                            setLevelConfigForm((prev) => ({ ...prev, enabled: next }));
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="sticky right-0 bg-white">
+                        <div className="flex justify-end">
+                          <button type="button" onClick={() => openLevelConfig(item)} className={secondaryButtonClassName()}>
+                            <Edit3 size={14} />
+                            配置
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {campaignLevels.length === 0 && <AdminEmptyState message="暂无闯关关卡数据。" />}
+            </div>
+          </AdminSection>
+        </>
+      ) : null}
 
       <FormDialog
         open={open}

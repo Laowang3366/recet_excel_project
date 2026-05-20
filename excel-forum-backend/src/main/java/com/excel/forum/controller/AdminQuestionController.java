@@ -42,9 +42,20 @@ public class AdminQuestionController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Long questionCategoryId) {
+            @RequestParam(required = false) Long questionCategoryId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Boolean enabled,
+            @RequestParam(required = false) Integer difficulty) {
         String effectiveType = StringUtils.hasText(type) ? type : "excel_template";
-        Map<String, Object> response = questionService.getQuestionsPage(page, size, effectiveType, questionCategoryId);
+        Map<String, Object> response = new HashMap<>(questionService.getQuestionsPage(
+                page,
+                size,
+                effectiveType,
+                questionCategoryId,
+                keyword,
+                enabled,
+                difficulty
+        ));
         @SuppressWarnings("unchecked")
         List<Question> records = (List<Question>) response.getOrDefault("questions", List.of());
         Map<Long, QuestionExcelTemplate> templateMap = questionExcelTemplateService.mapByQuestionIds(
