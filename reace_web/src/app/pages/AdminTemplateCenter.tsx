@@ -186,13 +186,13 @@ export function AdminTemplateCenter() {
   };
 
   const deleteTemplate = async (item: TemplateRecord) => {
-    if (!window.confirm(`确认删除模板“${item.title}”？`)) {
+    if (!window.confirm(`确认将模板“${item.title}”移入文件回收站？`)) {
       return;
     }
     try {
       await api.delete(`/api/admin/templates/${item.id}`);
       await refreshAll();
-      toast.success("模板已删除");
+      toast.success("模板已移入回收站");
     } catch (error) {
       handleAdminError(error, navigate);
     }
@@ -202,9 +202,9 @@ export function AdminTemplateCenter() {
     const items = bulkSelection.selectedItems;
     if (items.length === 0 || bulkDeleting) return;
     const confirmed = await openAdminConfirm({
-      title: "批量删除模板",
-      message: `确认删除选中的 ${items.length} 个模板？`,
-      confirmLabel: "删除选中",
+      title: "批量移入回收站",
+      message: `确认将选中的 ${items.length} 个模板移入文件回收站？`,
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (!confirmed) return;
@@ -213,7 +213,8 @@ export function AdminTemplateCenter() {
       items,
       request: (item) => api.delete(`/api/admin/templates/${item.id}`),
       entityName: "模板",
-      errorLabel: "批量删除模板",
+      errorLabel: "批量移入回收站",
+      successLabel: "已移入回收站",
       onRefresh: refreshAll,
       onFinally: () => {
         bulkSelection.clear();

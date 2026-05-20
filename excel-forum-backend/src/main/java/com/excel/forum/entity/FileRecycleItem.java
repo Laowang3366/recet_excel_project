@@ -10,24 +10,25 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("question_excel_template")
-public class QuestionExcelTemplate {
+@TableName("file_recycle_item")
+public class FileRecycleItem {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long questionId;
-    private String templateFileUrl;
-    private String answerSheet;
-    private String answerRange;
-    private String answerSnapshotJson;
-    private Boolean checkFormula;
-    private String gradingRuleJson;
-    private String expectedSnapshotJson;
-    private Integer sheetCountLimit;
-    private Integer version;
+    private String resourceType;
+    private Long resourceId;
+    private String displayName;
+    private String originalFileUrl;
+    private String recycleFileUrl;
+    private String filesJson;
+    private String businessSnapshotJson;
+    private Long deletedBy;
+    private LocalDateTime deletedAt;
+    private LocalDateTime expiresAt;
+    private LocalDateTime restoredAt;
+    private LocalDateTime purgedAt;
+    private String status;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
-    private LocalDateTime deletedAt;
-    private Long deletedBy;
 }

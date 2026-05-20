@@ -29,6 +29,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         int safeSize = Math.min(Math.max(size, 1), 100);
         Page<Question> pageParam = new Page<>(safePage, safeSize);
         QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
+        queryWrapper.isNull("deleted_at");
         
         if (StringUtils.hasText(type)) {
             queryWrapper.eq("type", type);

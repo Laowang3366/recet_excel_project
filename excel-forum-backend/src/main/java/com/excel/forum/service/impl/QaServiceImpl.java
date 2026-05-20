@@ -36,6 +36,7 @@ import com.excel.forum.mapper.QaSolutionShareMapper;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.AssistantService;
 import com.excel.forum.service.ExcelTemplateGradingService;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsRecordService;
@@ -83,6 +84,7 @@ public class QaServiceImpl implements QaService {
     private final NotificationService notificationService;
     private final AssistantService assistantService;
     private final ExcelTemplateGradingService excelTemplateGradingService;
+    private final FileRecycleService fileRecycleService;
     private final FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
 
@@ -282,8 +284,8 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> deleteCase(Long userId, Long caseId) {
         QaCaseHelp qaCase = requireOwnedCase(userId, caseId);
-        softDeleteCase(qaCase);
-        return Map.of("message", "求助已删除");
+        fileRecycleService.recycleQaCase(qaCase, userId);
+        return Map.of("message", "求助已移入回收站");
     }
 
     @Override
@@ -399,8 +401,8 @@ public class QaServiceImpl implements QaService {
         if (STATUS_ACCEPTED.equals(answer.getStatus())) {
             throw new IllegalArgumentException("已采纳的答疑不能删除");
         }
-        softDeleteCaseAnswer(answer);
-        return Map.of("message", "答疑已删除");
+        fileRecycleService.recycleQaAnswer(answer, userId);
+        return Map.of("message", "答疑已移入回收站");
     }
 
     @Override
@@ -544,6 +546,7 @@ public class QaServiceImpl implements QaService {
     @Override
     public Map<String, Object> adminListCases(String status, Integer page, Integer size) {
         QueryWrapper<QaCaseHelp> wrapper = new QueryWrapper<>();
+        wrapper.isNull("deleted_at").ne("status", STATUS_DELETED);
         if (StringUtils.hasText(status) && !"all".equalsIgnoreCase(status)) {
             wrapper.eq("status", normalizeCaseStatus(status));
         }
@@ -579,9 +582,9 @@ public class QaServiceImpl implements QaService {
     }
 
     @Override
-    public Map<String, Object> adminDeleteCase(Long caseId) {
-        softDeleteCase(requireCaseForAdmin(caseId));
-        return Map.of("message", "求助已删除");
+    public Map<String, Object> adminDeleteCase(Long caseId, Long deletedBy) {
+        fileRecycleService.recycleQaCase(requireCaseForAdmin(caseId), deletedBy);
+        return Map.of("message", "求助已移入回收站");
     }
 
     @Override
@@ -590,15 +593,16 @@ public class QaServiceImpl implements QaService {
         if (caseId != null && caseId > 0) {
             wrapper.eq("case_id", caseId);
         }
+        wrapper.isNull("deleted_at").ne("status", STATUS_DELETED);
         wrapper.orderByDesc("create_time");
         Page<QaCaseHelpAnswer> result = caseHelpAnswerMapper.selectPage(new Page<>(safePage(page), safeSize(size)), wrapper);
         return pagePayload(result, result.getRecords().stream().map(this::caseAnswerPayload).toList());
     }
 
     @Override
-    public Map<String, Object> adminDeleteCaseAnswer(Long answerId) {
-        softDeleteCaseAnswer(requireCaseAnswerForAdmin(answerId));
-        return Map.of("message", "答疑已删除");
+    public Map<String, Object> adminDeleteCaseAnswer(Long answerId, Long deletedBy) {
+        fileRecycleService.recycleQaAnswer(requireCaseAnswerForAdmin(answerId), deletedBy);
+        return Map.of("message", "答疑已移入回收站");
     }
 
     @Override

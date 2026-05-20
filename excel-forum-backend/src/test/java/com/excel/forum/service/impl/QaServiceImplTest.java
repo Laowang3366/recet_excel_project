@@ -19,6 +19,7 @@ import com.excel.forum.mapper.QaSolutionShareMapper;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.AssistantService;
 import com.excel.forum.service.ExcelTemplateGradingService;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsRecordService;
@@ -68,6 +69,8 @@ class QaServiceImplTest {
     @Mock
     private ExcelTemplateGradingService excelTemplateGradingService;
     @Mock
+    private FileRecycleService fileRecycleService;
+    @Mock
     private FileStorageService fileStorageService;
 
     private QaServiceImpl service;
@@ -88,6 +91,7 @@ class QaServiceImplTest {
                 notificationService,
                 assistantService,
                 excelTemplateGradingService,
+                fileRecycleService,
                 fileStorageService,
                 new ObjectMapper()
         );

@@ -356,15 +356,15 @@ export function AdminQuestions() {
 
   const remove = async (item: AdminQuestionRecord) => {
     const confirmed = await openAdminConfirm({
-      title: "删除题目",
-      message: `确认删除题目《${item.title}》？`,
-      confirmLabel: "确认删除",
+      title: "移入回收站",
+      message: `确认将题目《${item.title}》移入文件回收站？`,
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (!confirmed) return;
     await runAdminDelete({
       request: api.delete(`/api/admin/questions/${item.id}`),
-      successMessage: formatAdminEntityMessage("题目", item.title, "已删除"),
+      successMessage: formatAdminEntityMessage("题目", item.title, "已移入回收站"),
       staleMessage: `题目《${item.title}》不存在，列表已刷新`,
       errorLabel: "删除题目",
       onRefresh: () => queryClient.invalidateQueries({ queryKey: questionListQueryKey }).then(() => undefined),
@@ -375,9 +375,9 @@ export function AdminQuestions() {
     const items = bulkSelection.selectedItems;
     if (items.length === 0 || bulkDeleting) return;
     const confirmed = await openAdminConfirm({
-      title: "批量删除题目",
-      message: `确认删除选中的 ${items.length} 道题目？`,
-      confirmLabel: "删除选中",
+      title: "批量移入回收站",
+      message: `确认将选中的 ${items.length} 道题目移入文件回收站？`,
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (!confirmed) return;
@@ -386,7 +386,8 @@ export function AdminQuestions() {
       items,
       request: (item) => api.delete(`/api/admin/questions/${item.id}`),
       entityName: "题目",
-      errorLabel: "批量删除题目",
+      errorLabel: "批量移入回收站",
+      successLabel: "已移入回收站",
       onRefresh: () => queryClient.invalidateQueries({ queryKey: questionListQueryKey }).then(() => undefined),
       onFinally: () => {
         bulkSelection.clear();

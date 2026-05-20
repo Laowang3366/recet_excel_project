@@ -66,6 +66,7 @@ public class TemplateCenterController {
         String normalizedCategory = normalizeIndustryCategory(industryCategory);
         List<TemplateCenterItem> allEnabledItems = templateCenterItemService.list(new QueryWrapper<TemplateCenterItem>()
                 .eq("enabled", true)
+                .isNull("deleted_at")
                 .orderByAsc("sort_order")
                 .orderByAsc("id"));
         List<TemplateCenterItem> visibleItems = normalizedCategory == null
@@ -151,7 +152,7 @@ public class TemplateCenterController {
     @Transactional
     public ResponseEntity<?> downloadTemplate(@RequestAttribute Long userId, @PathVariable Long id) {
         TemplateCenterItem item = templateCenterItemService.getById(id);
-        if (item == null || !Boolean.TRUE.equals(item.getEnabled())) {
+        if (item == null || item.getDeletedAt() != null || !Boolean.TRUE.equals(item.getEnabled())) {
             return ResponseEntity.status(404).body(Map.of("message", "模板不存在"));
         }
         if (item.getTemplateFileUrl() == null || item.getTemplateFileUrl().isBlank()) {
@@ -218,7 +219,7 @@ public class TemplateCenterController {
     @GetMapping("/{id}/file")
     public ResponseEntity<?> downloadTemplateFile(@RequestAttribute Long userId, @PathVariable Long id) {
         TemplateCenterItem item = templateCenterItemService.getById(id);
-        if (item == null || !Boolean.TRUE.equals(item.getEnabled())) {
+        if (item == null || item.getDeletedAt() != null || !Boolean.TRUE.equals(item.getEnabled())) {
             return ResponseEntity.status(404).body(Map.of("message", "模板不存在"));
         }
         if (item.getTemplateFileUrl() == null || item.getTemplateFileUrl().isBlank()) {

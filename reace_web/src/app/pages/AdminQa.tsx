@@ -120,7 +120,7 @@ export function AdminQa() {
     onSuccess: async (result) => {
       if (!result) return;
       await refreshAdminQa();
-      showAdminSuccess("求助已删除");
+      showAdminSuccess("求助已移入回收站");
     },
   });
 
@@ -129,7 +129,7 @@ export function AdminQa() {
     onSuccess: async (result) => {
       if (!result) return;
       await refreshAdminQa();
-      showAdminSuccess("答疑已删除");
+      showAdminSuccess("答疑已移入回收站");
     },
   });
 
@@ -188,9 +188,9 @@ export function AdminQa() {
 
   const confirmDeleteCase = async (item: QaCaseHelp) => {
     const confirmed = await openAdminConfirm({
-      title: "删除求助",
-      message: "删除后该求助将不再展示。",
-      confirmLabel: "确认删除",
+      title: "移入回收站",
+      message: "该求助和模板文件将移入文件回收站。",
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (confirmed) deleteCaseMutation.mutate(item);
@@ -217,9 +217,9 @@ export function AdminQa() {
 
   const confirmDeleteAnswer = async (item: QaCaseAnswer) => {
     const confirmed = await openAdminConfirm({
-      title: "删除答疑",
-      message: "删除后该答疑将不再展示。",
-      confirmLabel: "确认删除",
+      title: "移入回收站",
+      message: "该答疑和 Excel 文件将移入文件回收站。",
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (confirmed) deleteAnswerMutation.mutate(item);
@@ -239,9 +239,9 @@ export function AdminQa() {
     const items = caseBulkSelection.selectedItems;
     if (!items.length || casesBulkDeleting) return;
     const confirmed = await openAdminConfirm({
-      title: "批量删除案例求助",
-      message: `确认删除选中的 ${items.length} 条案例求助？删除后将不再展示。`,
-      confirmLabel: "确认删除",
+      title: "批量移入回收站",
+      message: `确认将选中的 ${items.length} 条案例求助移入文件回收站？`,
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (!confirmed) return;
@@ -250,7 +250,8 @@ export function AdminQa() {
       items,
       request: (item) => api.delete(`/api/admin/qa/cases/${item.id}`, undefined, { silent: true }),
       entityName: "案例求助",
-      errorLabel: "批量删除案例求助",
+      errorLabel: "批量移入回收站",
+      successLabel: "已移入回收站",
       onRefresh: refreshAdminQa,
       onFinally: () => {
         caseBulkSelection.clear();
@@ -263,9 +264,9 @@ export function AdminQa() {
     const items = answerBulkSelection.selectedItems;
     if (!items.length || answersBulkDeleting) return;
     const confirmed = await openAdminConfirm({
-      title: "批量删除答疑",
-      message: `确认删除选中的 ${items.length} 条答疑提交？`,
-      confirmLabel: "确认删除",
+      title: "批量移入回收站",
+      message: `确认将选中的 ${items.length} 条答疑提交移入文件回收站？`,
+      confirmLabel: "移入回收站",
       destructive: true,
     });
     if (!confirmed) return;
@@ -274,7 +275,8 @@ export function AdminQa() {
       items,
       request: (item) => api.delete(`/api/admin/qa/answers/${item.id}`, undefined, { silent: true }),
       entityName: "答疑",
-      errorLabel: "批量删除答疑",
+      errorLabel: "批量移入回收站",
+      successLabel: "已移入回收站",
       onRefresh: refreshAdminQa,
       onFinally: () => {
         answerBulkSelection.clear();

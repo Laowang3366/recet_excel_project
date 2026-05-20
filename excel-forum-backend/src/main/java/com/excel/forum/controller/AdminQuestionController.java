@@ -5,6 +5,7 @@ import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
 import com.excel.forum.entity.dto.AdminQuestionRequest;
 import com.excel.forum.service.ExcelTemplateGradingService;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.PracticeCampaignService;
 import com.excel.forum.service.QuestionCategoryService;
 import com.excel.forum.service.QuestionExcelTemplateService;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,6 +38,7 @@ public class AdminQuestionController {
     private final QuestionExcelTemplateService questionExcelTemplateService;
     private final ExcelTemplateGradingService excelTemplateGradingService;
     private final PracticeCampaignService practiceCampaignService;
+    private final FileRecycleService fileRecycleService;
 
     @GetMapping
     public ResponseEntity<?> getQuestions(
@@ -99,7 +102,7 @@ public class AdminQuestionController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updateQuestion(@PathVariable Long id, @RequestBody AdminQuestionRequest request) {
         Question existing = questionService.getById(id);
-        if (existing == null) {
+        if (existing == null || existing.getDeletedAt() != null) {
             return ResponseEntity.notFound().build();
         }
         QuestionExcelTemplate existingTemplate = questionExcelTemplateService.getByQuestionId(id);
@@ -145,11 +148,17 @@ public class AdminQuestionController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteQuestion(@PathVariable Long id) {
-        questionExcelTemplateService.removeByQuestionId(id);
-        questionService.removeById(id);
+    public ResponseEntity<?> deleteQuestion(
+            @RequestAttribute(value = "userId", required = false) Long adminUserId,
+            @PathVariable Long id) {
+        Question question = questionService.getById(id);
+        if (question == null || question.getDeletedAt() != null) {
+            return ResponseEntity.notFound().build();
+        }
+        QuestionExcelTemplate template = questionExcelTemplateService.getByQuestionId(id);
+        fileRecycleService.recycleQuestion(question, template, adminUserId);
         practiceCampaignService.syncCampaignCatalog();
-        return ResponseEntity.ok(Map.of("message", "题目已删除"));
+        return ResponseEntity.ok(Map.of("message", "题目已移入回收站"));
     }
 
     private ResponseEntity<?> validateExcelTemplateRequest(AdminQuestionRequest request) {

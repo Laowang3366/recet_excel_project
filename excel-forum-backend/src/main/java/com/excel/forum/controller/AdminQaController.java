@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,8 +40,10 @@ public class AdminQaController {
     }
 
     @DeleteMapping("/cases/{id}")
-    public ResponseEntity<?> deleteCase(@PathVariable Long id) {
-        return ResponseEntity.ok(qaService.adminDeleteCase(id));
+    public ResponseEntity<?> deleteCase(
+            @RequestAttribute(value = "userId", required = false) Long adminUserId,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.adminDeleteCase(id, adminUserId));
     }
 
     @GetMapping("/cases/{id}/answers")
@@ -60,8 +63,10 @@ public class AdminQaController {
     }
 
     @DeleteMapping("/answers/{id}")
-    public ResponseEntity<?> deleteCaseAnswer(@PathVariable Long id) {
-        return ResponseEntity.ok(qaService.adminDeleteCaseAnswer(id));
+    public ResponseEntity<?> deleteCaseAnswer(
+            @RequestAttribute(value = "userId", required = false) Long adminUserId,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(qaService.adminDeleteCaseAnswer(id, adminUserId));
     }
 
     @GetMapping("/solution-shares")

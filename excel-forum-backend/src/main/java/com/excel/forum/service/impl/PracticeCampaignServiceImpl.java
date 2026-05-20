@@ -169,7 +169,7 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
                 .orElse(Map.of());
 
         Map<String, Object> questionPayload = new LinkedHashMap<>();
-        if (question != null) {
+        if (question != null && question.getDeletedAt() == null) {
             questionPayload.put("id", question.getId());
             questionPayload.put("title", question.getTitle());
             questionPayload.put("difficulty", question.getDifficulty());
@@ -417,7 +417,7 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             throw new IllegalArgumentException("挑战记录不存在");
         }
         Question question = questionService.getById(level.getQuestionId());
-        if (question == null || !Boolean.TRUE.equals(question.getEnabled())) {
+        if (question == null || question.getDeletedAt() != null || !Boolean.TRUE.equals(question.getEnabled())) {
             throw new IllegalArgumentException("题目不存在");
         }
 

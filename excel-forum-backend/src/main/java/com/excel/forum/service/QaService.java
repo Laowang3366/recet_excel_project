@@ -66,11 +66,11 @@ public interface QaService {
 
     Map<String, Object> adminUpdateCase(Long caseId, QaCaseHelpRequest request);
 
-    Map<String, Object> adminDeleteCase(Long caseId);
+    Map<String, Object> adminDeleteCase(Long caseId, Long deletedBy);
 
     Map<String, Object> adminListCaseAnswers(Long caseId, Integer page, Integer size);
 
-    Map<String, Object> adminDeleteCaseAnswer(Long answerId);
+    Map<String, Object> adminDeleteCaseAnswer(Long answerId, Long deletedBy);
 
     Map<String, Object> adminListSolutionShares(String status, Integer page, Integer size);
 

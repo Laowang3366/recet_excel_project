@@ -20,7 +20,7 @@ public class QuestionExcelTemplateServiceImpl extends ServiceImpl<QuestionExcelT
         if (questionId == null) {
             return null;
         }
-        return getOne(new QueryWrapper<QuestionExcelTemplate>().eq("question_id", questionId), false);
+        return getOne(new QueryWrapper<QuestionExcelTemplate>().eq("question_id", questionId).isNull("deleted_at"), false);
     }
 
     @Override
@@ -28,7 +28,7 @@ public class QuestionExcelTemplateServiceImpl extends ServiceImpl<QuestionExcelT
         if (questionIds == null || questionIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return list(new QueryWrapper<QuestionExcelTemplate>().in("question_id", questionIds)).stream()
+        return list(new QueryWrapper<QuestionExcelTemplate>().in("question_id", questionIds).isNull("deleted_at")).stream()
                 .filter(item -> item.getQuestionId() != null)
                 .collect(Collectors.toMap(QuestionExcelTemplate::getQuestionId, item -> item, (left, right) -> Objects.requireNonNullElse(right, left)));
     }

@@ -27,6 +27,7 @@ export const adminKeys = {
   qaAnswers: (params: Record<string, unknown>) => ["admin", "qa", "answers", params] as const,
   qaSolutionShares: (params: Record<string, unknown>) => ["admin", "qa", "solution-shares", params] as const,
   qaFeedback: (params: Record<string, unknown>) => ["admin", "qa", "feedback", params] as const,
+  fileRecycleBin: (params: Record<string, unknown>) => ["admin", "file-recycle-bin", params] as const,
 };
 
 export const notificationKeys = {

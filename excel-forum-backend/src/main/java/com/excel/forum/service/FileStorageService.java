@@ -7,4 +7,7 @@ public interface FileStorageService {
     String store(String fileName, byte[] content);
     byte[] load(String fileUrl);
     void delete(String fileUrl);
+    String moveToRecycle(String fileUrl, String recycleKey);
+    String restoreFromRecycle(String recycleFileUrl, String originalFileUrl);
+    void deletePermanently(String fileUrl);
 }

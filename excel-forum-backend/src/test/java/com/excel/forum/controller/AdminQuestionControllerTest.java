@@ -1,6 +1,7 @@
 package com.excel.forum.controller;
 
 import com.excel.forum.service.ExcelTemplateGradingService;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.PracticeCampaignService;
 import com.excel.forum.service.QuestionCategoryService;
 import com.excel.forum.service.QuestionExcelTemplateService;
@@ -35,6 +36,8 @@ class AdminQuestionControllerTest {
     private ExcelTemplateGradingService excelTemplateGradingService;
     @Mock
     private PracticeCampaignService practiceCampaignService;
+    @Mock
+    private FileRecycleService fileRecycleService;
 
     private MockMvc mockMvc;
 
@@ -46,7 +49,8 @@ class AdminQuestionControllerTest {
                         questionCategoryService,
                         questionExcelTemplateService,
                         excelTemplateGradingService,
-                        practiceCampaignService
+                        practiceCampaignService,
+                        fileRecycleService
                 ))
                 .build();
     }

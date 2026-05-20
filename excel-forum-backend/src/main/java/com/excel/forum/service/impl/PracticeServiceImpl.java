@@ -80,7 +80,7 @@ public class PracticeServiceImpl implements PracticeService {
     @Override
     public Map<String, Object> getPracticeCategories() {
         QueryWrapper<Question> questionQuery = new QueryWrapper<>();
-        questionQuery.eq("enabled", true).eq("type", "excel_template");
+        questionQuery.eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
         List<Question> practiceQuestions = questionService.list(questionQuery);
         if (practiceQuestions.isEmpty()) {
             return Map.of("categories", List.of());
@@ -132,7 +132,7 @@ public class PracticeServiceImpl implements PracticeService {
     @Override
     public Map<String, Object> getPracticeQuestionList(Long questionCategoryId, Long userId) {
         QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("enabled", true).eq("type", "excel_template");
+        queryWrapper.eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
         if (questionCategoryId != null) {
             queryWrapper.eq("question_category_id", questionCategoryId);
         }
@@ -173,7 +173,7 @@ public class PracticeServiceImpl implements PracticeService {
         int safeCount = count == null || count < 1 ? 10 : Math.min(count, 30);
 
         QueryWrapper<Question> questionQuery = new QueryWrapper<>();
-        questionQuery.eq("enabled", true).eq("type", "excel_template");
+        questionQuery.eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
         if (questionCategoryId != null) {
             questionQuery.eq("question_category_id", questionCategoryId);
         }
@@ -226,7 +226,7 @@ public class PracticeServiceImpl implements PracticeService {
             throw new IllegalArgumentException("题目参数无效");
         }
         QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template");
+        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
         Question question = questionService.getOne(queryWrapper, false);
         if (question == null) {
             throw new IllegalArgumentException("题目不存在或已停用");
@@ -251,7 +251,7 @@ public class PracticeServiceImpl implements PracticeService {
             throw new IllegalArgumentException("题目参数无效");
         }
         QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template");
+        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
         Question question = questionService.getOne(queryWrapper, false);
         if (question == null) {
             throw new IllegalArgumentException("题目不存在或已停用");
@@ -386,7 +386,7 @@ public class PracticeServiceImpl implements PracticeService {
         }
 
         QueryWrapper<Question> questionQuery = new QueryWrapper<>();
-        questionQuery.in("id", questionIds).eq("enabled", true);
+        questionQuery.in("id", questionIds).eq("enabled", true).isNull("deleted_at");
         List<Question> questions = questionService.list(questionQuery);
         if (questions.size() != questionIds.size()) {
             throw new IllegalArgumentException("部分题目不存在或已停用");

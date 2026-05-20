@@ -40,7 +40,8 @@ class PracticeCampaignCatalogSyncService {
     synchronized void syncCampaignCatalog() {
         Long worldId = ensurePracticeWorldId();
         List<Question> campaignQuestions = questionService.list(new QueryWrapper<Question>()
-                .eq("type", "excel_template"));
+                .eq("type", "excel_template")
+                .isNull("deleted_at"));
         Map<Long, QuestionCategory> categoryMap = questionCategoryService.list().stream()
                 .collect(Collectors.toMap(QuestionCategory::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
 

@@ -29,4 +29,6 @@ public class TemplateCenterItem {
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+    private LocalDateTime deletedAt;
+    private Long deletedBy;
 }

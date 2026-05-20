@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Service
@@ -89,16 +90,103 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
+    @Override
+    public String moveToRecycle(String fileUrl, String recycleKey) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return null;
+        }
+        try {
+            Path source = resolveLocalPath(fileUrl);
+            if (!Files.exists(source)) {
+                return null;
+            }
+            Path uploadRoot = uploadRoot();
+            Path trashRoot = uploadRoot.resolve(".trash").normalize();
+            Path targetDir = trashRoot.resolve(sanitizeRecycleKey(recycleKey)).normalize();
+            if (!targetDir.startsWith(trashRoot)) {
+                throw new IllegalArgumentException("回收站路径无效");
+            }
+            Files.createDirectories(targetDir);
+            Path target = uniquePath(targetDir.resolve(source.getFileName()));
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+            return toFileUrl(uploadRoot.relativize(target));
+        } catch (IOException e) {
+            throw new RuntimeException("文件移入回收站失败", e);
+        }
+    }
+
+    @Override
+    public String restoreFromRecycle(String recycleFileUrl, String originalFileUrl) {
+        if (recycleFileUrl == null || recycleFileUrl.isBlank()) {
+            return null;
+        }
+        try {
+            Path source = resolveLocalPath(recycleFileUrl);
+            if (!Files.exists(source)) {
+                throw new IllegalArgumentException("回收站文件不存在");
+            }
+            Path uploadRoot = uploadRoot();
+            Path target = resolveLocalPath(originalFileUrl);
+            if (target.startsWith(uploadRoot.resolve(".trash").normalize())) {
+                throw new IllegalArgumentException("恢复路径无效");
+            }
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            target = uniquePath(target);
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+            return toFileUrl(uploadRoot.relativize(target));
+        } catch (IOException e) {
+            throw new RuntimeException("文件恢复失败", e);
+        }
+    }
+
+    @Override
+    public void deletePermanently(String fileUrl) {
+        delete(fileUrl);
+    }
+
     private Path resolveLocalPath(String fileUrl) {
         if (fileUrl == null || !fileUrl.startsWith(fileStorageConfig.getLocal().getUrlPrefix())) {
             throw new IllegalArgumentException("文件地址无效");
         }
         String fileName = fileUrl.substring(fileStorageConfig.getLocal().getUrlPrefix().length() + 1);
-        Path uploadRoot = Paths.get(fileStorageConfig.getLocal().getPath()).toAbsolutePath().normalize();
+        Path uploadRoot = uploadRoot();
         Path resolved = uploadRoot.resolve(fileName).normalize();
         if (!resolved.startsWith(uploadRoot)) {
             throw new IllegalArgumentException("文件地址无效");
         }
         return resolved;
+    }
+
+    private Path uploadRoot() {
+        return Paths.get(fileStorageConfig.getLocal().getPath()).toAbsolutePath().normalize();
+    }
+
+    private String sanitizeRecycleKey(String recycleKey) {
+        if (recycleKey == null || recycleKey.isBlank()) {
+            return "unclassified";
+        }
+        return recycleKey.replace("\\", "/").replaceAll("^/+", "").replace("..", "_");
+    }
+
+    private Path uniquePath(Path target) {
+        if (!Files.exists(target)) {
+            return target;
+        }
+        String fileName = target.getFileName().toString();
+        String stem = fileName;
+        String extension = "";
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > -1) {
+            stem = fileName.substring(0, dotIndex);
+            extension = fileName.substring(dotIndex);
+        }
+        return target.getParent().resolve(stem + "-" + UUID.randomUUID() + extension);
+    }
+
+    private String toFileUrl(Path relativePath) {
+        String relativeUrl = relativePath.toString().replace('\\', '/');
+        return fileStorageConfig.getLocal().getUrlPrefix() + "/" + relativeUrl;
     }
 }

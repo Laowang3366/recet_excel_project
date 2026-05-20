@@ -21,6 +21,7 @@ import com.excel.forum.service.ExperienceService;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.FeedbackService;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.PointsRuleOptionService;
@@ -124,6 +125,9 @@ class AdminManagementControllersTest {
     private ExcelTemplateGradingService excelTemplateGradingService;
 
     @Mock
+    private FileRecycleService fileRecycleService;
+
+    @Mock
     private UserEntitlementService userEntitlementService;
 
     @Mock
@@ -198,7 +202,8 @@ class AdminManagementControllersTest {
                 questionCategoryService,
                 questionExcelTemplateService,
                 excelTemplateGradingService,
-                practiceCampaignService
+                practiceCampaignService,
+                fileRecycleService
         );
         AdminPracticeReviewController practiceReviewController = new AdminPracticeReviewController(
                 practiceQuestionSubmissionService,

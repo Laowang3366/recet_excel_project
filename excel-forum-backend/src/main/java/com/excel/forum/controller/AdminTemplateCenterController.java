@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.excel.forum.entity.TemplateCenterItem;
 import com.excel.forum.entity.TemplateDownloadRecord;
 import com.excel.forum.entity.dto.AdminTemplateCenterRequest;
+import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.TemplateCenterItemService;
 import com.excel.forum.service.TemplateDownloadRecordService;
 import com.excel.forum.util.TemplateCenterCatalog;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,6 +39,7 @@ public class AdminTemplateCenterController {
     private final TemplateCenterItemService templateCenterItemService;
     private final TemplateDownloadRecordService templateDownloadRecordService;
     private final ObjectMapper objectMapper;
+    private final FileRecycleService fileRecycleService;
 
     @GetMapping
     public ResponseEntity<?> getTemplates(@RequestParam(required = false) String industryCategory) {
@@ -44,6 +47,7 @@ public class AdminTemplateCenterController {
         if (industryCategory != null && !industryCategory.isBlank()) {
             queryWrapper.eq("industry_category", industryCategory.trim());
         }
+        queryWrapper.isNull("deleted_at");
         queryWrapper.orderByAsc("sort_order").orderByAsc("id");
         List<Map<String, Object>> records = templateCenterItemService.list(queryWrapper).stream()
                 .map(this::toAdminMap)
@@ -70,7 +74,7 @@ public class AdminTemplateCenterController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updateTemplate(@PathVariable Long id, @RequestBody AdminTemplateCenterRequest request) {
         TemplateCenterItem item = templateCenterItemService.getById(id);
-        if (item == null) {
+        if (item == null || item.getDeletedAt() != null) {
             return ResponseEntity.notFound().build();
         }
         String validationMessage = validateRequest(request);
@@ -84,14 +88,15 @@ public class AdminTemplateCenterController {
 
     @DeleteMapping("/{id}")
     @Transactional
-    public ResponseEntity<?> deleteTemplate(@PathVariable Long id) {
+    public ResponseEntity<?> deleteTemplate(
+            @RequestAttribute(value = "userId", required = false) Long adminUserId,
+            @PathVariable Long id) {
         TemplateCenterItem item = templateCenterItemService.getById(id);
-        if (item == null) {
+        if (item == null || item.getDeletedAt() != null) {
             return ResponseEntity.notFound().build();
         }
-        templateDownloadRecordService.remove(new QueryWrapper<TemplateDownloadRecord>().eq("template_id", id));
-        templateCenterItemService.removeById(id);
-        return ResponseEntity.ok(Map.of("message", "模板已删除"));
+        fileRecycleService.recycleTemplate(item, adminUserId);
+        return ResponseEntity.ok(Map.of("message", "模板已移入回收站"));
     }
 
     private String validateRequest(AdminTemplateCenterRequest request) {
