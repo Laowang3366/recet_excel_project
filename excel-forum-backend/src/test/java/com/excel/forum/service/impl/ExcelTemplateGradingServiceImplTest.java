@@ -106,6 +106,17 @@ class ExcelTemplateGradingServiceImplTest {
     }
 
     @Test
+    void parseAnswerSnapshotPreservesDateDisplayMetadata() {
+        ExcelTemplateAnswerSnapshot snapshot = service.parseAnswerSnapshot(
+                "{\"values\":[[46115],[46122]],\"formulas\":[[\"\"],[\"\"]],\"displays\":[[\"2026-04-03\"],[\"2026-04-10\"]],\"numberFormats\":[[\"yyyy-mm-dd\"],[\"yyyy-mm-dd\"]]}"
+        );
+
+        assertThat(snapshot.getValues()).isEqualTo(List.of(List.of(46115), List.of(46122)));
+        assertThat(snapshot.getDisplays()).isEqualTo(List.of(List.of("2026-04-03"), List.of("2026-04-10")));
+        assertThat(snapshot.getNumberFormats()).isEqualTo(List.of(List.of("yyyy-mm-dd"), List.of("yyyy-mm-dd")));
+    }
+
+    @Test
     void workbookSnapshotKeepsDateNumberFormatWithNumericValue() throws Exception {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Sheet1");

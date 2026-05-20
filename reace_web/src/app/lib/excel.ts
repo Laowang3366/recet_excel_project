@@ -27,6 +27,8 @@ export type ExcelRangeSelection = {
 export type ExcelAnswerSnapshot = {
   values: unknown[][];
   formulas: string[][];
+  displays?: string[][];
+  numberFormats?: string[][];
 };
 
 export type FormulaAnswerRegion = {
@@ -203,6 +205,7 @@ export function getCellDisplayValue(cell: ExcelCellSnapshot | undefined) {
 }
 
 const excelDateDisplayPattern = /^(?:\d{4}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/;
+const excelDateColumnHeaderPattern = /(?:日期|时间|年月|月份|年|月|日|到期|注册|下单|付款|收款|发货|签约|创建|更新|生效|截止|date|time|day|month|year)/i;
 const excelSerialEpochMs = Date.UTC(1899, 11, 30);
 const dayMs = 24 * 60 * 60 * 1000;
 
@@ -335,6 +338,45 @@ function parseExcelDateCell(cell: ExcelCellSnapshot | undefined) {
   return parseExcelDateText(String(rawText ?? ""));
 }
 
+function cellHasExplicitDateDisplay(cell: ExcelCellSnapshot | undefined) {
+  const display = cell?.display === null || cell?.display === undefined ? "" : String(cell.display).trim();
+  return Boolean(display && excelDateDisplayPattern.test(display));
+}
+
+function cellHasDateColumnSignal(cell: ExcelCellSnapshot | undefined) {
+  if (!cell) return false;
+  if (resolveExcelCellNumberFormat(cell)) return true;
+  return cellHasExplicitDateDisplay(cell);
+}
+
+function cellLooksLikeDateHeader(cell: ExcelCellSnapshot | undefined) {
+  const text = getCellDisplayValue(cell).trim();
+  if (!text) return false;
+  return excelDateColumnHeaderPattern.test(text);
+}
+
+function shouldConvertSelectionColumnToDate(
+  sheet: ExcelSheetSnapshot,
+  selection: ExcelRangeSelection,
+  col: number,
+) {
+  if (selection.startRow === selection.endRow && selection.startCol === selection.endCol) {
+    return Boolean(parseExcelDateCell(sheet.cells[toCellRef(selection.startRow, col)]));
+  }
+
+  // Dynamic-array spill cells often lose their own format. Use nearby headers and
+  // same-column date samples to identify the column before touching serial numbers.
+  for (let row = Math.max(1, selection.startRow - 3); row < selection.startRow; row += 1) {
+    if (cellLooksLikeDateHeader(sheet.cells[toCellRef(row, col)])) return true;
+  }
+
+  for (let row = selection.startRow; row <= selection.endRow; row += 1) {
+    if (cellHasDateColumnSignal(sheet.cells[toCellRef(row, col)])) return true;
+  }
+
+  return false;
+}
+
 export function resolveExcelCellNumberFormat(cell: ExcelCellSnapshot | null | undefined) {
   const explicit = typeof cell?.numberFormat === "string" ? cell.numberFormat.trim() : "";
   if (explicit) return explicit;
@@ -393,8 +435,16 @@ export function convertWorkbookSelectionToDateFormat(
     return { workbook: next, changed };
   }
 
+  const dateColumns = new Set<number>();
+  for (let col = selection.startCol; col <= selection.endCol; col += 1) {
+    if (shouldConvertSelectionColumnToDate(sheet, selection, col)) {
+      dateColumns.add(col);
+    }
+  }
+
   for (let row = selection.startRow; row <= selection.endRow; row += 1) {
     for (let col = selection.startCol; col <= selection.endCol; col += 1) {
+      if (!dateColumns.has(col)) continue;
       const cellRef = toCellRef(row, col);
       const cell = sheet.cells[cellRef];
       const dateValue = parseExcelDateCell(cell);
@@ -536,13 +586,20 @@ export function buildWorkbookWithAnswerSnapshot(
       }
       const formula = normalizeExcelFormulaText(answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "");
       const value = answerSnapshot?.values?.[rowOffset]?.[colOffset] ?? "";
+      const display = answerSnapshot?.displays?.[rowOffset]?.[colOffset];
+      const numberFormat = answerSnapshot?.numberFormats?.[rowOffset]?.[colOffset];
       if (!formula && (value === null || value === undefined || String(value).trim() === "")) {
         delete sheet.cells[cellRef];
         continue;
       }
       sheet.cells[cellRef] = formula
-        ? { value, formula, display: `=${formula}` }
-        : { value, formula: null, display: value === null || value === undefined ? "" : String(value) };
+        ? { value, formula, display: `=${formula}`, numberFormat: numberFormat || null }
+        : {
+          value,
+          formula: null,
+          display: display || (value === null || value === undefined ? "" : String(value)),
+          numberFormat: numberFormat || null,
+        };
     }
   }
   return next;
@@ -561,25 +618,62 @@ export function extractRangeAnswerSnapshot(
 
   const values: unknown[][] = [];
   const formulas: string[][] = [];
+  const displays: string[][] = [];
+  const numberFormats: string[][] = [];
 
   for (let row = range.startRow; row <= range.endRow; row += 1) {
     const valueRow: unknown[] = [];
     const formulaRow: string[] = [];
+    const displayRow: string[] = [];
+    const numberFormatRow: string[] = [];
     for (let col = range.startCol; col <= range.endCol; col += 1) {
       const cell = getCellSnapshot(sheet, toCellRef(row, col));
       valueRow.push(cell?.value ?? "");
       formulaRow.push(normalizeExcelFormulaText(cell?.formula));
+      displayRow.push(cell ? getCellDisplayValue(cell) : "");
+      numberFormatRow.push(resolveExcelCellNumberFormat(cell));
     }
     values.push(valueRow);
     formulas.push(formulaRow);
+    displays.push(displayRow);
+    numberFormats.push(numberFormatRow);
   }
 
-  return { values, formulas };
+  return { values, formulas, displays, numberFormats };
 }
 
-export function formatAnswerPreviewCellDisplay(value: unknown, formula: string | null | undefined) {
+export function extractDateAwareRangeAnswerSnapshot(
+  workbook: ExcelWorkbookSnapshot | null | undefined,
+  sheetName: string | null | undefined,
+  rangeRef: string | null | undefined,
+): ExcelAnswerSnapshot {
+  const range = parseRangeRef(rangeRef);
+  if (!sheetName || !range) {
+    return extractRangeAnswerSnapshot(workbook, sheetName, rangeRef);
+  }
+  const selection = normalizeSelection(
+    sheetName,
+    range.startRow,
+    range.startCol,
+    range.endRow,
+    range.endCol,
+  );
+  const normalized = convertWorkbookSelectionToDateFormat(workbook, selection);
+  return extractRangeAnswerSnapshot(
+    normalized.changed > 0 ? normalized.workbook : workbook,
+    sheetName,
+    rangeRef,
+  );
+}
+
+export function formatAnswerPreviewCellDisplay(
+  value: unknown,
+  formula: string | null | undefined,
+  display?: string | null,
+) {
   const normalizedFormula = normalizeExcelFormulaText(formula);
   if (normalizedFormula) return `=${normalizedFormula}`;
+  if (display !== null && display !== undefined && String(display).trim()) return String(display);
   if (value === null || value === undefined) return "";
   return String(value);
 }

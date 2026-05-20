@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
-import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, detectFormulaAnswerRegion, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
+import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
@@ -279,7 +279,20 @@ export function AdminQuestions() {
         return;
       }
     }
-    const latestWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
+    const capturedWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
+    const resolvedSelection = (() => {
+      const parsedRange = parseRangeRef(resolvedRange);
+      if (!parsedRange || !resolvedSheetName) return null;
+      return normalizeSelection(
+        resolvedSheetName,
+        parsedRange.startRow,
+        parsedRange.startCol,
+        parsedRange.endRow,
+        parsedRange.endCol,
+      );
+    })();
+    const dateNormalized = convertWorkbookSelectionToDateFormat(capturedWorkbook, resolvedSelection);
+    const latestWorkbook = dateNormalized.changed > 0 ? dateNormalized.workbook : capturedWorkbook;
     if (latestWorkbook !== editorWorkbook) {
       setEditorWorkbook(latestWorkbook);
     }
@@ -596,7 +609,7 @@ export function AdminQuestions() {
   const sheetOptions = templateWorkbook.sheets || [];
   const templateEditorResetKey = `${form.templateFileUrl || "empty"}:${selectedSheetName || "none"}:${sheetOptions.length}:${templateLoadError || "ok"}`;
   const currentPreviewWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
-  const answerPreview = extractRangeAnswerSnapshot(
+  const answerPreview = extractDateAwareRangeAnswerSnapshot(
     currentPreviewWorkbook,
     primarySheetName,
     isTemplateEditMode ? (selectionToRangeRef(selection) || primaryRangeRef) : primaryRangeRef,
@@ -615,7 +628,8 @@ export function AdminQuestions() {
   const answerPreviewText = answerPreview.values.flatMap((valueRow, rowIndex) =>
     valueRow.map((value, colIndex) => {
       const formula = answerPreview.formulas?.[rowIndex]?.[colIndex];
-      return formatAnswerPreviewCellDisplay(value, formula);
+      const display = answerPreview.displays?.[rowIndex]?.[colIndex];
+      return formatAnswerPreviewCellDisplay(value, formula, display);
     }),
   ).filter((item) => item.trim().length > 0).join(" | ");
   const answerPreviewHasEmptyCell = answerPreview.values.some((row) =>
@@ -1395,9 +1409,10 @@ export function AdminQuestions() {
                         </th>
                         {row.map((value, colIndex) => {
                           const formula = answerPreview.formulas?.[rowIndex]?.[colIndex];
+                          const display = answerPreview.displays?.[rowIndex]?.[colIndex];
                           const cellRef = previewRange ? toCellRef(previewRange.startRow + rowIndex, previewRange.startCol + colIndex) : "";
                           const missingFormula = missingFormulaCellRefSet.has(cellRef);
-                          const displayValue = formatAnswerPreviewCellDisplay(value, formula);
+                          const displayValue = formatAnswerPreviewCellDisplay(value, formula, display);
                           return (
                             <td
                               key={`preview-cell-${rowIndex}-${colIndex}`}

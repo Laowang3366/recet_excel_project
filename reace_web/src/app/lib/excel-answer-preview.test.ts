@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   convertWorkbookSelectionToDateFormat,
+  extractDateAwareRangeAnswerSnapshot,
+  extractRangeAnswerSnapshot,
   findMissingFormulaCellRefs,
   formatAnswerPreviewCellDisplay,
   getExcelCellErrorInfo,
@@ -22,6 +24,7 @@ describe("excel answer preview", () => {
   it("renders formulas as formulas and plain values as values", () => {
     expect(formatAnswerPreviewCellDisplay(434000, "SUM(C5:E5)")).toBe("=SUM(C5:E5)");
     expect(formatAnswerPreviewCellDisplay(434000, "")).toBe("434000");
+    expect(formatAnswerPreviewCellDisplay(46122, "", "2026-04-10")).toBe("2026-04-10");
   });
 
   it("renders external Excel formulas without compatibility prefixes", () => {
@@ -84,5 +87,114 @@ describe("excel answer preview", () => {
       value: "not-date",
       display: "not-date",
     });
+  });
+
+  it("converts only date columns inside a selected answer table", () => {
+    const workbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            M10: { value: "日期", display: "日期" },
+            N10: { value: "订单号", display: "订单号" },
+            O10: { value: "客户", display: "客户" },
+            P10: { value: "销售额", display: "销售额" },
+            Q10: { value: "渠道", display: "渠道" },
+            M11: { value: 46115, display: "2026-04-03" },
+            N11: { value: "SO1003", display: "SO1003" },
+            O11: { value: "禾田餐饮", display: "禾田餐饮" },
+            P11: { value: 30600, display: "30600" },
+            Q11: { value: "官网", display: "官网" },
+            M12: { value: 46122, display: "46122" },
+            N12: { value: "SO1010", display: "SO1010" },
+            O12: { value: "北辰贸易", display: "北辰贸易" },
+            P12: { value: 27800, display: "27800" },
+            Q12: { value: "官网", display: "官网" },
+          },
+        },
+      ],
+    };
+
+    const result = convertWorkbookSelectionToDateFormat(workbook, {
+      sheetName: "Sheet1",
+      startRow: 11,
+      startCol: 13,
+      endRow: 12,
+      endCol: 17,
+    });
+
+    expect(result.changed).toBe(2);
+    expect(result.workbook.sheets[0].cells.M11).toMatchObject({
+      value: 46115,
+      display: "2026-04-03",
+      numberFormat: "yyyy-mm-dd",
+    });
+    expect(result.workbook.sheets[0].cells.M12).toMatchObject({
+      value: 46122,
+      display: "2026-04-10",
+      numberFormat: "yyyy-mm-dd",
+    });
+    expect(result.workbook.sheets[0].cells.P11).toMatchObject({
+      value: 30600,
+      display: "30600",
+    });
+    expect(result.workbook.sheets[0].cells.P12).toMatchObject({
+      value: 27800,
+      display: "27800",
+    });
+  });
+
+  it("extracts answer snapshot display metadata for date cells", () => {
+    const workbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            M11: { value: 46115, display: "2026-04-03", numberFormat: "yyyy-mm-dd" },
+            M12: { value: 46122, display: "2026-04-10", numberFormat: "yyyy-mm-dd" },
+          },
+        },
+      ],
+    };
+
+    const snapshot = extractRangeAnswerSnapshot(workbook, "Sheet1", "M11:M12");
+
+    expect(snapshot.values).toEqual([[46115], [46122]]);
+    expect(snapshot.displays).toEqual([["2026-04-03"], ["2026-04-10"]]);
+    expect(snapshot.numberFormats).toEqual([["yyyy-mm-dd"], ["yyyy-mm-dd"]]);
+  });
+
+  it("extracts date-aware answer preview without converting adjacent numeric columns", () => {
+    const workbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            M10: { value: "日期", display: "日期" },
+            N10: { value: "订单号", display: "订单号" },
+            O10: { value: "客户", display: "客户" },
+            P10: { value: "销售额", display: "销售额" },
+            Q10: { value: "渠道", display: "渠道" },
+            M11: { value: 46115, display: "2026-04-03" },
+            N11: { value: "SO1003", display: "SO1003" },
+            O11: { value: "禾田餐饮", display: "禾田餐饮" },
+            P11: { value: 30600, display: "30600" },
+            Q11: { value: "官网", display: "官网" },
+            M12: { value: 46122, display: "46122" },
+            N12: { value: "SO1010", display: "SO1010" },
+            O12: { value: "北辰贸易", display: "北辰贸易" },
+            P12: { value: 27800, display: "27800" },
+            Q12: { value: "官网", display: "官网" },
+          },
+        },
+      ],
+    };
+
+    const snapshot = extractDateAwareRangeAnswerSnapshot(workbook, "Sheet1", "M11:Q12");
+
+    expect(snapshot.displays?.[1]?.[0]).toBe("2026-04-10");
+    expect(snapshot.numberFormats?.[1]?.[0]).toBe("yyyy-mm-dd");
+    expect(snapshot.displays?.[1]?.[3]).toBe("27800");
+    expect(snapshot.numberFormats?.[1]?.[3]).toBe("");
   });
 });

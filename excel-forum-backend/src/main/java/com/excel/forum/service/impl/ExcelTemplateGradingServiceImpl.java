@@ -173,6 +173,12 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             if (snapshot.getFormulas() == null) {
                 snapshot.setFormulas(new ArrayList<>());
             }
+            if (snapshot.getDisplays() == null) {
+                snapshot.setDisplays(new ArrayList<>());
+            }
+            if (snapshot.getNumberFormats() == null) {
+                snapshot.setNumberFormats(new ArrayList<>());
+            }
             snapshot.setFormulas(normalizeFormulaMatrix(snapshot.getFormulas()));
             return snapshot;
         } catch (JsonProcessingException e) {
@@ -199,6 +205,8 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             ExcelWorkbookSnapshot materialized = materializeSubmission(fileUrl, workbook);
             normalized = new ExcelTemplateAnswerSnapshot();
             normalized.setValues(getRangeValues(materialized, answerSheet, answerRange));
+            normalized.setDisplays(getRangeDisplays(materialized, answerSheet, answerRange));
+            normalized.setNumberFormats(getRangeNumberFormats(materialized, answerSheet, answerRange));
             if (Boolean.TRUE.equals(checkFormula)) {
                 normalized.setFormulas(getRangeFormulas(materialized, answerSheet, answerRange));
             }
@@ -1167,6 +1175,52 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             formulas.add(rowFormulas);
         }
         return formulas;
+    }
+
+    private List<List<String>> getRangeDisplays(ExcelWorkbookSnapshot workbookSnapshot, String sheetName, String rangeRef) {
+        RangeRef range = parseRange(rangeRef);
+        if (range == null) {
+            return List.of();
+        }
+        List<List<String>> displays = new ArrayList<>();
+        ExcelWorkbookSnapshot.SheetSnapshot sheet = findSheet(workbookSnapshot, sheetName);
+        for (int row = range.startRow; row <= range.endRow; row += 1) {
+            List<String> rowDisplays = new ArrayList<>();
+            for (int col = range.startCol; col <= range.endCol; col += 1) {
+                String cellRef = toCellRef(row, col);
+                String display = "";
+                if (sheet != null && sheet.getCells() != null) {
+                    ExcelWorkbookSnapshot.CellSnapshot cell = sheet.getCells().get(cellRef);
+                    display = cell == null ? "" : defaultText(cell.getDisplay());
+                }
+                rowDisplays.add(display);
+            }
+            displays.add(rowDisplays);
+        }
+        return displays;
+    }
+
+    private List<List<String>> getRangeNumberFormats(ExcelWorkbookSnapshot workbookSnapshot, String sheetName, String rangeRef) {
+        RangeRef range = parseRange(rangeRef);
+        if (range == null) {
+            return List.of();
+        }
+        List<List<String>> numberFormats = new ArrayList<>();
+        ExcelWorkbookSnapshot.SheetSnapshot sheet = findSheet(workbookSnapshot, sheetName);
+        for (int row = range.startRow; row <= range.endRow; row += 1) {
+            List<String> rowNumberFormats = new ArrayList<>();
+            for (int col = range.startCol; col <= range.endCol; col += 1) {
+                String cellRef = toCellRef(row, col);
+                String numberFormat = "";
+                if (sheet != null && sheet.getCells() != null) {
+                    ExcelWorkbookSnapshot.CellSnapshot cell = sheet.getCells().get(cellRef);
+                    numberFormat = cell == null ? "" : defaultText(cell.getNumberFormat());
+                }
+                rowNumberFormats.add(numberFormat);
+            }
+            numberFormats.add(rowNumberFormats);
+        }
+        return numberFormats;
     }
 
     private String getCellFormula(ExcelWorkbookSnapshot workbookSnapshot, String sheetName, String cellRef) {
