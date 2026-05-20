@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Edit3, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminSection, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { QuestionCategoryForm, QuestionCategoryRecord, adminRequest, showAdminSuccess, runAdminDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, defaultQuestionCategoryForm } from "./AdminConsoleShared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminSection, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { QuestionCategoryForm, QuestionCategoryRecord, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, defaultQuestionCategoryForm } from "./AdminConsoleShared";
 
 export function AdminQuestionCategories() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function AdminQuestionCategories() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<QuestionCategoryRecord | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState<QuestionCategoryForm>(defaultQuestionCategoryForm());
   const questionCategoriesQuery = useQuery({
     queryKey: adminKeys.questionCategories(),
@@ -24,6 +26,8 @@ export function AdminQuestionCategories() {
     },
   });
   const records = questionCategoriesQuery.data || [];
+  const bulkSelection = useAdminBulkSelection(records, (item) => item.id);
+  const refreshCategories = () => queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() }).then(() => undefined);
 
   const openCreate = () => {
     setEditing(null);
@@ -62,7 +66,7 @@ export function AdminQuestionCategories() {
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("题目分类", result?.name || form.name, "已创建"));
     }
-    await queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() });
+    await refreshCategories();
   };
 
   const toggleEnabled = async (item: QuestionCategoryRecord, nextEnabled: boolean) => {
@@ -80,7 +84,7 @@ export function AdminQuestionCategories() {
     );
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("题目分类", item.name, nextEnabled ? "已启用" : "已停用"));
-    await queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() });
+    await refreshCategories();
   };
 
   const remove = async (item: QuestionCategoryRecord) => {
@@ -96,7 +100,31 @@ export function AdminQuestionCategories() {
       successMessage: formatAdminEntityMessage("题目分类", item.name, "已删除"),
       staleMessage: `题目分类《${item.name}》不存在，列表已刷新`,
       errorLabel: "删除题目分类",
-      onRefresh: () => queryClient.invalidateQueries({ queryKey: adminKeys.questionCategories() }).then(() => undefined),
+      onRefresh: refreshCategories,
+    });
+  };
+
+  const removeSelected = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除题目分类",
+      message: `确认删除选中的 ${items.length} 个题目分类？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/question-categories/${item.id}`),
+      entityName: "题目分类",
+      errorLabel: "批量删除题目分类",
+      onRefresh: refreshCategories,
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
     });
   };
 
@@ -106,9 +134,19 @@ export function AdminQuestionCategories() {
       description="维护练习题目分类，同时控制前台章节板块的名称、描述、排序与启用状态。"
     >
       <AdminSection title="分类列表" actions={<AddButton onClick={openCreate}>新增题目分类</AddButton>}>
+        <AdminBulkActions
+          selectedCount={bulkSelection.selectedCount}
+          totalCount={records.length}
+          allVisibleSelected={bulkSelection.allVisibleSelected}
+          deleting={bulkDeleting}
+          onToggleAll={bulkSelection.toggleAllVisible}
+          onClear={bulkSelection.clear}
+          onDeleteSelected={() => void removeSelected()}
+        />
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">选择</TableHead>
               <TableHead>名称</TableHead>
               <TableHead>分组</TableHead>
               <TableHead>描述</TableHead>
@@ -120,6 +158,13 @@ export function AdminQuestionCategories() {
           <TableBody>
             {records.map((item) => (
               <TableRow key={item.id}>
+                <TableCell>
+                  <AdminBulkCheckbox
+                    checked={bulkSelection.isSelected(item.id)}
+                    onChange={() => bulkSelection.toggleOne(item.id)}
+                    label={`选择题目分类 ${item.name}`}
+                  />
+                </TableCell>
                 <TableCell className="font-bold text-slate-800">{item.name}</TableCell>
                 <TableCell>{item.groupName || "-"}</TableCell>
                 <TableCell className="max-w-[320px] truncate">{item.description || "-"}</TableCell>

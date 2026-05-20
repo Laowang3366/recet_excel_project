@@ -22,8 +22,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Switch } from "../components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
   AddButton,
+  AdminBulkActions,
+  AdminBulkCheckbox,
   AdminEmptyState,
   AdminPageShell,
   AdminPermissionNotice,
@@ -40,6 +43,7 @@ import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { adminKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
+import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
 
 type FormDialogProps = {
   open: boolean;
@@ -140,6 +144,8 @@ export function AdminHomeContent() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
   const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
+  const [categoryBulkDeleting, setCategoryBulkDeleting] = useState(false);
+  const [articleBulkDeleting, setArticleBulkDeleting] = useState(false);
 
   const categoriesQuery = useQuery({
     queryKey: adminKeys.tutorialCategories(),
@@ -182,6 +188,8 @@ export function AdminHomeContent() {
 
   const categories = categoriesQuery.data || [];
   const articles = articlesQuery.data || [];
+  const categoryBulkSelection = useAdminBulkSelection(categories, (item) => item.id);
+  const articleBulkSelection = useAdminBulkSelection(articles, (item) => item.id);
   const chapterOptions = articleLinkOptionsQuery.data?.chapters || [];
   const questionOptions = articleLinkOptionsQuery.data?.questions || [];
   const categoryOptions = useMemo(
@@ -251,6 +259,30 @@ export function AdminHomeContent() {
     } catch (error) {
       handleAdminError(error, navigate);
     }
+  };
+
+  const deleteSelectedCategories = async () => {
+    const items = categoryBulkSelection.selectedItems;
+    if (items.length === 0 || categoryBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除教程分类",
+      message: `确认删除选中的 ${items.length} 个教程分类？分类下教程也会按现有接口处理。`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setCategoryBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/tutorials/categories/${item.id}`),
+      entityName: "教程分类",
+      errorLabel: "批量删除教程分类",
+      onRefresh: refreshAll,
+      onFinally: () => {
+        categoryBulkSelection.clear();
+        setCategoryBulkDeleting(false);
+      },
+    });
   };
 
   const openCreateArticle = () => {
@@ -325,12 +357,46 @@ export function AdminHomeContent() {
     }
   };
 
+  const deleteSelectedArticles = async () => {
+    const items = articleBulkSelection.selectedItems;
+    if (items.length === 0 || articleBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除教程条目",
+      message: `确认删除选中的 ${items.length} 个教程条目？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setArticleBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/tutorials/articles/${item.id}`),
+      entityName: "教程条目",
+      errorLabel: "批量删除教程条目",
+      onRefresh: refreshAll,
+      onFinally: () => {
+        articleBulkSelection.clear();
+        setArticleBulkDeleting(false);
+      },
+    });
+  };
+
   return (
     <AdminPageShell>
       <AdminSection title="首页教程分类" actions={<AddButton onClick={openCreateCategory}>新增分类</AddButton>}>
+        <AdminBulkActions
+          selectedCount={categoryBulkSelection.selectedCount}
+          totalCount={categories.length}
+          allVisibleSelected={categoryBulkSelection.allVisibleSelected}
+          deleting={categoryBulkDeleting}
+          onToggleAll={categoryBulkSelection.toggleAllVisible}
+          onClear={categoryBulkSelection.clear}
+          onDeleteSelected={() => void deleteSelectedCategories()}
+        />
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">选择</TableHead>
               <TableHead>分类名称</TableHead>
               <TableHead>说明</TableHead>
               <TableHead>条目数</TableHead>
@@ -342,6 +408,13 @@ export function AdminHomeContent() {
           <TableBody>
             {categories.map((item) => (
               <TableRow key={item.id}>
+                <TableCell>
+                  <AdminBulkCheckbox
+                    checked={categoryBulkSelection.isSelected(item.id)}
+                    onChange={() => categoryBulkSelection.toggleOne(item.id)}
+                    label={`选择教程分类 ${item.name}`}
+                  />
+                </TableCell>
                 <TableCell className="font-bold text-slate-800">{item.name}</TableCell>
                 <TableCell className="max-w-[420px] truncate">{item.description || "-"}</TableCell>
                 <TableCell>{item.articleCount ?? 0}</TableCell>
@@ -396,9 +469,19 @@ export function AdminHomeContent() {
         </FilterBar>
 
         <div className="mt-5">
+          <AdminBulkActions
+            selectedCount={articleBulkSelection.selectedCount}
+            totalCount={articles.length}
+            allVisibleSelected={articleBulkSelection.allVisibleSelected}
+            deleting={articleBulkDeleting}
+            onToggleAll={articleBulkSelection.toggleAllVisible}
+            onClear={articleBulkSelection.clear}
+            onDeleteSelected={() => void deleteSelectedArticles()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>标题</TableHead>
               <TableHead>所属分类</TableHead>
               <TableHead>轨道 / 难度</TableHead>
@@ -412,6 +495,13 @@ export function AdminHomeContent() {
             <TableBody>
               {articles.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={articleBulkSelection.isSelected(item.id)}
+                      onChange={() => articleBulkSelection.toggleOne(item.id)}
+                      label={`选择教程条目 ${item.title}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.title}</div>
                     <div className="mt-1 text-xs text-slate-400">ID {item.id}</div>

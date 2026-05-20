@@ -5,8 +5,9 @@ import { Edit3, RefreshCcw, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatExperienceBizType, EXPERIENCE_BIZ_TYPE_OPTIONS, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, LevelRuleForm, LevelRuleRecord, ExpRuleForm, ExpRuleRecord, LevelsOverviewResponse, LevelUserRecord, ExpLogRecord, adminRequest, showAdminSuccess, openAdminPrompt, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, generateMachineIdentifier } from "./AdminConsoleShared";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatExperienceBizType, EXPERIENCE_BIZ_TYPE_OPTIONS, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { PagedAdminResponse, LevelRuleForm, LevelRuleRecord, ExpRuleForm, ExpRuleRecord, LevelsOverviewResponse, LevelUserRecord, ExpLogRecord, adminRequest, showAdminSuccess, runAdminBulkDelete, openAdminPrompt, openAdminConfirm, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, generateMachineIdentifier } from "./AdminConsoleShared";
 
 export function AdminLevels() {
   const navigate = useNavigate();
@@ -17,10 +18,12 @@ export function AdminLevels() {
   const [levelRuleOpen, setLevelRuleOpen] = useState(false);
   const [levelRuleEditing, setLevelRuleEditing] = useState<LevelRuleRecord | null>(null);
   const [pendingLevelRuleRemove, setPendingLevelRuleRemove] = useState<LevelRuleRecord | null>(null);
+  const [levelRulesBulkDeleting, setLevelRulesBulkDeleting] = useState(false);
   const [levelRuleForm, setLevelRuleForm] = useState<LevelRuleForm>({ level: "", name: "", threshold: "0", enabled: true });
   const [expRuleOpen, setExpRuleOpen] = useState(false);
   const [expRuleEditing, setExpRuleEditing] = useState<ExpRuleRecord | null>(null);
   const [pendingExpRuleRemove, setPendingExpRuleRemove] = useState<ExpRuleRecord | null>(null);
+  const [expRulesBulkDeleting, setExpRulesBulkDeleting] = useState(false);
   const [expRuleForm, setExpRuleForm] = useState<ExpRuleForm>({ key: "", name: "", description: "", minExp: "0", maxExp: "0", maxObtainCount: "", enabled: true });
   const [userKeyword, setUserKeyword] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
@@ -60,11 +63,15 @@ export function AdminLevels() {
   });
 
   const overview = overviewQuery.data;
+  const levelRules = overview?.levelRules || [];
+  const expRules = overview?.expRules || [];
   const users = usersQuery.data?.records || [];
   const userTotal = usersQuery.data?.total || 0;
   const logs = logsQuery.data?.records || [];
   const logTotal = logsQuery.data?.total || 0;
-  const existingExpRuleKeys = useMemo(() => (overview?.expRules || []).map((item) => String(item.key || "").trim()).filter(Boolean), [overview?.expRules]);
+  const levelRuleBulkSelection = useAdminBulkSelection(levelRules, (item) => item.level);
+  const expRuleBulkSelection = useAdminBulkSelection(expRules, (item) => item.key);
+  const existingExpRuleKeys = useMemo(() => expRules.map((item) => String(item.key || "").trim()).filter(Boolean), [expRules]);
   const experienceBizTypeOptions = useMemo(() => {
     const normalizedCurrentBizType = String(bizType || "").trim();
     if (!normalizedCurrentBizType) return EXPERIENCE_BIZ_TYPE_OPTIONS;
@@ -140,6 +147,32 @@ export function AdminLevels() {
     setPendingLevelRuleRemove(null);
     showAdminSuccess(formatAdminEntityMessage("等级定义", pendingLevelRuleRemove.name || `Lv.${pendingLevelRuleRemove.level}`, "已删除"));
     await Promise.all([refreshOverview(), refreshUsers()]);
+  };
+
+  const removeSelectedLevelRules = async () => {
+    const items = levelRuleBulkSelection.selectedItems;
+    if (!items.length || levelRulesBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除等级定义",
+      message: `确认删除选中的 ${items.length} 条等级定义？删除后会自动重算受影响用户等级。`,
+      confirmLabel: "确认删除",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setLevelRulesBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/levels/rules/${item.level}`),
+      entityName: "等级定义",
+      errorLabel: "批量删除等级定义",
+      onRefresh: async () => {
+        await Promise.all([refreshOverview(), refreshUsers()]);
+      },
+      onFinally: () => {
+        levelRuleBulkSelection.clear();
+        setLevelRulesBulkDeleting(false);
+      },
+    });
   };
 
   const toggleLevelRuleEnabled = async (item: LevelRuleRecord, nextEnabled: boolean) => {
@@ -232,6 +265,30 @@ export function AdminLevels() {
     await refreshOverview();
   };
 
+  const removeSelectedExpRules = async () => {
+    const items = expRuleBulkSelection.selectedItems;
+    if (!items.length || expRulesBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除经验规则",
+      message: `确认删除选中的 ${items.length} 条经验规则？`,
+      confirmLabel: "确认删除",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setExpRulesBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/levels/exp-rules/${item.key}`),
+      entityName: "经验规则",
+      errorLabel: "批量删除经验规则",
+      onRefresh: refreshOverview,
+      onFinally: () => {
+        expRuleBulkSelection.clear();
+        setExpRulesBulkDeleting(false);
+      },
+    });
+  };
+
   const toggleExpRuleEnabled = async (item: ExpRuleRecord, nextEnabled: boolean) => {
     const result = await adminRequest(
       api.put(`/api/admin/levels/exp-rules/${item.key}`, {
@@ -316,14 +373,24 @@ export function AdminLevels() {
             </div>
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-                {(overview?.levelRules || []).length} 条定义
+                {levelRules.length} 条定义
               </span>
               <AddButton onClick={openCreateLevelRule}>新增定义</AddButton>
             </div>
           </div>
+          <AdminBulkActions
+            selectedCount={levelRuleBulkSelection.selectedCount}
+            totalCount={levelRules.length}
+            allVisibleSelected={levelRuleBulkSelection.allVisibleSelected}
+            deleting={levelRulesBulkDeleting}
+            onToggleAll={levelRuleBulkSelection.toggleAllVisible}
+            onClear={levelRuleBulkSelection.clear}
+            onDeleteSelected={() => void removeSelectedLevelRules()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>等级</TableHead>
                 <TableHead>名称</TableHead>
                 <TableHead>经验阈值</TableHead>
@@ -332,8 +399,15 @@ export function AdminLevels() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(overview?.levelRules || []).map((item) => (
+              {levelRules.map((item) => (
                 <TableRow key={item.level}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={levelRuleBulkSelection.isSelected(item.level)}
+                      onChange={() => levelRuleBulkSelection.toggleOne(item.level)}
+                      label={`选择等级定义 ${item.name || item.level}`}
+                    />
+                  </TableCell>
                   <TableCell>Lv.{item.level}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.threshold}</TableCell>
@@ -413,14 +487,24 @@ export function AdminLevels() {
             </div>
             <div className="flex items-center gap-3">
               <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-                {(overview?.expRules || []).length} 条规则
+                {expRules.length} 条规则
               </span>
               <AddButton onClick={openCreateExpRule}>新增规则</AddButton>
             </div>
           </div>
+          <AdminBulkActions
+            selectedCount={expRuleBulkSelection.selectedCount}
+            totalCount={expRules.length}
+            allVisibleSelected={expRuleBulkSelection.allVisibleSelected}
+            deleting={expRulesBulkDeleting}
+            onToggleAll={expRuleBulkSelection.toggleAllVisible}
+            onClear={expRuleBulkSelection.clear}
+            onDeleteSelected={() => void removeSelectedExpRules()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>规则</TableHead>
                 <TableHead>经验范围</TableHead>
                 <TableHead>最多可获得</TableHead>
@@ -429,8 +513,15 @@ export function AdminLevels() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(overview?.expRules || []).map((item) => (
+              {expRules.map((item) => (
                 <TableRow key={item.key}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={expRuleBulkSelection.isSelected(item.key)}
+                      onChange={() => expRuleBulkSelection.toggleOne(item.key)}
+                      label={`选择经验规则 ${item.label || item.key}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.label}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.description || "-"}</div>

@@ -6,8 +6,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Switch } from "../components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
   AddButton,
+  AdminBulkActions,
+  AdminBulkCheckbox,
   AdminEmptyState,
   AdminPageShell,
   AdminPermissionNotice,
@@ -31,6 +34,7 @@ import {
   TEMPLATE_INDUSTRY_CATEGORIES,
 } from "../lib/template-center";
 import { useSession } from "../lib/session";
+import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
 
 type TemplateForm = {
   title: string;
@@ -86,6 +90,7 @@ export function AdminTemplateCenter() {
   const [form, setForm] = useState<TemplateForm>(defaultForm);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const templatesQuery = useQuery({
     queryKey: adminKeys.templates({ industryCategory: filterCategory }),
@@ -102,6 +107,7 @@ export function AdminTemplateCenter() {
   });
 
   const records = templatesQuery.data?.records || [];
+  const bulkSelection = useAdminBulkSelection(records, (item) => item.id);
   const categoryOptions = useMemo(
     () => (templatesQuery.data?.industryCategories || TEMPLATE_INDUSTRY_CATEGORIES).map((item: string) => ({ value: item, label: item })),
     [templatesQuery.data?.industryCategories]
@@ -192,6 +198,30 @@ export function AdminTemplateCenter() {
     }
   };
 
+  const deleteSelectedTemplates = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除模板",
+      message: `确认删除选中的 ${items.length} 个模板？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/templates/${item.id}`),
+      entityName: "模板",
+      errorLabel: "批量删除模板",
+      onRefresh: refreshAll,
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
+    });
+  };
+
   const uploadAsset = async (file: File, kind: "preview" | "template") => {
     const formData = new FormData();
     formData.append("file", file);
@@ -234,9 +264,19 @@ export function AdminTemplateCenter() {
         </FilterBar>
 
         <div className="mt-5">
+          <AdminBulkActions
+            selectedCount={bulkSelection.selectedCount}
+            totalCount={records.length}
+            allVisibleSelected={bulkSelection.allVisibleSelected}
+            deleting={bulkDeleting}
+            onToggleAll={bulkSelection.toggleAllVisible}
+            onClear={bulkSelection.clear}
+            onDeleteSelected={() => void deleteSelectedTemplates()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>模板标题</TableHead>
                 <TableHead>行业分类</TableHead>
                 <TableHead>使用场景</TableHead>
@@ -251,6 +291,13 @@ export function AdminTemplateCenter() {
             <TableBody>
               {records.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={bulkSelection.isSelected(item.id)}
+                      onChange={() => bulkSelection.toggleOne(item.id)}
+                      label={`选择模板 ${item.title}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="h-12 w-16 overflow-hidden rounded-[4px] border border-slate-200 bg-slate-50">

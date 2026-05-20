@@ -6,8 +6,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Switch } from "../components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
   AddButton,
+  AdminBulkActions,
+  AdminBulkCheckbox,
   AdminEmptyState,
   AdminPageShell,
   AdminPagination,
@@ -28,6 +31,7 @@ import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { adminKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
+import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
 
 type AiAssistantConfigRecord = {
   id: number;
@@ -104,6 +108,7 @@ export function AdminAssistant() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingDefaultPrompt, setLoadingDefaultPrompt] = useState(false);
   const [savingDefaultPrompt, setSavingDefaultPrompt] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -143,6 +148,7 @@ export function AdminAssistant() {
   });
 
   const configs = configsQuery.data?.records || [];
+  const bulkSelection = useAdminBulkSelection(configs, (item) => item.id);
   const stats = statsQuery.data || {};
   const overview = stats.overview || {};
   const statRecords = stats.records || [];
@@ -246,6 +252,30 @@ export function AdminAssistant() {
     }
   };
 
+  const deleteSelectedConfigs = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除 AI 助手配置",
+      message: `确认删除选中的 ${items.length} 个 AI 助手配置？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/assistant/configs/${item.id}`),
+      entityName: "AI 助手配置",
+      errorLabel: "批量删除 AI 助手配置",
+      onRefresh: refreshAll,
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
+    });
+  };
+
   const fetchModels = async () => {
     const normalizedApiKey = normalizeApiKeyInput(form.apiKey);
     setLoadingModels(true);
@@ -337,10 +367,21 @@ export function AdminAssistant() {
         {configs.length === 0 ? (
           <AdminEmptyState message="暂无 AI 助手配置。" />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>配置</TableHead>
+          <>
+            <AdminBulkActions
+              selectedCount={bulkSelection.selectedCount}
+              totalCount={configs.length}
+              allVisibleSelected={bulkSelection.allVisibleSelected}
+              deleting={bulkDeleting}
+              onToggleAll={bulkSelection.toggleAllVisible}
+              onClear={bulkSelection.clear}
+              onDeleteSelected={() => void deleteSelectedConfigs()}
+            />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                <TableHead className="w-10">选择</TableHead>
+                  <TableHead>配置</TableHead>
                 <TableHead>URL</TableHead>
                 <TableHead>模型</TableHead>
                 <TableHead>密钥</TableHead>
@@ -353,6 +394,13 @@ export function AdminAssistant() {
             <TableBody>
               {configs.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={bulkSelection.isSelected(item.id)}
+                      onChange={() => bulkSelection.toggleOne(item.id)}
+                      label={`选择 AI 助手配置 ${item.name}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-semibold text-[#262626]">{item.name}</div>
                     <div className="mt-1 text-xs text-[#8c8c8c]">排序 {item.sortOrder || 0}</div>
@@ -392,6 +440,7 @@ export function AdminAssistant() {
               ))}
             </TableBody>
           </Table>
+          </>
         )}
       </AdminSection>
 

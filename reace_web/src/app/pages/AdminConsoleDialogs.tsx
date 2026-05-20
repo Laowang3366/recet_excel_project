@@ -6,6 +6,7 @@ import { ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { getDefaultAdminPath } from "../admin/config";
 import { inputClassName, primaryButtonClassName, secondaryButtonClassName } from "../admin/shared";
+import { runSequentialAdminBulkAction } from "../admin/bulk-selection";
 import type { AdminConfirmRequest, AdminDialogController, AdminDialogRequest, AdminPromptRequest } from "./AdminConsoleTypes";
 
 let adminDialogController: AdminDialogController | null = null;
@@ -248,6 +249,38 @@ export async function runAdminDelete(options: {
     }
     toast.error(`${errorLabel}失败：系统异常，请稍后重试`);
     return false;
+  } finally {
+    onFinally?.();
+    if (onRefresh) {
+      await onRefresh();
+    }
+  }
+}
+
+export async function runAdminBulkDelete<T>(options: {
+  items: readonly T[];
+  request: (item: T) => Promise<unknown>;
+  entityName: string;
+  errorLabel: string;
+  successLabel?: string;
+  onRefresh?: () => Promise<void>;
+  onFinally?: () => void;
+}) {
+  const { items, request, entityName, errorLabel, successLabel = "已删除", onRefresh, onFinally } = options;
+  try {
+    const result = await runSequentialAdminBulkAction(items, request);
+    if (result.successCount > 0) {
+      toast.success(`${successLabel} ${result.successCount} 条${entityName}`);
+    }
+    if (result.failedCount > 0) {
+      const firstError = result.firstError;
+      if (firstError instanceof ApiError) {
+        toast.error(`${errorLabel}部分失败：${firstError.message || "操作失败"}`);
+      } else {
+        toast.error(`${errorLabel}部分失败：系统异常，请稍后重试`);
+      }
+    }
+    return result;
   } finally {
     onFinally?.();
     if (onRefresh) {

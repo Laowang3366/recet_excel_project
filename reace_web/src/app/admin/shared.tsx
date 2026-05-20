@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 
 export const POINTS_TASK_KEY_OPTIONS = [
@@ -268,6 +268,71 @@ export function formatAdminRole(value: unknown) {
     user: "用户",
   };
   return map[normalized] || String(value ?? "-");
+}
+
+export function AdminBulkActions({
+  selectedCount,
+  totalCount,
+  allVisibleSelected,
+  deleteLabel = "删除选中",
+  processingLabel = "删除中...",
+  deleting = false,
+  onToggleAll,
+  onClear,
+  onDeleteSelected,
+}: {
+  selectedCount: number;
+  totalCount: number;
+  allVisibleSelected: boolean;
+  deleteLabel?: string;
+  processingLabel?: string;
+  deleting?: boolean;
+  onToggleAll: () => void;
+  onClear: () => void;
+  onDeleteSelected: () => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-[#e5e7eb] bg-[#fafafa] px-3 py-2 text-sm text-[#595959]">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onToggleAll} disabled={totalCount === 0} className={secondaryButtonClassName()}>
+          {allVisibleSelected ? "取消全选" : "全选本页"}
+        </button>
+        <button type="button" onClick={onClear} disabled={selectedCount === 0} className={secondaryButtonClassName()}>
+          清空选择
+        </button>
+        <span className="text-xs text-[#8c8c8c]">已选 {selectedCount} / 本页 {totalCount}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onDeleteSelected}
+        disabled={selectedCount === 0 || deleting}
+        className={`${secondaryButtonClassName()} !border-rose-200 !text-rose-600 hover:!border-rose-400 hover:!text-rose-700`}
+      >
+        <Trash2 size={14} />
+        {deleting ? processingLabel : `${deleteLabel} (${selectedCount})`}
+      </button>
+    </div>
+  );
+}
+
+export function AdminBulkCheckbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      aria-label={label}
+      className="h-4 w-4 rounded border-[#d9d9d9] text-[#1677ff] focus:ring-[#1677ff]/20"
+    />
+  );
 }
 
 export function formatQuestionType(value: unknown) {

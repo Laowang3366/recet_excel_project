@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Edit3, Send, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatPointsTaskKey, formatPointsRuleType, POINTS_RULE_TYPE_OPTIONS, POINTS_TASK_KEY_OPTIONS, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, AdminUserRecord, PointsRuleForm, PointsRuleRecord, PointsOptionKind, PointsOptionForm, PointsOptionRecord, PointsStatsResponse, PointsOptionsResponse, PointsRecord, PointsGrantResponse, adminRequest, showAdminSuccess, runAdminDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, defaultPointsRuleForm, defaultPointsOptionForm, buildAdminOptionChoices, buildAdminOptionLabelMap, generateMachineIdentifier } from "./AdminConsoleShared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatPointsTaskKey, formatPointsRuleType, POINTS_RULE_TYPE_OPTIONS, POINTS_TASK_KEY_OPTIONS, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { PagedAdminResponse, AdminUserRecord, PointsRuleForm, PointsRuleRecord, PointsOptionKind, PointsOptionForm, PointsOptionRecord, PointsStatsResponse, PointsOptionsResponse, PointsRecord, PointsGrantResponse, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, defaultPointsRuleForm, defaultPointsOptionForm, buildAdminOptionChoices, buildAdminOptionLabelMap, generateMachineIdentifier } from "./AdminConsoleShared";
 
 export function AdminPoints() {
   const navigate = useNavigate();
@@ -24,6 +25,9 @@ export function AdminPoints() {
   const [optionEditing, setOptionEditing] = useState<PointsOptionRecord | null>(null);
   const [optionKind, setOptionKind] = useState<PointsOptionKind>("type");
   const [optionForm, setOptionForm] = useState<PointsOptionForm>(defaultPointsOptionForm("type"));
+  const [rulesBulkDeleting, setRulesBulkDeleting] = useState(false);
+  const [typeOptionsBulkDeleting, setTypeOptionsBulkDeleting] = useState(false);
+  const [taskOptionsBulkDeleting, setTaskOptionsBulkDeleting] = useState(false);
   const grantUsernameRef = useRef<HTMLDivElement | null>(null);
   const size = 10;
   const recordsQueryPath = `/api/admin/points/records?page=${recordsPage}&size=${size}${recordsKeyword.trim() ? `&username=${encodeURIComponent(recordsKeyword.trim())}` : ""}`;
@@ -75,6 +79,9 @@ export function AdminPoints() {
   const pointsOptions = optionsQuery.data || { types: [], taskKeys: [] };
   const rules = rulesQuery.data || [];
   const records = recordsQuery.data?.records || [];
+  const rulesBulkSelection = useAdminBulkSelection(rules, (item) => item.id);
+  const typeOptionsBulkSelection = useAdminBulkSelection(pointsOptions.types || [], (item) => item.id);
+  const taskOptionsBulkSelection = useAdminBulkSelection(pointsOptions.taskKeys || [], (item) => item.id);
   const grantUserOptions = grantUsersQuery.data?.records || [];
   const existingTypeValues = useMemo(() => (pointsOptions.types || []).map((item) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.types]);
   const existingTaskKeyValues = useMemo(() => (pointsOptions.taskKeys || []).map((item) => String(item.value || item.optionValue || "").trim()).filter(Boolean), [pointsOptions.taskKeys]);
@@ -261,6 +268,70 @@ export function AdminPoints() {
     });
   };
 
+  const removeSelectedRules = async () => {
+    const items = rulesBulkSelection.selectedItems;
+    if (items.length === 0 || rulesBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除积分规则",
+      message: `确认删除选中的 ${items.length} 条积分规则？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setRulesBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/points/rules/${item.id}`),
+      entityName: "积分规则",
+      errorLabel: "批量删除积分规则",
+      onRefresh: async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: adminKeys.pointsRules() }),
+          queryClient.invalidateQueries({ queryKey: adminKeys.pointsStats() }),
+          queryClient.invalidateQueries({ queryKey: adminKeys.pointsRecords({ page: recordsPage, size, keyword: recordsKeyword.trim() }) }),
+        ]);
+      },
+      onFinally: () => {
+        rulesBulkSelection.clear();
+        setRulesBulkDeleting(false);
+      },
+    });
+  };
+
+  const removeSelectedOptions = async (
+    kind: PointsOptionKind,
+    selection: typeof typeOptionsBulkSelection,
+    setDeleting: (next: boolean) => void,
+  ) => {
+    const items = selection.selectedItems;
+    const label = kind === "type" ? "规则类型" : "任务类型";
+    if (items.length === 0) return;
+    const confirmed = await openAdminConfirm({
+      title: `批量删除${label}`,
+      message: `确认删除选中的 ${items.length} 个${label}？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/points/options/${item.id}`),
+      entityName: label,
+      errorLabel: `批量删除${label}`,
+      onRefresh: async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: adminKeys.pointsOptions() }),
+          queryClient.invalidateQueries({ queryKey: adminKeys.pointsRules() }),
+        ]);
+      },
+      onFinally: () => {
+        selection.clear();
+        setDeleting(false);
+      },
+    });
+  };
+
   const grantPoints = async () => {
     const payload = {
       username: grantForm.username.trim(),
@@ -362,9 +433,19 @@ export function AdminPoints() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <AdminSection title="积分规则" actions={<AddButton onClick={openCreate}>新增积分规则</AddButton>}>
+          <AdminBulkActions
+            selectedCount={rulesBulkSelection.selectedCount}
+            totalCount={rules.length}
+            allVisibleSelected={rulesBulkSelection.allVisibleSelected}
+            deleting={rulesBulkDeleting}
+            onToggleAll={rulesBulkSelection.toggleAllVisible}
+            onClear={rulesBulkSelection.clear}
+            onDeleteSelected={() => void removeSelectedRules()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>规则名称</TableHead>
                 <TableHead>任务标识</TableHead>
                 <TableHead>分值</TableHead>
@@ -376,6 +457,13 @@ export function AdminPoints() {
             <TableBody>
               {rules.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={rulesBulkSelection.isSelected(item.id)}
+                      onChange={() => rulesBulkSelection.toggleOne(item.id)}
+                      label={`选择积分规则 ${item.name}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-bold text-slate-800">{item.name}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.description || "-"}</div>
@@ -404,9 +492,19 @@ export function AdminPoints() {
 
         <AdminSection title="规则类型管理" actions={<AddButton onClick={() => openOptionCreate("type")}>新增类型</AddButton>}>
           <div className="mb-4 text-xs text-slate-500">每日任务和一次性任务带有内置积分去重逻辑；新增类型会按通用规则处理。</div>
+          <AdminBulkActions
+            selectedCount={typeOptionsBulkSelection.selectedCount}
+            totalCount={(pointsOptions.types || []).length}
+            allVisibleSelected={typeOptionsBulkSelection.allVisibleSelected}
+            deleting={typeOptionsBulkDeleting}
+            onToggleAll={typeOptionsBulkSelection.toggleAllVisible}
+            onClear={typeOptionsBulkSelection.clear}
+            onDeleteSelected={() => void removeSelectedOptions("type", typeOptionsBulkSelection, setTypeOptionsBulkDeleting)}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>显示名称</TableHead>
                 <TableHead>中文显示</TableHead>
                 <TableHead>使用规则</TableHead>
@@ -417,6 +515,13 @@ export function AdminPoints() {
             <TableBody>
               {(pointsOptions.types || []).map((item) => (
                 <TableRow key={`type-${item.id}`}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={typeOptionsBulkSelection.isSelected(item.id)}
+                      onChange={() => typeOptionsBulkSelection.toggleOne(item.id)}
+                      label={`选择规则类型 ${item.label}`}
+                    />
+                  </TableCell>
                   <TableCell>{item.label}</TableCell>
                   <TableCell>{resolveRuleTypeLabel(item.value)}</TableCell>
                   <TableCell>{item.usageCount ?? 0}</TableCell>
@@ -436,9 +541,19 @@ export function AdminPoints() {
 
         <AdminSection title="任务类型管理" actions={<AddButton onClick={() => openOptionCreate("task_key")}>新增任务类型</AddButton>}>
           <div className="mb-4 text-xs text-slate-500">新增任务类型只会进入规则配置选项；如需自动发放积分，还需要业务代码调用对应任务标识。</div>
+          <AdminBulkActions
+            selectedCount={taskOptionsBulkSelection.selectedCount}
+            totalCount={(pointsOptions.taskKeys || []).length}
+            allVisibleSelected={taskOptionsBulkSelection.allVisibleSelected}
+            deleting={taskOptionsBulkDeleting}
+            onToggleAll={taskOptionsBulkSelection.toggleAllVisible}
+            onClear={taskOptionsBulkSelection.clear}
+            onDeleteSelected={() => void removeSelectedOptions("task_key", taskOptionsBulkSelection, setTaskOptionsBulkDeleting)}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>显示名称</TableHead>
                 <TableHead>中文显示</TableHead>
                 <TableHead>使用规则</TableHead>
@@ -449,6 +564,13 @@ export function AdminPoints() {
             <TableBody>
               {(pointsOptions.taskKeys || []).map((item) => (
                 <TableRow key={`task-${item.id}`}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={taskOptionsBulkSelection.isSelected(item.id)}
+                      onChange={() => taskOptionsBulkSelection.toggleOne(item.id)}
+                      label={`选择任务类型 ${item.label}`}
+                    />
+                  </TableCell>
                   <TableCell>{item.label}</TableCell>
                   <TableCell>{resolveTaskKeyLabel(item.value)}</TableCell>
                   <TableCell>{item.usageCount ?? 0}</TableCell>

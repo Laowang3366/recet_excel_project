@@ -5,11 +5,12 @@ import { ChevronDown, ChevronRight, Edit3, FileSpreadsheet, LoaderCircle, MouseP
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, detectFormulaAnswerRegion, extractRangeAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson } from "./AdminConsoleShared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { PagedAdminResponse, QuestionCategoryRecord, DailyChallengeForm, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson } from "./AdminConsoleShared";
 
 const ExcelWorkbookEditor = lazy(() =>
   preloadExcelWorkbookEditor().then((module) => ({ default: module.ExcelWorkbookEditor }))
@@ -25,6 +26,7 @@ export function AdminQuestions() {
   const [keyword, setKeyword] = useState("");
   const [enabledFilter, setEnabledFilter] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("");
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [campaignConfigExpanded, setCampaignConfigExpanded] = useState(false);
   const [dailyChallengeForm, setDailyChallengeForm] = useState<DailyChallengeForm>({
     challengeDate: "",
@@ -96,6 +98,7 @@ export function AdminQuestions() {
 
   const records = questionsQuery.data?.questions || [];
   const total = questionsQuery.data?.total || 0;
+  const bulkSelection = useAdminBulkSelection(records, (item) => item.id);
   const questionCategories = questionCategoriesQuery.data || [];
   const campaignLevelsQuery = useQuery({
     queryKey: adminKeys.practiceCampaignLevels(),
@@ -365,6 +368,30 @@ export function AdminQuestions() {
       staleMessage: `题目《${item.title}》不存在，列表已刷新`,
       errorLabel: "删除题目",
       onRefresh: () => queryClient.invalidateQueries({ queryKey: questionListQueryKey }).then(() => undefined),
+    });
+  };
+
+  const removeSelected = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除题目",
+      message: `确认删除选中的 ${items.length} 道题目？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/questions/${item.id}`),
+      entityName: "题目",
+      errorLabel: "批量删除题目",
+      onRefresh: () => queryClient.invalidateQueries({ queryKey: questionListQueryKey }).then(() => undefined),
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
     });
   };
 
@@ -688,9 +715,21 @@ export function AdminQuestions() {
         </FilterBar>
 
         <div className="mt-4 overflow-hidden rounded-[2px] border border-[#f0f0f0]">
+          <div className="p-3 pb-0">
+            <AdminBulkActions
+              selectedCount={bulkSelection.selectedCount}
+              totalCount={records.length}
+              allVisibleSelected={bulkSelection.allVisibleSelected}
+              deleting={bulkDeleting}
+              onToggleAll={bulkSelection.toggleAllVisible}
+              onClear={bulkSelection.clear}
+              onDeleteSelected={() => void removeSelected()}
+            />
+          </div>
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-[#fafafa]">
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>题目</TableHead>
                 <TableHead>工作表 / 区域</TableHead>
                 <TableHead>难度 / 奖励</TableHead>
@@ -701,6 +740,13 @@ export function AdminQuestions() {
             <TableBody>
               {records.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={bulkSelection.isSelected(item.id)}
+                      onChange={() => bulkSelection.toggleOne(item.id)}
+                      label={`选择题目 ${item.title}`}
+                    />
+                  </TableCell>
                   <TableCell className="max-w-[520px] py-2">
                     <div className="line-clamp-1 font-bold text-slate-800">{item.title}</div>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">

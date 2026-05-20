@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Edit3, Send, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, AdminStatCard, AdminStatGrid, formatMaybeDate, formatAdminStatus, formatRoleList, formatNotificationTarget, formatNotificationType, NOTIFICATION_TARGET_OPTIONS, NOTIFICATION_TYPE_OPTIONS, ROLE_OPTIONS, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, AdminNotificationForm, AdminNotificationRecord, AdminNotificationStats, adminRequest, showAdminSuccess, runAdminDelete, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, defaultNotificationForm } from "./AdminConsoleShared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, AdminStatCard, AdminStatGrid, formatMaybeDate, formatAdminStatus, formatRoleList, formatNotificationTarget, formatNotificationType, NOTIFICATION_TARGET_OPTIONS, NOTIFICATION_TYPE_OPTIONS, ROLE_OPTIONS, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { PagedAdminResponse, AdminNotificationForm, AdminNotificationRecord, AdminNotificationStats, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, defaultNotificationForm } from "./AdminConsoleShared";
 
 export function AdminNotifications() {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ export function AdminNotifications() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminNotificationRecord | null>(null);
   const [pendingRemove, setPendingRemove] = useState<AdminNotificationRecord | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState<AdminNotificationForm>(defaultNotificationForm());
   const size = 10;
   const statsQuery = useQuery({
@@ -37,6 +39,13 @@ export function AdminNotifications() {
   const stats = statsQuery.data;
   const records = notificationsQuery.data?.records || [];
   const total = notificationsQuery.data?.total || 0;
+  const bulkSelection = useAdminBulkSelection(records, (item) => item.id);
+  const refreshNotifications = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: adminKeys.notificationsStats() }),
+      queryClient.invalidateQueries({ queryKey: adminKeys.notifications({ page, size }) }),
+    ]);
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -71,20 +80,14 @@ export function AdminNotifications() {
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("通知", result?.title || form.title, "已创建"));
     }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: adminKeys.notificationsStats() }),
-      queryClient.invalidateQueries({ queryKey: adminKeys.notifications({ page, size }) }),
-    ]);
+    await refreshNotifications();
   };
 
   const sendNow = async (item: AdminNotificationRecord) => {
     const result = await adminRequest(api.put(`/api/admin/notifications/${item.id}/send`, {}), navigate, role, "发送通知");
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("通知", item.title, "已发送"));
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: adminKeys.notificationsStats() }),
-      queryClient.invalidateQueries({ queryKey: adminKeys.notifications({ page, size }) }),
-    ]);
+    await refreshNotifications();
   };
 
   const remove = (item: AdminNotificationRecord) => {
@@ -99,13 +102,32 @@ export function AdminNotifications() {
       successMessage: formatAdminEntityMessage("通知", item.title, "已删除"),
       staleMessage: `通知《${item.title}》不存在，列表已刷新`,
       errorLabel: "删除通知",
-      onRefresh: async () => {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: adminKeys.notificationsStats() }),
-          queryClient.invalidateQueries({ queryKey: adminKeys.notifications({ page, size }) }),
-        ]);
-      },
+      onRefresh: refreshNotifications,
       onFinally: () => setPendingRemove(null),
+    });
+  };
+
+  const confirmBulkRemove = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除通知",
+      message: `确认删除选中的 ${items.length} 条通知？`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/notifications/${item.id}`),
+      entityName: "通知",
+      errorLabel: "批量删除通知",
+      onRefresh: refreshNotifications,
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
     });
   };
 
@@ -122,9 +144,19 @@ export function AdminNotifications() {
       </AdminStatGrid>
 
       <AdminSection title="通知列表" actions={<AddButton onClick={openCreate}>新建通知</AddButton>}>
+        <AdminBulkActions
+          selectedCount={bulkSelection.selectedCount}
+          totalCount={records.length}
+          allVisibleSelected={bulkSelection.allVisibleSelected}
+          deleting={bulkDeleting}
+          onToggleAll={bulkSelection.toggleAllVisible}
+          onClear={bulkSelection.clear}
+          onDeleteSelected={() => void confirmBulkRemove()}
+        />
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">选择</TableHead>
               <TableHead>标题</TableHead>
               <TableHead>类型</TableHead>
               <TableHead>发送目标</TableHead>
@@ -136,6 +168,13 @@ export function AdminNotifications() {
           <TableBody>
             {records.map((item) => (
               <TableRow key={item.id}>
+                <TableCell>
+                  <AdminBulkCheckbox
+                    checked={bulkSelection.isSelected(item.id)}
+                    onChange={() => bulkSelection.toggleOne(item.id)}
+                    label={`选择通知 ${item.title}`}
+                  />
+                </TableCell>
                 <TableCell className="max-w-[320px]">
                   <div className="font-bold text-slate-800">{item.title}</div>
                   <div className="mt-1 text-xs text-slate-400 line-clamp-2">{item.content}</div>

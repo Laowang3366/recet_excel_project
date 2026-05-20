@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { Edit3, Lock, MessageSquare, Trash2, UserCog } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import { getAdminAvatarSrc } from "../admin/display";
-import { AddButton, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatMaybeDate, formatAdminRole, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName } from "../admin/shared";
-import { PagedAdminResponse, AdminEditableUserRole, AdminUserForm, AdminUserRecord, AdminUserToggleResponse, adminRequest, showAdminSuccess, runAdminDelete, openAdminPrompt, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, isEditableUserRole, defaultUserForm } from "./AdminConsoleShared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatMaybeDate, formatAdminRole, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName } from "../admin/shared";
+import { PagedAdminResponse, AdminEditableUserRole, AdminUserForm, AdminUserRecord, AdminUserToggleResponse, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminPrompt, openAdminConfirm, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, isEditableUserRole, defaultUserForm } from "./AdminConsoleShared";
 
 export function AdminUsers() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export function AdminUsers() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUserRecord | null>(null);
   const [pendingRemove, setPendingRemove] = useState<AdminUserRecord | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState<AdminUserForm>(defaultUserForm());
   const size = 10;
   const query = new URLSearchParams({ page: String(page), size: String(size) });
@@ -39,6 +41,7 @@ export function AdminUsers() {
 
   const records = usersQuery.data?.records || [];
   const total = usersQuery.data?.total || 0;
+  const bulkSelection = useAdminBulkSelection(records, (item) => item.id);
   const refreshUsers = () =>
     queryClient.invalidateQueries({ queryKey: adminKeys.users({ page, size, keyword: keyword.trim(), role: roleFilter, status: statusFilter }) }).then(() => undefined);
 
@@ -114,6 +117,30 @@ export function AdminUsers() {
     });
   };
 
+  const confirmBulkRemove = async () => {
+    const items = bulkSelection.selectedItems;
+    if (items.length === 0 || bulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除用户",
+      message: `确认删除选中的 ${items.length} 个用户？系统会按现有删除策略执行安全停用。`,
+      confirmLabel: "删除选中",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/users/${item.id}`),
+      entityName: "用户",
+      errorLabel: "批量删除用户",
+      onRefresh: refreshUsers,
+      onFinally: () => {
+        bulkSelection.clear();
+        setBulkDeleting(false);
+      },
+    });
+  };
+
   const toggleLock = async (item: AdminUserRecord) => {
     const result = await adminRequest<AdminUserToggleResponse>(api.put(`/api/admin/users/${item.id}/lock`, {}), navigate, role, item.status === 1 ? "解除用户锁定" : "锁定用户");
     if (!result) return;
@@ -156,9 +183,19 @@ export function AdminUsers() {
         </FilterBar>
 
         <div className="mt-5">
+          <AdminBulkActions
+            selectedCount={bulkSelection.selectedCount}
+            totalCount={records.length}
+            allVisibleSelected={bulkSelection.allVisibleSelected}
+            deleting={bulkDeleting}
+            onToggleAll={bulkSelection.toggleAllVisible}
+            onClear={bulkSelection.clear}
+            onDeleteSelected={() => void confirmBulkRemove()}
+          />
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">选择</TableHead>
                 <TableHead>用户</TableHead>
                 <TableHead>角色</TableHead>
                 <TableHead>状态</TableHead>
@@ -170,6 +207,13 @@ export function AdminUsers() {
             <TableBody>
               {records.map((item) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <AdminBulkCheckbox
+                      checked={bulkSelection.isSelected(item.id)}
+                      onChange={() => bulkSelection.toggleOne(item.id)}
+                      label={`选择用户 ${item.username}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <img src={getAdminAvatarSrc(item)} alt={item.username} className="h-10 w-10 rounded-xl object-cover" />

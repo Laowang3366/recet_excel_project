@@ -8,7 +8,10 @@ import { api } from "../lib/api";
 import { formatDateTime } from "../lib/format";
 import { formatQaAnswerStatus, formatQaFeedbackReason, formatQaStatus, type QaCaseAnswer, type QaCaseHelp, type QaPageResponse, type QaSolutionShare } from "../lib/qa";
 import { adminKeys } from "../lib/query-keys";
+import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
+  AdminBulkActions,
+  AdminBulkCheckbox,
   AdminEmptyState,
   AdminPageShell,
   AdminSection,
@@ -19,7 +22,7 @@ import {
   statusBadgeClassName,
   textareaClassName,
 } from "../admin/shared";
-import { Field, FormDialog, adminRequest, openAdminConfirm, showAdminSuccess, useAdminRole } from "./AdminConsoleShared";
+import { Field, FormDialog, adminRequest, openAdminConfirm, runAdminBulkDelete, showAdminSuccess, useAdminRole } from "./AdminConsoleShared";
 
 type AdminQaStats = {
   cases?: number;
@@ -61,6 +64,9 @@ export function AdminQa() {
   const [caseForm, setCaseForm] = useState<CaseFormState>({ title: "", description: "", answerSheet: "", answerRange: "", status: "open" });
   const [editingShare, setEditingShare] = useState<QaSolutionShare | null>(null);
   const [shareForm, setShareForm] = useState<ShareFormState>({ title: "", thoughtText: "", status: "published" });
+  const [casesBulkDeleting, setCasesBulkDeleting] = useState(false);
+  const [answersBulkDeleting, setAnswersBulkDeleting] = useState(false);
+  const [sharesBulkDeleting, setSharesBulkDeleting] = useState(false);
 
   const statsQuery = useQuery({
     queryKey: adminKeys.qaStats(),
@@ -156,6 +162,9 @@ export function AdminQa() {
   const answers = answersQuery.data?.records || [];
   const shares = sharesQuery.data?.records || [];
   const feedback = feedbackQuery.data?.records || [];
+  const caseBulkSelection = useAdminBulkSelection(cases, (item) => item.id);
+  const answerBulkSelection = useAdminBulkSelection(answers, (item) => item.id);
+  const shareBulkSelection = useAdminBulkSelection(shares, (item) => item.id);
 
   const openCaseEdit = (item: QaCaseHelp) => {
     setEditingCase(item);
@@ -226,6 +235,79 @@ export function AdminQa() {
     if (confirmed) deleteShareMutation.mutate(item);
   };
 
+  const deleteSelectedCases = async () => {
+    const items = caseBulkSelection.selectedItems;
+    if (!items.length || casesBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除案例求助",
+      message: `确认删除选中的 ${items.length} 条案例求助？删除后将不再展示。`,
+      confirmLabel: "确认删除",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setCasesBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/qa/cases/${item.id}`, undefined, { silent: true }),
+      entityName: "案例求助",
+      errorLabel: "批量删除案例求助",
+      onRefresh: refreshAdminQa,
+      onFinally: () => {
+        caseBulkSelection.clear();
+        setCasesBulkDeleting(false);
+      },
+    });
+  };
+
+  const deleteSelectedAnswers = async () => {
+    const items = answerBulkSelection.selectedItems;
+    if (!items.length || answersBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量删除答疑",
+      message: `确认删除选中的 ${items.length} 条答疑提交？`,
+      confirmLabel: "确认删除",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setAnswersBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/qa/answers/${item.id}`, undefined, { silent: true }),
+      entityName: "答疑",
+      errorLabel: "批量删除答疑",
+      onRefresh: refreshAdminQa,
+      onFinally: () => {
+        answerBulkSelection.clear();
+        setAnswersBulkDeleting(false);
+      },
+    });
+  };
+
+  const deleteSelectedShares = async () => {
+    const items = shareBulkSelection.selectedItems;
+    if (!items.length || sharesBulkDeleting) return;
+    const confirmed = await openAdminConfirm({
+      title: "批量下架解题分享",
+      message: `确认下架选中的 ${items.length} 条解题分享？下架后将不再公开展示。`,
+      confirmLabel: "确认下架",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setSharesBulkDeleting(true);
+    await runAdminBulkDelete({
+      items,
+      request: (item) => api.delete(`/api/admin/qa/solution-shares/${item.id}`, undefined, { silent: true }),
+      entityName: "解题分享",
+      errorLabel: "批量下架解题分享",
+      successLabel: "已下架",
+      onRefresh: refreshAdminQa,
+      onFinally: () => {
+        shareBulkSelection.clear();
+        setSharesBulkDeleting(false);
+      },
+    });
+  };
+
   return (
     <AdminPageShell>
       <AdminStatGrid>
@@ -236,10 +318,20 @@ export function AdminQa() {
       </AdminStatGrid>
 
       <AdminSection title="案例求助监控">
+        <AdminBulkActions
+          selectedCount={caseBulkSelection.selectedCount}
+          totalCount={cases.length}
+          allVisibleSelected={caseBulkSelection.allVisibleSelected}
+          deleting={casesBulkDeleting}
+          onToggleAll={caseBulkSelection.toggleAllVisible}
+          onClear={caseBulkSelection.clear}
+          onDeleteSelected={() => void deleteSelectedCases()}
+        />
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-[#f0f0f0] text-sm">
             <thead className="bg-[#fafafa] text-left text-xs font-bold text-[#8c8c8c]">
               <tr>
+                <th className="w-10 px-3 py-2">选择</th>
                 <th className="px-3 py-2">标题</th>
                 <th className="px-3 py-2">状态</th>
                 <th className="px-3 py-2">答疑</th>
@@ -250,6 +342,13 @@ export function AdminQa() {
             <tbody className="divide-y divide-[#f0f0f0]">
               {cases.map((item) => (
                 <tr key={item.id}>
+                  <td className="px-3 py-3">
+                    <AdminBulkCheckbox
+                      checked={caseBulkSelection.isSelected(item.id)}
+                      onChange={() => caseBulkSelection.toggleOne(item.id)}
+                      label={`选择案例求助 ${item.title || item.id}`}
+                    />
+                  </td>
                   <td className="px-3 py-3 font-medium text-[#262626]">{item.title}</td>
                   <td className="px-3 py-3"><span className={statusBadgeClassName(item.status)}>{formatQaStatus(item.status)}</span></td>
                   <td className="px-3 py-3 text-[#595959]">{item.answerCount || 0}</td>
@@ -273,9 +372,23 @@ export function AdminQa() {
       </AdminSection>
 
       <AdminSection title="答疑提交">
+        <AdminBulkActions
+          selectedCount={answerBulkSelection.selectedCount}
+          totalCount={answers.length}
+          allVisibleSelected={answerBulkSelection.allVisibleSelected}
+          deleting={answersBulkDeleting}
+          onToggleAll={answerBulkSelection.toggleAllVisible}
+          onClear={answerBulkSelection.clear}
+          onDeleteSelected={() => void deleteSelectedAnswers()}
+        />
         <AdminTableEmptyGuard empty={!answers.length} message="暂无答疑提交">
           {answers.map((item) => (
             <AdminCompactRow key={item.id} title={`答疑 #${item.id}`} meta={`求助 #${item.caseId || "-"} · ${formatQaAnswerStatus(item.status)} · ${formatDateTime(item.createTime)}`}>
+              <AdminBulkCheckbox
+                checked={answerBulkSelection.isSelected(item.id)}
+                onChange={() => answerBulkSelection.toggleOne(item.id)}
+                label={`选择答疑 ${item.id}`}
+              />
               <button type="button" onClick={() => void confirmDeleteAnswer(item)} className={`${secondaryButtonClassName()} !text-rose-600`}><Trash2 size={14} />删除</button>
             </AdminCompactRow>
           ))}
@@ -283,9 +396,25 @@ export function AdminQa() {
       </AdminSection>
 
       <AdminSection title="解题分享">
+        <AdminBulkActions
+          selectedCount={shareBulkSelection.selectedCount}
+          totalCount={shares.length}
+          allVisibleSelected={shareBulkSelection.allVisibleSelected}
+          deleteLabel="下架选中"
+          processingLabel="下架中..."
+          deleting={sharesBulkDeleting}
+          onToggleAll={shareBulkSelection.toggleAllVisible}
+          onClear={shareBulkSelection.clear}
+          onDeleteSelected={() => void deleteSelectedShares()}
+        />
         <AdminTableEmptyGuard empty={!shares.length} message="暂无解题分享">
           {shares.map((item) => (
             <AdminCompactRow key={item.id} title={item.title || `分享 #${item.id}`} meta={`${item.status || "published"} · 浏览 ${item.viewCount || 0} · ${formatDateTime(item.createTime)}`}>
+              <AdminBulkCheckbox
+                checked={shareBulkSelection.isSelected(item.id)}
+                onChange={() => shareBulkSelection.toggleOne(item.id)}
+                label={`选择解题分享 ${item.title || item.id}`}
+              />
               <button type="button" onClick={() => openShareEdit(item)} className={secondaryButtonClassName()}><PencilLine size={14} />编辑</button>
               <button type="button" onClick={() => void confirmDeleteShare(item)} className={`${secondaryButtonClassName()} !text-rose-600`}><Trash2 size={14} />下架</button>
             </AdminCompactRow>
