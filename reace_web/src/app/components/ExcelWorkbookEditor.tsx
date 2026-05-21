@@ -6,6 +6,8 @@ import type { FWorkbook } from "@univerjs/preset-sheets-core";
 import "@univerjs/preset-sheets-core/lib/index.css";
 import { AlertTriangle, Bot, CalendarDays, Copy, Expand, Minimize2 } from "lucide-react";
 import {
+  applyWorkbookSelectionFormat,
+  clearWorkbookRange,
   ExcelRangeSelection,
   ExcelWorkbookSnapshot,
   convertWorkbookSelectionToDateFormat,
@@ -23,6 +25,7 @@ import {
   toCellRef,
   type ExcelCellErrorInfo,
   type ExcelWorkbookErrorCell,
+  type WorkbookCellFormatKind,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
 import { getStoredUser } from "../lib/session-store";
@@ -112,7 +115,7 @@ function workbookCellSnapshotToUniverValue(cell: ExcelWorkbookSnapshot["sheets"]
   if (formula) return formula;
   const value = cell?.value;
   const numberFormat = resolveExcelCellNumberFormat(cell);
-  if (numberFormat && typeof value === "number") {
+  if (numberFormat) {
     return { v: value, s: { n: { pattern: numberFormat } } };
   }
   return value;
@@ -221,6 +224,7 @@ export function ExcelWorkbookEditor({
   const latestOnWorkbookChangeRef = useRef(onWorkbookChange);
   const lastFocusedRangeKeyRef = useRef("");
   const latestEditorSnapshotRef = useRef<ExcelWorkbookSnapshot>(workbook);
+  const consumeNextFullscreenEscapeRef = useRef(false);
   const [instanceVersion, setInstanceVersion] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -464,6 +468,10 @@ export function ExcelWorkbookEditor({
     const handleFullscreenChange = () => {
       const nextIsFullscreen = document.fullscreenElement === shellRef.current;
       setIsFullscreen(nextIsFullscreen);
+      consumeNextFullscreenEscapeRef.current = false;
+      if (!nextIsFullscreen) {
+        setEditorNotice("");
+      }
       window.setTimeout(() => {
         window.dispatchEvent(new Event("resize"));
         setInstanceVersion((current) => current + 1);
@@ -503,53 +511,123 @@ export function ExcelWorkbookEditor({
     return false;
   };
 
+  const hasActiveEditorSelection = () => {
+    if (latestSelectionRef.current) return true;
+    const binding = bindingRef.current;
+    try {
+      return Boolean(binding?.workbook.getActiveRange?.());
+    } catch {
+      return false;
+    }
+  };
+
   const handleFullscreenEscape = (event: KeyboardEvent | React.KeyboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.key !== "Escape" || document.fullscreenElement !== shellRef.current) return false;
-    if (!clearActiveEditorOperation()) return false;
+    if (consumeNextFullscreenEscapeRef.current) {
+      consumeNextFullscreenEscapeRef.current = false;
+      return false;
+    }
+    if (!clearActiveEditorOperation() && !hasActiveEditorSelection()) return false;
+    consumeNextFullscreenEscapeRef.current = true;
+    setEditorNotice("已取消当前编辑操作，再按 Esc 退出全屏");
     event.preventDefault();
     event.stopPropagation();
+    return true;
+  };
+
+  const getActiveSelectionFromBinding = (binding: UniverBinding | null): ExcelRangeSelection | null => {
+    if (latestSelectionRef.current) return latestSelectionRef.current;
+    const activeRange = binding?.workbook.getActiveRange?.();
+    if (!activeRange) return null;
+    const parsed = parseSheetAndRange(activeRange.getA1Notation(true));
+    const range = parseRangeRef(parsed.rangeRef);
+    const sheetName = parsed.sheetName || binding?.workbook.getActiveSheet()?.getSheetName() || latestSelectedSheetNameRef.current;
+    return range && sheetName
+      ? normalizeSelection(sheetName, range.startRow, range.startCol, range.endRow, range.endCol)
+      : null;
+  };
+
+  const commitEditorWorkbookSnapshot = (
+    nextWorkbook: ExcelWorkbookSnapshot,
+    nextSelection: ExcelRangeSelection | null,
+    notice: string,
+  ) => {
+    const nextKey = JSON.stringify(nextWorkbook);
+    latestEditorSnapshotRef.current = nextWorkbook;
+    lastInternalSnapshotRef.current = nextKey;
+    latestOnWorkbookChangeRef.current?.(nextWorkbook);
+    refreshCellInspector(nextWorkbook, nextSelection);
+    setEditorNotice(notice);
+    window.setTimeout(() => {
+      setInstanceVersion((current) => current + 1);
+    }, 0);
+  };
+
+  const clearActiveSelectionContent = () => {
+    const binding = bindingRef.current;
+    const activeSelection = getActiveSelectionFromBinding(binding);
+    if (!binding || !activeSelection || !latestOnWorkbookChangeRef.current) return false;
+    const activeRange = binding.workbook.getActiveRange?.();
+    try {
+      activeRange?.clearContent?.();
+    } catch {
+      // Univer may reject clearContent for some range states; the snapshot path below is the authoritative fallback.
+    }
+    const sourceSnapshot = binding.captureSnapshot();
+    const nextWorkbook = clearWorkbookRange(sourceSnapshot, activeSelection);
+    commitEditorWorkbookSnapshot(
+      nextWorkbook,
+      activeSelection,
+      `已清空 ${activeSelection.sheetName} / ${selectionToRangeRef(activeSelection)}`,
+    );
     return true;
   };
 
   const handleEditorKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (handleFullscreenEscape(event)) return;
     if (event.defaultPrevented || (event.key !== "Backspace" && event.key !== "Delete")) return;
-    if (!latestOnWorkbookChangeRef.current || isEditableKeyboardTarget(event.target)) return;
-    const binding = bindingRef.current;
-    const activeRange = binding?.workbook.getActiveRange?.();
-    if (!binding || !activeRange?.clearContent) return;
+    if (isEditableKeyboardTarget(event.target)) return;
+    if (!clearActiveSelectionContent()) return;
     event.preventDefault();
-    activeRange.clearContent();
-    window.setTimeout(() => {
-      binding.syncWorkbookSnapshot();
-    }, 0);
   };
 
-  const handleConvertSelectionToDateFormat = () => {
+  const formatSelection = (formatSelection: WorkbookCellFormatKind) => {
     const binding = bindingRef.current;
-    const activeSelection = latestSelectionRef.current;
+    const activeSelection = getActiveSelectionFromBinding(binding);
     if (!binding || !activeSelection) {
-      setEditorNotice("请先框选需要转换的日期单元格");
+      setEditorNotice("请先框选需要转换格式的单元格");
       return;
     }
 
     const sourceSnapshot = binding.captureSnapshot();
-    const result = convertWorkbookSelectionToDateFormat(sourceSnapshot, activeSelection);
+    const result = formatSelection === "date"
+      ? convertWorkbookSelectionToDateFormat(sourceSnapshot, activeSelection)
+      : applyWorkbookSelectionFormat(sourceSnapshot, activeSelection, formatSelection);
     if (result.changed === 0) {
-      setEditorNotice("当前选区未识别到可转换的日期");
+      setEditorNotice("当前选区没有可转换的内容");
       refreshCellInspector(sourceSnapshot, activeSelection);
       return;
     }
 
-    const nextKey = JSON.stringify(result.workbook);
-    latestEditorSnapshotRef.current = result.workbook;
-    lastInternalSnapshotRef.current = nextKey;
-    latestOnWorkbookChangeRef.current?.(result.workbook);
-    refreshCellInspector(result.workbook, activeSelection);
-    setEditorNotice(`已转换 ${result.changed} 个日期单元格`);
-    window.setTimeout(() => {
-      setInstanceVersion((current) => current + 1);
-    }, 0);
+    const labelMap: Record<WorkbookCellFormatKind, string> = {
+      general: "常规",
+      number: "数字",
+      percent: "百分比",
+      text: "文本",
+      date: "日期",
+    };
+    commitEditorWorkbookSnapshot(result.workbook, activeSelection, `已将 ${result.changed} 个单元格转换为${labelMap[formatSelection]}格式`);
+  };
+
+  const handleConvertSelectionToDateFormat = () => {
+    formatSelection("date");
+  };
+
+  const handleCellFormatChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextFormat = event.target.value as WorkbookCellFormatKind | "";
+    event.currentTarget.value = "";
+    if (!nextFormat) return;
+    formatSelection(nextFormat);
   };
 
   const handleCopyActiveFormula = async () => {
@@ -647,6 +725,19 @@ export function ExcelWorkbookEditor({
                 <CalendarDays size={14} />
                 日期格式
               </button>
+              <select
+                aria-label="单元格格式"
+                defaultValue=""
+                onChange={handleCellFormatChange}
+                className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition hover:border-slate-300"
+              >
+                <option value="" disabled>单元格格式</option>
+                <option value="general">常规</option>
+                <option value="number">数字</option>
+                <option value="percent">百分比</option>
+                <option value="date">日期</option>
+                <option value="text">文本</option>
+              </select>
               <button
                 type="button"
                 onClick={() => setInspectorOpen((current) => !current)}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyWorkbookSelectionFormat,
   convertWorkbookSelectionToDateFormat,
   extractDateAwareRangeAnswerSnapshot,
   extractStoredAnswerSnapshot,
@@ -87,6 +88,57 @@ describe("excel answer preview", () => {
     expect(result.workbook.sheets[0].cells.A3).toMatchObject({
       value: "not-date",
       display: "not-date",
+    });
+  });
+
+  it("applies explicit text number and percent formats to selected cells", () => {
+    const workbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            A1: { value: 0.25, display: "25%" },
+            A2: { value: "46083", display: "46083" },
+            A3: { value: "SKU001", display: "SKU001" },
+          },
+        },
+      ],
+    };
+
+    const selection = {
+      sheetName: "Sheet1",
+      startRow: 1,
+      startCol: 1,
+      endRow: 3,
+      endCol: 1,
+    };
+
+    const asText = applyWorkbookSelectionFormat(workbook, selection, "text");
+    expect(asText.changed).toBe(3);
+    expect(asText.workbook.sheets[0].cells.A1).toMatchObject({
+      value: "25%",
+      display: "25%",
+      numberFormat: "@",
+    });
+
+    const asNumber = applyWorkbookSelectionFormat(workbook, selection, "number");
+    expect(asNumber.workbook.sheets[0].cells.A2).toMatchObject({
+      value: 46083,
+      display: "46083",
+    });
+    expect(asNumber.workbook.sheets[0].cells.A2.numberFormat).toBeUndefined();
+
+    const asPercent = applyWorkbookSelectionFormat(workbook, {
+      sheetName: "Sheet1",
+      startRow: 1,
+      startCol: 1,
+      endRow: 1,
+      endCol: 1,
+    }, "percent");
+    expect(asPercent.workbook.sheets[0].cells.A1).toMatchObject({
+      value: 0.25,
+      display: "25.00%",
+      numberFormat: "0.00%",
     });
   });
 

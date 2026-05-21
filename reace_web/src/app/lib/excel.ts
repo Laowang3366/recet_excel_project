@@ -31,6 +31,8 @@ export type ExcelAnswerSnapshot = {
   numberFormats?: string[][];
 };
 
+export type WorkbookCellFormatKind = "general" | "number" | "percent" | "text" | "date";
+
 export type FormulaAnswerRegion = {
   sheetName: string;
   rangeRef: string;
@@ -338,6 +340,22 @@ function parseExcelDateCell(cell: ExcelCellSnapshot | undefined) {
   return parseExcelDateText(String(rawText ?? ""));
 }
 
+function parseExcelNumericText(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const percent = text.endsWith("%");
+  const normalized = text.replace(/,/g, "").replace(/%$/, "").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return percent ? parsed / 100 : parsed;
+}
+
+function formatPercentDisplay(value: number) {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
 function cellHasExplicitDateDisplay(cell: ExcelCellSnapshot | undefined) {
   const display = cell?.display === null || cell?.display === undefined ? "" : String(cell.display).trim();
   return Boolean(display && excelDateDisplayPattern.test(display));
@@ -455,6 +473,95 @@ export function convertWorkbookSelectionToDateFormat(
         display: dateValue.display,
         numberFormat: "yyyy-mm-dd",
       };
+      changed += 1;
+    }
+  }
+
+  return { workbook: next, changed };
+}
+
+export function applyWorkbookSelectionFormat(
+  workbook: ExcelWorkbookSnapshot | null | undefined,
+  selection: ExcelRangeSelection | null | undefined,
+  format: WorkbookCellFormatKind,
+) {
+  const next = cloneWorkbookSnapshot(workbook);
+  let changed = 0;
+  if (!selection) {
+    return { workbook: next, changed };
+  }
+  const sheet = getSheetSnapshot(next, selection.sheetName);
+  if (!sheet) {
+    return { workbook: next, changed };
+  }
+
+  for (let row = selection.startRow; row <= selection.endRow; row += 1) {
+    for (let col = selection.startCol; col <= selection.endCol; col += 1) {
+      const cellRef = toCellRef(row, col);
+      const cell = sheet.cells[cellRef];
+      if (!cell) continue;
+      const formula = normalizeExcelFormulaText(cell.formula);
+      const rawDisplay = getCellDisplayValue(cell);
+
+      if (format === "date") {
+        const dateValue = parseExcelDateCell(cell);
+        if (!dateValue) continue;
+        sheet.cells[cellRef] = {
+          ...cell,
+          value: dateValue.serial,
+          formula: formula || null,
+          display: dateValue.display,
+          numberFormat: "yyyy-mm-dd",
+        };
+        changed += 1;
+        continue;
+      }
+
+      if (format === "text") {
+        const text = formula ? `=${formula}` : rawDisplay;
+        sheet.cells[cellRef] = {
+          value: text,
+          formula: null,
+          display: text,
+          numberFormat: "@",
+        };
+        changed += 1;
+        continue;
+      }
+
+      if (format === "percent") {
+        const parsed = parseExcelNumericText(cell.value ?? rawDisplay);
+        if (parsed === null) continue;
+        const percentValue = parsed > 1 && parsed <= 100 ? parsed / 100 : parsed;
+        sheet.cells[cellRef] = {
+          ...cell,
+          value: percentValue,
+          formula: formula || null,
+          display: formatPercentDisplay(percentValue),
+          numberFormat: "0.00%",
+        };
+        changed += 1;
+        continue;
+      }
+
+      if (format === "number") {
+        const parsed = parseExcelNumericText(cell.value ?? rawDisplay);
+        if (parsed === null) continue;
+        const numberCell: ExcelCellSnapshot = {
+          ...cell,
+          value: parsed,
+          formula: formula || null,
+          display: String(parsed),
+        };
+        delete numberCell.numberFormat;
+        sheet.cells[cellRef] = numberCell;
+        changed += 1;
+        continue;
+      }
+
+      const generalCell: ExcelCellSnapshot = { ...cell, formula: formula || null };
+      delete generalCell.numberFormat;
+      sheet.cells[cellRef] = generalCell;
       changed += 1;
     }
   }

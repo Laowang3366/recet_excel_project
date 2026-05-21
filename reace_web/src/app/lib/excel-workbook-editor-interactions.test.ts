@@ -11,7 +11,24 @@ describe("ExcelWorkbookEditor interactions", () => {
 
     expect(source).toContain("handleFullscreenEscape");
     expect(source).toContain("clearActiveEditorOperation");
+    expect(source).toContain("consumeNextFullscreenEscapeRef");
     expect(source).toContain('event.key !== "Escape"');
+  });
+
+  it("uses snapshot fallback when Delete clears the selected range", () => {
+    const source = editorSource();
+
+    expect(source).toContain("clearWorkbookRange");
+    expect(source).toContain("clearActiveSelectionContent");
+  });
+
+  it("exposes cell format controls for date percent text and number conversion", () => {
+    const source = editorSource();
+
+    expect(source).toContain("handleCellFormatChange");
+    expect(source).toContain("formatSelection");
+    expect(source).toContain("百分比");
+    expect(source).toContain("文本");
   });
 
   it("does not open formula diagnostics by default until errors are detected", () => {

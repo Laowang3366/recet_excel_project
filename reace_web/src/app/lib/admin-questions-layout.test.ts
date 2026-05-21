@@ -30,4 +30,12 @@ describe("admin questions layout", () => {
     expect(source).toContain("handleIdealAnswerImagePaste");
     expect(source).toContain("Ctrl+V 粘贴图片");
   });
+
+  it("allows removing the current Excel template before uploading a replacement", () => {
+    const source = adminQuestionsSource();
+
+    expect(source).toContain("removeCurrentTemplate");
+    expect(source).toContain("移除模板");
+    expect(source).toContain("尚未上传模板文件");
+  });
 });

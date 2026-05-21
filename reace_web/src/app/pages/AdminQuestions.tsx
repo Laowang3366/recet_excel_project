@@ -556,6 +556,30 @@ export function AdminQuestions() {
     }
   };
 
+  const removeCurrentTemplate = async () => {
+    if (!form.templateFileUrl) return;
+    const confirmed = await openAdminConfirm({
+      title: "移除当前模板",
+      message: "移除后会清空当前模板、答题区域和标准答案；保存题目前不会影响已发布题目。",
+      confirmLabel: "移除模板",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    resetEditorState();
+    setForm((prev) => ({
+      ...prev,
+      templateFileUrl: "",
+      answerSheet: "",
+      answerRange: "",
+      answerSnapshotJson: "",
+      checkFormula: false,
+      gradingRuleJson: "",
+      dynamicArrayRules: [defaultDynamicArrayRule()],
+    }));
+    setIsTemplateEditMode(true);
+    toast.success("当前模板已移除，可以重新上传");
+  };
+
   const uploadIdealAnswerImageFile = async (file: File) => {
     const isSupportedImage = /^image\/(png|jpe?g|webp|gif)$/i.test(file.type) || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
     if (!isSupportedImage) {
@@ -1072,10 +1096,30 @@ export function AdminQuestions() {
                   {isTemplateEditMode ? "完成修改" : "修改规则"}
                 </button>
               )}
+              {form.templateFileUrl ? (
+                <button
+                  type="button"
+                  onClick={() => void removeCurrentTemplate()}
+                  disabled={!isTemplateEditMode}
+                  className={`${secondaryButtonClassName()} ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}
+                >
+                  <X size={14} />
+                  移除模板
+                </button>
+              ) : null}
               <label className={`${primaryButtonClassName()} cursor-pointer ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}>
                 {uploadingTemplate ? <LoaderCircle size={14} className="animate-spin" /> : <UploadCloud size={14} />}
                 上传模板
-                <input type="file" accept=".xlsx,.xls" className="hidden" disabled={!isTemplateEditMode} onChange={(e) => void handleTemplateUpload(e.target.files)} />
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  disabled={!isTemplateEditMode}
+                  onChange={(e) => {
+                    void handleTemplateUpload(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                />
               </label>
             </div>
           </div>
