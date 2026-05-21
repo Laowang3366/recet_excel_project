@@ -20,7 +20,7 @@
 - [x] `/api/practice/template-snapshot?fileUrl=...` is retained only as an admin-compatible endpoint through security rules.
 - [x] Verification run: `cd excel-forum-backend; mvn test` passed with 123 tests, 0 failures.
 - [x] Verification run: `cd reace_web; npm run build` passed.
-- [ ] Production Nginx guardrails and live deployment verification are still pending.
+- [x] Production Nginx guardrails and live deployment verification completed.
 
 ---
 

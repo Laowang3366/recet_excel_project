@@ -203,12 +203,13 @@ QA 求助场景还存在两条高消耗路径：
 - `cd excel-forum-backend; mvn test`：123 tests, 0 failures。
 - `cd reace_web; npm run build`：构建通过。
 
-待部署阶段执行：
+线上部署与 Nginx 防护：
 
-- 线上 Nginx `client_max_body_size` 与后端 20MB 对齐。
-- 对 `/api/`、下载接口和 `/uploads/` 加保守 `limit_req/limit_conn`。
-- 低风险验证刷提交/刷下载返回 429。
-- 标准部署后更新 `ONLINE_UPDATE_LOG.md`。
+- 运行标准部署脚本上线应用提交 `62caced`，服务器备份为 `/www/wwwroot/excelcc/kick-deploy/backups/20260521-071447`。
+- 线上 Nginx `client_max_body_size` 已与后端 20MB 对齐。
+- 已对 `/api/`、受控下载接口和 `/uploads/` 加保守 `limit_req/limit_conn`，并设置限流响应状态为 429。
+- Nginx 配置变更前备份：`/etc/nginx/conf.d/kick.conf.20260521-071752.security.bak`、`/etc/nginx/conf.d/kick.conf.20260521-071822.limit-status.bak`。
+- 低风险验证：`https://www.excelcc.cn/`、`/api/public/home-overview`、`/practice`、`/qa`、`/api/practice/campaign/chapters` 返回 200；旧论坛 `/api/posts` 返回 410；私有上传路径和普通用户任意 fileUrl 快照入口返回 401；并发请求 `/uploads` 触发 429。
 
 ## 不建议本轮执行的事项
 
