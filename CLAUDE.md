@@ -62,16 +62,16 @@ Rules:
 
 - Add new migrations for schema changes.
 - Do not edit historical migrations.
-- Do not drop legacy forum tables in routine deploys.
-- Legacy forum tables are retained as archived data; see `docs/legacy-forum-archive.md`.
+- Do not drop historical community tables in routine deploys.
+- Historical community tables are retained as archived data; see `docs/retired-runtime-cleanup.md`.
 
 `DataInitializer` only seeds current bootstrap data such as the admin account. The old fallback `DatabaseInitializer`, `schema.sql`, and `db/update.sql` are removed from active source.
 
-## Legacy Forum Policy
+## Retired Runtime Policy
 
-Old forum pages, routes, WebSocket chat, post/reply/message controllers, services, mappers, DTOs, and tests have been removed from active source.
+Early community pages, routes, WebSocket chat, post/reply/message controllers, services, mappers, DTOs, and tests have been removed from active source.
 
-Legacy HTTP surfaces are intentionally blocked by `LegacyForumFeatureShutdownFilter` and should return `410 Gone`, including:
+The retired HTTP surfaces below are deleted, not compatibility-routed. Do not add a new controller, filter, or frontend link for these paths without a new product decision and review:
 
 - `/api/posts/**`
 - `/api/replies/**`
@@ -87,7 +87,7 @@ Legacy HTTP surfaces are intentionally blocked by `LegacyForumFeatureShutdownFil
 - `/api/admin/categories/**`
 - `/api/admin/drafts/**`
 
-Keep that filter and its tests unless a separate data migration and product decision reintroduces a replacement feature.
+The archived database tables are kept only for data retention. They are not active product models.
 
 ## Frontend Architecture
 

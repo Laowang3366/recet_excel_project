@@ -21,8 +21,8 @@
 
 ## 历史归档
 
-- [旧论坛运行面归档](./legacy-forum-archive.md)
-- [旧论坛数据库表归档说明](./legacy-forum-data-archive.md)
+- [已删除运行面清理说明](./retired-runtime-cleanup.md)
+- [历史社区数据库表归档说明](./historical-community-data-archive.md)
 - [历史文档归档索引](./archive/README.md)
 
 ## 根目录保留规则

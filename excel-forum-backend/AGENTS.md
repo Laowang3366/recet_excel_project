@@ -35,8 +35,8 @@ CREATE DATABASE excel_forum CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 - 结构变更只允许新增 Flyway 迁移。
 - 不要编辑历史 migration。
-- 不要在常规功能部署中删除旧论坛表。
-- 旧论坛表作为历史归档数据保留，清理策略见仓库根目录 `docs/legacy-forum-archive.md`。
+- 不要在常规功能部署中删除历史社区表。
+- 历史社区表作为归档数据保留，清理策略见仓库根目录 `docs/retired-runtime-cleanup.md`。
 
 ## 构建运行
 
@@ -61,7 +61,7 @@ mvn spring-boot:run
 - AI 助手：`/api/assistant/**`
 - 后台管理：`/api/admin/**`
 
-旧论坛 API 由 `LegacyForumFeatureShutdownFilter` 统一返回 `410 Gone`，不要重新开放。
+早期社区 API 实现已从活动源码移除，不保留专门兼容拦截器。新增接口不得复用已归档的旧路径或历史表作为业务模型。
 
 ## 注意事项
 

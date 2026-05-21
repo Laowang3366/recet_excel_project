@@ -4,7 +4,7 @@
 
 ## 已完成收敛
 
-- 旧论坛前端页面、旧后台论坛入口、旧论坛活跃接口已清理或下线，旧接口统一由下线策略返回 410。
+- 早期社区前端页面、后台入口、Controller、Service、Mapper、Entity 和兼容拦截器已从活动源码移除。
 - 后台 `AdminController` 已按职责拆分，原巨型控制器不再作为活跃代码保留。
 - 后台前端已从单体 `AdminConsole.tsx` 拆成 lazy 页面。
 - 本轮 P1：新增 `QueryPageUtils`，将闯关、商城、每日挑战相关 `limit 1/5` 查询收敛到分页 API，避免继续使用 SQL suffix 拼接模式。
@@ -15,7 +15,7 @@
 - 2026-05-18 P2 收口：Univer 编辑器依赖按渲染核心、文字数据、UI、公式、Sheets 分块，生产构建不再出现大 chunk 警告。
 - 2026-05-18 P2 收口：活跃 Controller 的 `@RequestBody Map` 已清零，管理、商城、反馈、账号、隐私、闯关配置等入口改用 DTO。
 - 2026-05-18 质量门禁收口：前端 `vitest` 已纳入脚本和 CI，`scripts/quality/check.ps1` 覆盖前端审计/类型/单测/构建与后端源码门禁/编译/测试。
-- 2026-05-18 旧数据归档：新增 `legacy_table_archive` 归档登记迁移，旧论坛表只做归档标记，不删除历史数据。
+- 2026-05-18 历史数据归档：新增 `legacy_table_archive` 归档登记迁移，历史社区表只做归档标记，不删除历史数据。
 
 ## 剩余 P1
 
@@ -36,12 +36,12 @@
 
 ## 剩余质量与归档
 
-无。当前质量门禁和旧论坛数据库表归档已补齐：
+无。当前质量门禁和历史社区数据库表归档已补齐：
 
 - 本地统一入口：`powershell -ExecutionPolicy Bypass -File scripts/quality/check.ps1`
 - CI 前端门禁：依赖审计、类型检查、Vitest、生产构建。
 - CI 后端门禁：编译、测试。
-- 旧论坛数据策略：保留历史表，新增 `legacy_table_archive` 登记表，不执行 drop/rename。
+- 历史社区数据策略：保留历史表，新增 `legacy_table_archive` 登记表，不执行 drop/rename。
 
 ## 本轮验证
 
