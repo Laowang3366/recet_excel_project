@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api } from "../../lib/api";
 import { notificationKeys } from "../../lib/query-keys";
+import { renderRichContent } from "../../lib/rich-content";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import type { LayoutNotification } from "./NotificationDropdown";
 
@@ -90,7 +91,7 @@ export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotifi
             {popupNotification?.detailContent ? (
               <div
                 className="prose prose-sm max-w-none text-slate-700"
-                dangerouslySetInnerHTML={{ __html: popupNotification.detailContent }}
+                dangerouslySetInnerHTML={{ __html: renderRichContent(popupNotification.detailContent) }}
               />
             ) : (
               <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">

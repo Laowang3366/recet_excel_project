@@ -67,6 +67,32 @@ class QaControllerTest {
     }
 
     @Test
+    void caseFileDownloadReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.equals("download:qa-case:user:7:case:30")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("文件下载过于频繁，请稍后再试", 20));
+
+        mockMvc.perform(get("/api/qa/cases/30/file").requestAttr("userId", 7L))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("文件下载过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(20));
+
+        verify(qaService, never()).buildCaseWorkbookFile(any(), any());
+    }
+
+    @Test
+    void answerFileDownloadReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.equals("download:qa-answer:user:7:answer:88")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("文件下载过于频繁，请稍后再试", 20));
+
+        mockMvc.perform(get("/api/qa/cases/30/answers/88/file").requestAttr("userId", 7L))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("文件下载过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(20));
+
+        verify(qaService, never()).buildCaseAnswerWorkbookFile(any(), any(), any());
+    }
+
+    @Test
     void caseAnswerSnapshotUsesControlledAnswerEndpoint() throws Exception {
         ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();
         when(qaService.loadCaseAnswerSnapshot(7L, 30L, 88L)).thenReturn(snapshot);

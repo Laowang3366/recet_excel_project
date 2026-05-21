@@ -170,6 +170,44 @@ class QaServiceImplTest {
     }
 
     @Test
+    void updateCaseAnswerRejectsNonOwner() {
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setUserId(9L);
+        answer.setStatus("active");
+
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        QaCaseAnswerRequest request = new QaCaseAnswerRequest();
+        request.setAnswerFileUrl("/uploads/private/answer.xlsx");
+
+        assertThatThrownBy(() -> service.updateCaseAnswer(7L, 30L, 44L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("只能操作自己的答疑");
+
+        verify(excelTemplateGradingService, never()).loadWorkbookSnapshot(any());
+        verify(caseHelpAnswerMapper, never()).updateById(any());
+    }
+
+    @Test
+    void deleteCaseAnswerRejectsNonOwner() {
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setUserId(9L);
+        answer.setStatus("active");
+
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        assertThatThrownBy(() -> service.deleteCaseAnswer(7L, 30L, 44L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("只能操作自己的答疑");
+
+        verify(fileRecycleService, never()).recycleQaAnswer(any(), any());
+    }
+
+    @Test
     void loadCaseAnswerSnapshotUsesAnswerOwnedByCase() {
         QaCaseHelp qaCase = new QaCaseHelp();
         qaCase.setId(30L);

@@ -79,19 +79,19 @@ export function clearStoredSession() {
 
 export type RememberedAuth = {
   username: string;
-  password: string;
 };
 
 export function getRememberedAuth(): RememberedAuth | null {
   const raw = window.localStorage.getItem(AUTH_REMEMBER_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<RememberedAuth>;
-    if (typeof parsed.username === "string" && typeof parsed.password === "string") {
-      return {
-        username: parsed.username,
-        password: parsed.password,
-      };
+    const parsed = JSON.parse(raw) as Partial<RememberedAuth> & { password?: unknown };
+    if (typeof parsed.username === "string" && parsed.username.trim()) {
+      const remembered = { username: parsed.username };
+      if ("password" in parsed) {
+        window.localStorage.setItem(AUTH_REMEMBER_KEY, JSON.stringify(remembered));
+      }
+      return remembered;
     }
   } catch {
     return null;
@@ -100,9 +100,9 @@ export function getRememberedAuth(): RememberedAuth | null {
 }
 
 export function storeRememberedAuth(value: RememberedAuth | null) {
-  if (!value || (!value.username && !value.password)) {
+  if (!value || !value.username.trim()) {
     window.localStorage.removeItem(AUTH_REMEMBER_KEY);
     return;
   }
-  window.localStorage.setItem(AUTH_REMEMBER_KEY, JSON.stringify(value));
+  window.localStorage.setItem(AUTH_REMEMBER_KEY, JSON.stringify({ username: value.username.trim() }));
 }

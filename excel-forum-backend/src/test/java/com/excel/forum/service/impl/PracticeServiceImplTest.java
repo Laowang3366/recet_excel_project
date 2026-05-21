@@ -111,14 +111,46 @@ class PracticeServiceImplTest {
     }
 
     @Test
+    void getPracticeQuestionListDoesNotExposeSensitiveAnswerFields() {
+        PracticeServiceImpl service = createService();
+
+        Question question = buildExcelQuestion();
+        question.setAnswer("=SUM(A:A)");
+        question.setExplanation("标准解析只应在结果页展示");
+        QuestionExcelTemplate template = buildTemplate();
+        template.setAnswerSnapshotJson("{\"secret\":\"answer\"}");
+        template.setExpectedSnapshotJson("{\"secret\":\"expected\"}");
+
+        when(questionService.list(any(QueryWrapper.class))).thenReturn(List.of(question));
+        when(questionExcelTemplateService.mapByQuestionIds(any())).thenReturn(Map.of(9L, template));
+
+        Map<String, Object> result = service.getPracticeQuestionList(null, 7L);
+
+        assertThat(result.get("questions"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(Map.class))
+                .singleElement()
+                .satisfies(item -> assertThat(item)
+                        .doesNotContainKeys(
+                                "answer",
+                                "correctAnswer",
+                                "explanation",
+                                "templateFileUrl",
+                                "answerSnapshotJson",
+                                "expectedSnapshotJson"));
+    }
+
+    @Test
     void getPracticeQuestionDetailDoesNotExposeAnswerExplanationBeforeSubmit() {
         PracticeServiceImpl service = createService();
 
         Question question = buildExcelQuestion();
+        question.setAnswer("=SUM(A:A)");
         question.setExplanation("先用 FILTER+UNIQUE 生成组合，再用 BYROW+SUMIFS 聚合。");
         QuestionExcelTemplate template = buildTemplate();
         template.setAnswerSheet("Sheet1");
         template.setAnswerRange("K10:P14");
+        template.setAnswerSnapshotJson("{\"secret\":\"answer\"}");
+        template.setExpectedSnapshotJson("{\"secret\":\"expected\"}");
 
         when(questionService.getOne(any(QueryWrapper.class), eq(false))).thenReturn(question);
         when(questionExcelTemplateService.getByQuestionId(9L)).thenReturn(template);
@@ -126,8 +158,12 @@ class PracticeServiceImplTest {
 
         Map<String, Object> result = service.getPracticeQuestionDetail(9L);
 
+        assertThat(result).doesNotContainKey("answer");
+        assertThat(result).doesNotContainKey("correctAnswer");
         assertThat(result).doesNotContainKey("explanation");
         assertThat(result).doesNotContainKey("templateFileUrl");
+        assertThat(result).doesNotContainKey("answerSnapshotJson");
+        assertThat(result).doesNotContainKey("expectedSnapshotJson");
         assertThat(result.get("hasTemplateFile")).isEqualTo(true);
         assertThat(result.get("title")).isEqualTo("销售汇总");
         assertThat(result.get("answerSheet")).isEqualTo("Sheet1");
@@ -336,6 +372,19 @@ class PracticeServiceImplTest {
         verify(excelTemplateGradingService).grade(workbookCaptor.capture(), any(), any());
         assertThat(workbookCaptor.getValue()).isEqualTo(submittedWorkbook);
         assertThat(workbookCaptor.getValue()).isNotEqualTo(incompleteMaterializedWorkbook);
+    }
+
+    @Test
+    void getPracticeHistoryDetailReturnsNullForOtherUsersRecord() {
+        PracticeServiceImpl service = createService();
+        PracticeRecord record = new PracticeRecord();
+        record.setId(88L);
+        record.setUserId(8L);
+
+        when(practiceRecordMapper.selectById(88L)).thenReturn(record);
+
+        assertThat(service.getPracticeHistoryDetail(7L, 88L)).isNull();
+        verify(practiceAnswerMapper, never()).selectList(any(QueryWrapper.class));
     }
 
     private Question buildExcelQuestion() {

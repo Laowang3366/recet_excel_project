@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalFileStorageServiceTest {
 
@@ -61,6 +62,19 @@ class LocalFileStorageServiceTest {
 
         assertThat(fileUrl).startsWith("/uploads/private/");
         assertThat(tempDir.resolve(fileUrl.substring("/uploads/".length()))).exists();
+    }
+
+    @Test
+    void rejectsTraversalWhenLoadingFiles() throws Exception {
+        LocalFileStorageService storage = new LocalFileStorageService(config());
+        Files.writeString(tempDir.resolve("sample.xlsx"), "excel-content", StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> storage.load("/uploads/private/../sample.xlsx"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("文件地址无效");
+        assertThatThrownBy(() -> storage.load("/uploads/private/%2e%2e/sample.xlsx"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("文件地址无效");
     }
 
     @Test

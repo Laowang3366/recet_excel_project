@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -154,12 +156,27 @@ public class LocalFileStorageService implements FileStorageService {
             throw new IllegalArgumentException("文件地址无效");
         }
         String fileName = fileUrl.substring(fileStorageConfig.getLocal().getUrlPrefix().length() + 1);
+        String decodedFileName = URLDecoder.decode(fileName, StandardCharsets.UTF_8);
+        if (decodedFileName.isBlank() || containsTraversalSegment(decodedFileName)) {
+            throw new IllegalArgumentException("文件地址无效");
+        }
         Path uploadRoot = uploadRoot();
-        Path resolved = uploadRoot.resolve(fileName).normalize();
-        if (!resolved.startsWith(uploadRoot)) {
+        Path relativePath = Paths.get(decodedFileName);
+        Path resolved = uploadRoot.resolve(relativePath).normalize();
+        if (relativePath.isAbsolute() || !resolved.startsWith(uploadRoot)) {
             throw new IllegalArgumentException("文件地址无效");
         }
         return resolved;
+    }
+
+    private boolean containsTraversalSegment(String path) {
+        String normalized = path.replace('\\', '/');
+        for (String segment : normalized.split("/")) {
+            if ("..".equals(segment)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Path uploadRoot() {

@@ -61,15 +61,15 @@ function renderMarkdownContent(markdown: string) {
 }
 
 function renderHtmlContent(html: string) {
+  const safeHtml = sanitizeRichHtml(html);
   if (typeof DOMParser === "undefined") {
-    return html
-      .replace(/\s(src|href)=["']([^"']+)["']/gi, (_match, attr, value) => ` ${attr}="${escapeHtml(normalizeResourceUrl(value))}"`);
+    return safeHtml;
   }
 
   const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div data-rich-content-root="true">${html}</div>`, "text/html");
+  const doc = parser.parseFromString(`<div data-rich-content-root="true">${safeHtml}</div>`, "text/html");
   const root = doc.body.querySelector('[data-rich-content-root="true"]');
-  if (!root) return html;
+  if (!root) return safeHtml;
 
   root.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
   root.querySelectorAll("*").forEach((node) => {
@@ -167,6 +167,50 @@ function renderHtmlContent(html: string) {
   });
 
   return root.innerHTML;
+}
+
+export function sanitizeRichHtml(html: string) {
+  if (!html) return "";
+  if (typeof DOMParser === "undefined") {
+    return sanitizeRichHtmlFallback(html);
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div data-rich-content-root="true">${html}</div>`, "text/html");
+  const root = doc.body.querySelector('[data-rich-content-root="true"]');
+  if (!root) return "";
+
+  root.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
+  root.querySelectorAll("*").forEach((node) => {
+    const element = node as HTMLElement;
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value;
+      if (name.startsWith("on")) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+      if ((name === "src" || name === "href") && /^\s*javascript:/i.test(value)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+      if (name === "src" || name === "href") {
+        element.setAttribute(attribute.name, normalizeResourceUrl(value));
+      }
+    });
+  });
+
+  return root.innerHTML;
+}
+
+function sanitizeRichHtmlFallback(html: string) {
+  return html
+    .replace(/<\s*(script|style|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(src|href)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, "")
+    .replace(/\s(src|href)\s*=\s*(["'])([^"']+)\2/gi, (_match, attr, quote, value) => (
+      ` ${attr}=${quote}${escapeHtml(normalizeResourceUrl(value))}${quote}`
+    ));
 }
 
 export function stripRichContent(markdown: string) {

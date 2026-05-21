@@ -7,6 +7,8 @@ import com.excel.forum.entity.dto.AuthResponse;
 import com.excel.forum.entity.dto.ForgotPasswordRequest;
 import com.excel.forum.entity.dto.LoginRequest;
 import com.excel.forum.entity.dto.RegisterRequest;
+import com.excel.forum.entity.dto.ResetPasswordRequest;
+import com.excel.forum.service.PasswordResetTokenService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.UserService;
@@ -14,6 +16,7 @@ import com.excel.forum.util.JwtUtil;
 import com.excel.forum.util.PasswordPolicy;
 import com.excel.forum.util.UsernamePolicy;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -34,20 +37,31 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final RateLimitService rateLimitService;
+    private final PasswordResetTokenService passwordResetTokenService;
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+        String loginId = request == null || request.getUsername() == null ? "" : request.getUsername().trim();
+        String password = request == null || request.getPassword() == null ? "" : request.getPassword();
+        String clientIp = resolveClientIp(servletRequest);
         ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
-                "auth:login:" + normalizeRateLimitKey(request.getUsername()),
-                10,
+                "auth:login:id-ip:" + normalizeRateLimitKey(loginId) + ":" + clientIp,
+                8,
                 Duration.ofSeconds(60),
                 "登录过于频繁，请稍后再试"
         ));
         if (rateLimitResponse != null) {
             return rateLimitResponse;
         }
-        String loginId = request.getUsername() == null ? "" : request.getUsername().trim();
-        String password = request.getPassword() == null ? "" : request.getPassword();
+        rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:login:ip:" + clientIp,
+                60,
+                Duration.ofMinutes(5),
+                "登录过于频繁，请稍后再试"
+        ));
+        if (rateLimitResponse != null) {
+            return rateLimitResponse;
+        }
 
         User userByUsername = userService.findByUsername(loginId);
         User userByEmail = userService.findByEmail(loginId);
@@ -92,19 +106,30 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@RequestBody RegisterRequest request, HttpServletRequest servletRequest) {
+        String username = UsernamePolicy.normalize(request == null ? null : request.getUsername());
+        String email = normalizeEmail(request == null ? null : request.getEmail());
+        String password = request == null ? null : request.getPassword();
+        String clientIp = resolveClientIp(servletRequest);
+
         ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
-                "auth:register:" + normalizeRateLimitKey(request.getUsername()),
-                5,
-                Duration.ofMinutes(5),
+                "auth:register:ip:" + clientIp,
+                10,
+                Duration.ofHours(1),
                 "注册过于频繁，请稍后再试"
         ));
         if (rateLimitResponse != null) {
             return rateLimitResponse;
         }
-        String username = UsernamePolicy.normalize(request.getUsername());
-        String email = normalizeEmail(request.getEmail());
-        String password = request.getPassword();
+        rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:register:id-ip:" + normalizeRateLimitKey(username) + ":" + clientIp,
+                3,
+                Duration.ofMinutes(10),
+                "注册过于频繁，请稍后再试"
+        ));
+        if (rateLimitResponse != null) {
+            return rateLimitResponse;
+        }
 
         if (username == null || username.isEmpty()) {
             return ResponseEntity.badRequest().body("用户名不能为空");
@@ -122,7 +147,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body("邮箱格式不正确");
         }
         if (!isStrongPassword(password)) {
-            return ResponseEntity.badRequest().body("密码必须至少8位，且只能包含字母和数字");
+            return ResponseEntity.badRequest().body(PasswordPolicy.MESSAGE);
         }
 
         if (userService.findByUsername(username) != null) {
@@ -150,15 +175,24 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest body) {
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest body, HttpServletRequest servletRequest) {
         String username = UsernamePolicy.normalize(body == null ? null : body.getUsername());
         String email = normalizeEmail(body == null ? null : body.getEmail());
-        String newPassword = body == null ? null : body.getNewPassword();
+        String clientIp = resolveClientIp(servletRequest);
 
         ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
-                "auth:forgot:" + normalizeRateLimitKey(username + ":" + email),
-                5,
-                Duration.ofMinutes(5),
+                "auth:forgot:id-ip:" + normalizeRateLimitKey(username + ":" + email) + ":" + clientIp,
+                3,
+                Duration.ofMinutes(15),
+                "重置密码过于频繁，请稍后再试"
+        ));
+        if (rateLimitResponse != null) {
+            return rateLimitResponse;
+        }
+        rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:forgot:ip:" + clientIp,
+                10,
+                Duration.ofHours(1),
                 "重置密码过于频繁，请稍后再试"
         ));
         if (rateLimitResponse != null) {
@@ -173,23 +207,27 @@ public class AuthController {
         if (!email.matches(EMAIL_REGEX)) {
             return ResponseEntity.badRequest().body(Map.of("message", "邮箱格式不正确"));
         }
+
+        passwordResetTokenService.issueResetToken(username, email, clientIp);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("message", "如果账号信息匹配，系统会发送密码重置指引"));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest body) {
+        String token = body == null ? null : body.getToken();
+        String newPassword = body == null ? null : body.getNewPassword();
         if (!isStrongPassword(newPassword)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "新密码必须至少8位，且只能包含字母和数字"));
+            return ResponseEntity.badRequest().body(Map.of("message", PasswordPolicy.MESSAGE));
         }
 
-        User user = userService.findByUsername(username);
-        String passwordHash = user != null && user.getPassword() != null ? user.getPassword() : DUMMY_BCRYPT_HASH;
-        passwordEncoder.matches(newPassword == null ? "" : newPassword, passwordHash);
-        if (user == null || user.getEmail() == null || !user.getEmail().equalsIgnoreCase(email)) {
-            applyLoginFailureDelay();
-            return ResponseEntity.badRequest().body(Map.of("message", "用户名与邮箱不匹配"));
-        }
-
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setTokenVersion(nextTokenVersion(user.getTokenVersion()));
-        userService.updateById(user);
-
-        return ResponseEntity.ok(Map.of("message", "密码已重置，请使用新密码登录"));
+        return passwordResetTokenService.consumeToken(token)
+                .map(user -> {
+                    user.setPassword(passwordEncoder.encode(newPassword));
+                    user.setTokenVersion(nextTokenVersion(user.getTokenVersion()));
+                    userService.updateById(user);
+                    return ResponseEntity.ok(Map.of("message", "密码已重置，请重新登录"));
+                })
+                .orElseGet(() -> ResponseEntity.badRequest().body(Map.of("message", "重置链接无效或已过期")));
     }
 
     @GetMapping("/current")
@@ -250,7 +288,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body(java.util.Map.of("message", "请输入当前密码"));
         }
         if (!isStrongPassword(newPassword)) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("message", "新密码必须至少8位，且只能包含字母和数字"));
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", PasswordPolicy.MESSAGE));
         }
         
         User user = userService.getById(userId);
@@ -335,7 +373,7 @@ public class AuthController {
         if (value == null || value.isBlank()) {
             return "anonymous";
         }
-        return value.trim().toLowerCase();
+        return value.trim().toLowerCase().replaceAll("[^a-z0-9@._:-]", "_");
     }
 
     private String normalizeEmail(String value) {
@@ -344,6 +382,29 @@ public class AuthController {
 
     private int nextTokenVersion(Integer tokenVersion) {
         return tokenVersion == null ? 1 : tokenVersion + 1;
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
+        }
+        String forwarded = firstHeaderValue(request.getHeader("X-Forwarded-For"));
+        if (forwarded != null) {
+            return normalizeRateLimitKey(forwarded);
+        }
+        String realIp = firstHeaderValue(request.getHeader("X-Real-IP"));
+        if (realIp != null) {
+            return normalizeRateLimitKey(realIp);
+        }
+        return normalizeRateLimitKey(request.getRemoteAddr());
+    }
+
+    private String firstHeaderValue(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String first = value.split(",", 2)[0].trim();
+        return first.isBlank() ? null : first;
     }
 
     private ResponseEntity<?> toLimitResponse(RateLimitResult result) {

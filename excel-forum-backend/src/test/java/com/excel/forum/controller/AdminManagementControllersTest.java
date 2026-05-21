@@ -451,9 +451,9 @@ class AdminManagementControllersTest {
                         .content("""
                                 {"username":"tester","email":"tester@example.com","password":"weak!"}
                                 
-                                """))
+                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("密码必须至少8位，且只能包含字母和数字"));
+                .andExpect(jsonPath("$.message").value("密码需为 8-64 位，包含大小写字母、数字和特殊字符"));
 
         verify(userService, never()).save(any(User.class));
     }

@@ -88,7 +88,7 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/mall/types")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/mall/**")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/.trash/**")).hasRole("ADMIN")
-                .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/private/**")).authenticated()
+                .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/private/**")).denyAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/**")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/ws/**")).authenticated()
                 // 运营角色可访问的统计与反馈接口

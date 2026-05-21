@@ -14,9 +14,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -43,7 +46,12 @@ class UploadControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(fileStorageService, rateLimitService, workbookSecurityGuard, excelTemplateGradingService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(fileStorageService, rateLimitService, workbookSecurityGuard, excelTemplateGradingService))
+                .setMessageConverters(
+                        new StringHttpMessageConverter(StandardCharsets.UTF_8),
+                        new MappingJackson2HttpMessageConverter()
+                )
+                .build();
     }
 
     @Test
@@ -87,6 +95,47 @@ class UploadControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.url").value("/uploads/private/case.xlsx"))
                 .andExpect(jsonPath("$.workbook.sheets").isArray());
+    }
+
+    @Test
+    void uploadRejectsSpoofedExcelWhenMagicDoesNotMatchExtension() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "case.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] { (byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10 }
+        );
+
+        mockMvc.perform(multipart("/api/upload")
+                        .file(file)
+                        .requestAttr("userId", 7L))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("不支持的文件类型"));
+
+        verify(fileStorageService, never()).store(any(MockMultipartFile.class));
+    }
+
+    @Test
+    void uploadRejectsOversizedFileBeforeStorage() throws Exception {
+        byte[] content = new byte[20 * 1024 * 1024 + 1];
+        content[0] = 'P';
+        content[1] = 'K';
+        content[2] = 3;
+        content[3] = 4;
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "large.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                content
+        );
+
+        mockMvc.perform(multipart("/api/upload")
+                        .file(file)
+                        .requestAttr("userId", 7L))
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("文件大小超过限制"));
+
+        verify(fileStorageService, never()).store(any(MockMultipartFile.class));
     }
 
     private byte[] createWorkbookBytes() throws Exception {

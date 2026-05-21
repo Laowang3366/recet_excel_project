@@ -128,6 +128,19 @@ class PracticeControllerTest {
     }
 
     @Test
+    void questionWorkbookDownloadReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.equals("download:practice-question:user:7:question:9")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("文件下载过于频繁，请稍后再试", 20));
+
+        mockMvc.perform(get("/api/practice/questions/9/file").requestAttr("userId", 7L))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("文件下载过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(20));
+
+        verify(practiceService, never()).buildPracticeQuestionWorkbookFile(9L);
+    }
+
+    @Test
     void questionWorkbookExternalOpenUrlUsesXlsxPathForOfficeProtocol() throws Exception {
         when(practiceWorkbookLinkService.createTicket(9L, 7L)).thenReturn("signed-ticket");
 
@@ -192,6 +205,26 @@ class PracticeControllerTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.message").value("答题提交过于频繁，请稍后再试"))
                 .andExpect(jsonPath("$.retryAfterSeconds").value(30));
+
+        verify(practiceService, never()).submitPractice(eq(7L), any());
+    }
+
+    @Test
+    void submitPracticeReturnsTooManyRequestsWhenQuestionSubmitIsRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.startsWith("practice:submit:user:7")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.allow());
+        when(rateLimitService.check(argThat(key -> key != null && key.equals("practice:submit:user:7:question:9")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("该题提交过于频繁，请稍后再试", 42));
+
+        mockMvc.perform(post("/api/practice/submit")
+                        .requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":9,"userAnswer":"A"}]}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("该题提交过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(42));
 
         verify(practiceService, never()).submitPractice(eq(7L), any());
     }

@@ -28,7 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/practice")
@@ -183,6 +185,10 @@ public class PracticeController {
         if (limited != null) {
             return limited;
         }
+        limited = checkQuestionSubmitLimits(userId, request);
+        if (limited != null) {
+            return limited;
+        }
         try {
             return ResponseEntity.ok(practiceService.submitPractice(userId, request));
         } catch (IllegalArgumentException e) {
@@ -249,6 +255,28 @@ public class PracticeController {
     private boolean isLoginRequired(RuntimeException e) {
         String message = e.getMessage();
         return "未登录".equals(message) || "请先登录".equals(message);
+    }
+
+    private ResponseEntity<?> checkQuestionSubmitLimits(Long userId, PracticeSubmitRequest request) {
+        if (request == null || request.getAnswers() == null || request.getAnswers().isEmpty()) {
+            return null;
+        }
+        Set<Long> checkedQuestionIds = new HashSet<>();
+        for (var answer : request.getAnswers()) {
+            if (answer == null || answer.getQuestionId() == null || !checkedQuestionIds.add(answer.getQuestionId())) {
+                continue;
+            }
+            ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                    "practice:submit:user:" + userId + ":question:" + answer.getQuestionId(),
+                    6,
+                    Duration.ofMinutes(1),
+                    "该题提交过于频繁，请稍后再试"
+            ));
+            if (limited != null) {
+                return limited;
+            }
+        }
+        return null;
     }
 
     private ResponseEntity<?> toLimitResponse(RateLimitResult result) {

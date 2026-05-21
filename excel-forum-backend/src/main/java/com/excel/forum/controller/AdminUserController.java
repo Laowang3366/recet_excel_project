@@ -107,7 +107,7 @@ public class AdminUserController {
             return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
         }
         if (!PasswordPolicy.isStrongPassword(password)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码必须至少8位，且只能包含字母和数字"));
+            return ResponseEntity.badRequest().body(Map.of("message", PasswordPolicy.MESSAGE));
         }
 
         QueryWrapper<User> checkWrapper = new QueryWrapper<>();
@@ -187,7 +187,7 @@ public class AdminUserController {
             return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
         }
         if (!PasswordPolicy.isStrongPassword(password)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "密码必须至少8位，包含大小写字母、数字和特殊字符"));
+            return ResponseEntity.badRequest().body(Map.of("message", PasswordPolicy.MESSAGE));
         }
 
         user.setPassword(passwordEncoder.encode(password));

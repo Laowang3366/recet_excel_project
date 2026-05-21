@@ -9,6 +9,7 @@ import { formatDateTime } from "../lib/format";
 import { normalizeAvatarUrl, normalizeImageUrl, parseJsonText } from "../lib/mappers";
 import { notificationKeys } from "../lib/query-keys";
 import { resolveNotificationReturnTarget } from "../lib/notification-return";
+import { renderRichContent } from "../lib/rich-content";
 import { openGlobalConfirm } from "../components/GlobalConfirmPromptDialog";
 
 function formatNotificationKind(value?: string | null) {
@@ -243,7 +244,7 @@ export function NotificationDetail() {
             {/* 正文 */}
             <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed mb-10">
               {isAnnouncement ? (
-                <div dangerouslySetInnerHTML={{ __html: notification.content }} />
+                <div dangerouslySetInnerHTML={{ __html: renderRichContent(notification.content || "") }} />
               ) : (
                 <div className="whitespace-pre-wrap break-words text-[15px] leading-8 text-slate-700">
                   {notification.content}

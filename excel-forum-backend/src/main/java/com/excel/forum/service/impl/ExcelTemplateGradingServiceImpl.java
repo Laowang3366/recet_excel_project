@@ -31,9 +31,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -1064,8 +1066,20 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         if (!StringUtils.hasText(prefix) || !fileUrl.startsWith(prefix + "/")) {
             throw new IllegalArgumentException("当前仅支持解析本地上传模板文件");
         }
-        String fileName = fileUrl.substring(prefix.length() + 1);
-        return Paths.get(fileStorageConfig.getLocal().getPath()).resolve(fileName);
+        String relativeName = URLDecoder.decode(fileUrl.substring(prefix.length() + 1), StandardCharsets.UTF_8);
+        if (!StringUtils.hasText(relativeName)) {
+            throw new IllegalArgumentException("模板文件路径无效");
+        }
+        Path uploadRoot = Paths.get(fileStorageConfig.getLocal().getPath()).toAbsolutePath().normalize();
+        Path relativePath = Paths.get(relativeName).normalize();
+        if (relativePath.isAbsolute() || relativePath.startsWith("..")) {
+            throw new IllegalArgumentException("模板文件路径无效");
+        }
+        Path resolved = uploadRoot.resolve(relativePath).normalize();
+        if (!resolved.startsWith(uploadRoot)) {
+            throw new IllegalArgumentException("模板文件路径无效");
+        }
+        return resolved;
     }
 
     private int resolveColumnCount(Sheet sheet) {

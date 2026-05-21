@@ -16,14 +16,10 @@ export function Auth() {
   const [password, setPassword] = useState("");
   const [rememberPassword, setRememberPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
-  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotForm, setForgotForm] = useState({
     username: "",
     email: "",
-    newPassword: "",
-    confirmPassword: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
@@ -40,7 +36,6 @@ export function Auth() {
     const remembered = getRememberedAuth();
     if (!remembered) return;
     setEmail(remembered.username);
-    setPassword(remembered.password);
     setRememberPassword(true);
   }, []);
 
@@ -52,7 +47,7 @@ export function Auth() {
     try {
       if (isLogin) {
         await login(email.trim(), password, rememberPassword);
-        storeRememberedAuth(rememberPassword ? { username: email.trim(), password } : null);
+        storeRememberedAuth(rememberPassword ? { username: email.trim() } : null);
       } else {
         await register({
           username: username.trim(),
@@ -78,38 +73,20 @@ export function Auth() {
       toast.info("请输入注册邮箱");
       return;
     }
-    if (!forgotForm.newPassword) {
-      toast.info("请输入新密码");
-      return;
-    }
-    if (forgotForm.newPassword !== forgotForm.confirmPassword) {
-      toast.info("两次输入的新密码不一致");
-      return;
-    }
-
     setForgotSubmitting(true);
     try {
       const result = await api.post<{ message: string }>("/api/auth/forgot-password", {
         username: forgotForm.username.trim(),
         email: forgotForm.email.trim(),
-        newPassword: forgotForm.newPassword,
       }, { auth: false });
-      toast.success(result.message || "密码已重置");
+      toast.success(result.message || "找回申请已提交");
       setForgotOpen(false);
       setIsLogin(true);
       setEmail(forgotForm.username.trim());
       setPassword("");
-      if (rememberPassword) {
-        storeRememberedAuth({
-          username: forgotForm.username.trim(),
-          password: forgotForm.newPassword,
-        });
-      }
       setForgotForm({
         username: "",
         email: "",
-        newPassword: "",
-        confirmPassword: "",
       });
     } finally {
       setForgotSubmitting(false);
@@ -256,7 +233,7 @@ export function Auth() {
                             }}
                             className="h-4 w-4 rounded border border-slate-300 text-[#00b050] focus:ring-2 focus:ring-[#00b050]/20"
                           />
-                          记住密码
+                          记住账号
                         </label>
                         <button
                           type="button"
@@ -318,10 +295,10 @@ export function Auth() {
 
       <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
         <DialogContent className="sm:!max-w-md">
-          <DialogHeader>
-            <DialogTitle>找回密码</DialogTitle>
-            <DialogDescription>使用用户名和注册邮箱校验身份后，直接重置为新的登录密码。</DialogDescription>
-          </DialogHeader>
+            <DialogHeader>
+              <DialogTitle>找回密码</DialogTitle>
+              <DialogDescription>提交账号与注册邮箱后，系统会按安全流程处理重置申请。</DialogDescription>
+            </DialogHeader>
           <form onSubmit={handleForgotPassword} className="space-y-4">
             <div>
               <label className="mb-1.5 ml-1 block text-sm font-medium text-slate-700">用户名</label>
@@ -353,56 +330,6 @@ export function Auth() {
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1.5 ml-1 block text-sm font-medium text-slate-700">新密码</label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-                  <Lock size={18} />
-                </div>
-                <input
-                  type={showForgotNewPassword ? "text" : "password"}
-                  required
-                  value={forgotForm.newPassword}
-                  onChange={(e) => setForgotForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                  autoComplete="new-password"
-                  placeholder="请输入密码"
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-12 outline-none transition-all focus:border-[#00b050] focus:bg-white focus:ring-4 focus:ring-[#00b050]/10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowForgotNewPassword((current) => !current)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition hover:text-slate-700"
-                  aria-label={showForgotNewPassword ? "隐藏密码" : "显示密码"}
-                >
-                  {showForgotNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 ml-1 block text-sm font-medium text-slate-700">确认新密码</label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
-                  <Lock size={18} />
-                </div>
-                <input
-                  type={showForgotConfirmPassword ? "text" : "password"}
-                  required
-                  value={forgotForm.confirmPassword}
-                  onChange={(e) => setForgotForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                  autoComplete="new-password"
-                  placeholder="请再次输入密码"
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-12 outline-none transition-all focus:border-[#00b050] focus:bg-white focus:ring-4 focus:ring-[#00b050]/10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowForgotConfirmPassword((current) => !current)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 transition hover:text-slate-700"
-                  aria-label={showForgotConfirmPassword ? "隐藏密码" : "显示密码"}
-                >
-                  {showForgotConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -416,7 +343,7 @@ export function Auth() {
                 disabled={forgotSubmitting}
                 className="rounded-xl bg-[#00b050] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#008f43] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {forgotSubmitting ? "重置中..." : "重置密码"}
+                {forgotSubmitting ? "提交中..." : "提交申请"}
               </button>
             </div>
           </form>
@@ -429,9 +356,11 @@ export function Auth() {
 function getPasswordChecks(password: string) {
   return [
     { label: "至少 8 位字符", passed: password.length >= 8 },
-    { label: "包含字母", passed: /[A-Za-z]/.test(password) },
+    { label: "包含大写字母", passed: /[A-Z]/.test(password) },
+    { label: "包含小写字母", passed: /[a-z]/.test(password) },
     { label: "包含数字", passed: /\d/.test(password) },
-    { label: "仅允许字母和数字", passed: /^[A-Za-z0-9]*$/.test(password) && password.length > 0 },
+    { label: "包含特殊字符", passed: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(password) },
+    { label: "不含空格且不超过 64 位", passed: password.length > 0 && password.length <= 64 && !/\s/.test(password) },
   ];
 }
 

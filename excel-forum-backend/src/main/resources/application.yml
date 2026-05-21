@@ -1,5 +1,8 @@
 server:
   port: 8080
+  error:
+    include-stacktrace: never
+    include-message: never
   tomcat:
     threads:
       max: ${SERVER_TOMCAT_THREADS_MAX:300}
@@ -17,7 +20,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/excel_forum_recet?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&characterSetResults=utf-8}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:admin}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       connection-init-sql: SET NAMES utf8mb4
@@ -76,10 +79,10 @@ file:
       path: ./uploads
       url-prefix: /uploads
     minio:
-      endpoint: http://localhost:9000
-      access-key: minioadmin
-      secret-key: minioadmin
-      bucket-name: excel-forum
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:}
+      secret-key: ${MINIO_SECRET_KEY:}
+      bucket-name: ${MINIO_BUCKET_NAME:excelcc}
 
 experience:
   rules:

@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ExcelTemplateGradingServiceImplTest {
 
@@ -182,6 +183,36 @@ class ExcelTemplateGradingServiceImplTest {
         }
     }
 
+    @Test
+    void loadWorkbookSnapshotRejectsPathTraversalOutsideUploadRoot() throws Exception {
+        Path uploadRoot = Files.createDirectories(tempDir.resolve("uploads"));
+        Path outsideWorkbook = tempDir.resolve("outside.xlsx");
+        writeTinyWorkbook(outsideWorkbook);
+
+        FileStorageConfig config = new FileStorageConfig();
+        config.getLocal().setPath(uploadRoot.toString());
+        ExcelTemplateGradingServiceImpl localService = new ExcelTemplateGradingServiceImpl(new ObjectMapper(), config, defaultGuard());
+
+        assertThatThrownBy(() -> localService.loadWorkbookSnapshot("/uploads/../outside.xlsx"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("模板文件路径无效");
+    }
+
+    @Test
+    void loadWorkbookSnapshotAcceptsFilesInsideUploadRoot() throws Exception {
+        Path uploadRoot = Files.createDirectories(tempDir.resolve("uploads"));
+        Path workbookPath = uploadRoot.resolve("practice.xlsx");
+        writeTinyWorkbook(workbookPath);
+
+        FileStorageConfig config = new FileStorageConfig();
+        config.getLocal().setPath(uploadRoot.toString());
+        ExcelTemplateGradingServiceImpl localService = new ExcelTemplateGradingServiceImpl(new ObjectMapper(), config, defaultGuard());
+
+        ExcelWorkbookSnapshot snapshot = localService.loadWorkbookSnapshot("/uploads/practice.xlsx");
+
+        assertThat(snapshot.getSheets()).singleElement().satisfies(sheet -> assertThat(sheet.getName()).isEqualTo("Sheet1"));
+    }
+
     private void putCell(ExcelWorkbookSnapshot.SheetSnapshot sheet, String ref, Object value, String formula) {
         ExcelWorkbookSnapshot.CellSnapshot cell = new ExcelWorkbookSnapshot.CellSnapshot();
         cell.setValue(value);
@@ -207,5 +238,14 @@ class ExcelTemplateGradingServiceImplTest {
 
     private static WorkbookSecurityGuardImpl defaultGuard() {
         return new WorkbookSecurityGuardImpl(new WorkbookSecurityProperties());
+    }
+
+    private void writeTinyWorkbook(Path target) throws Exception {
+        try (Workbook workbook = new XSSFWorkbook();
+             OutputStream outputStream = Files.newOutputStream(target)) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            sheet.createRow(0).createCell(0).setCellValue("ok");
+            workbook.write(outputStream);
+        }
     }
 }
