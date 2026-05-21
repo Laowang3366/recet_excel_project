@@ -7,47 +7,42 @@ import com.excel.forum.entity.dto.AuthResponse;
 import com.excel.forum.entity.dto.ForgotPasswordRequest;
 import com.excel.forum.entity.dto.LoginRequest;
 import com.excel.forum.entity.dto.RegisterRequest;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.UserService;
 import com.excel.forum.util.JwtUtil;
 import com.excel.forum.util.PasswordPolicy;
 import com.excel.forum.util.UsernamePolicy;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Slf4j
 public class AuthController {
     private static final String EMAIL_REGEX = "^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\\.[A-Za-z]{2,63}$";
     private static final String DUMMY_BCRYPT_HASH = "$2a$10$7EqJtq98hPqEX7fNZaFWoOHi5M1QwzKzbwQ6vurIWBLL8GMDIS9xC";
-    private static final DefaultRedisScript<Long> RATE_LIMIT_SCRIPT = new DefaultRedisScript<>(
-            "local current = redis.call('INCR', KEYS[1]); " +
-                    "if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; " +
-                    "return current;",
-            Long.class
-    );
-    private static final ConcurrentHashMap<String, LocalRateLimitState> LOCAL_RATE_LIMITS = new ConcurrentHashMap<>();
 
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-    private final StringRedisTemplate redisTemplate;
+    private final RateLimitService rateLimitService;
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        ResponseEntity<?> rateLimitResponse = guardRateLimit("auth:login:" + normalizeRateLimitKey(request.getUsername()), 10, 60, "登录过于频繁，请稍后再试");
+        ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:login:" + normalizeRateLimitKey(request.getUsername()),
+                10,
+                Duration.ofSeconds(60),
+                "登录过于频繁，请稍后再试"
+        ));
         if (rateLimitResponse != null) {
             return rateLimitResponse;
         }
@@ -98,7 +93,12 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-        ResponseEntity<?> rateLimitResponse = guardRateLimit("auth:register:" + normalizeRateLimitKey(request.getUsername()), 5, 300, "注册过于频繁，请稍后再试");
+        ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:register:" + normalizeRateLimitKey(request.getUsername()),
+                5,
+                Duration.ofMinutes(5),
+                "注册过于频繁，请稍后再试"
+        ));
         if (rateLimitResponse != null) {
             return rateLimitResponse;
         }
@@ -155,7 +155,12 @@ public class AuthController {
         String email = normalizeEmail(body == null ? null : body.getEmail());
         String newPassword = body == null ? null : body.getNewPassword();
 
-        ResponseEntity<?> rateLimitResponse = guardRateLimit("auth:forgot:" + normalizeRateLimitKey(username + ":" + email), 5, 300, "重置密码过于频繁，请稍后再试");
+        ResponseEntity<?> rateLimitResponse = toLimitResponse(rateLimitService.check(
+                "auth:forgot:" + normalizeRateLimitKey(username + ":" + email),
+                5,
+                Duration.ofMinutes(5),
+                "重置密码过于频繁，请稍后再试"
+        ));
         if (rateLimitResponse != null) {
             return rateLimitResponse;
         }
@@ -326,31 +331,6 @@ public class AuthController {
         return null;
     }
 
-    private ResponseEntity<?> guardRateLimit(String key, int maxRequests, int ttlSeconds, String limitedMessage) {
-        try {
-            Long count = redisTemplate.execute(RATE_LIMIT_SCRIPT, List.of(key), String.valueOf(ttlSeconds));
-            if (count != null && count > maxRequests) {
-                return ResponseEntity.status(429).body(Map.of("message", limitedMessage));
-            }
-            return null;
-        } catch (Exception exception) {
-            log.debug("Redis rate limit unavailable, falling back to local limiter for key {}", key, exception);
-            long now = System.currentTimeMillis();
-            LocalRateLimitState state = LOCAL_RATE_LIMITS.compute(key, (currentKey, currentState) -> {
-                if (currentState == null || currentState.expireAtMillis <= now) {
-                    return new LocalRateLimitState(1, now + ttlSeconds * 1000L);
-                }
-                currentState.count += 1;
-                return currentState;
-            });
-            cleanupExpiredLocalRateLimits(now);
-            if (state != null && state.count > maxRequests) {
-                return ResponseEntity.status(429).body(Map.of("message", limitedMessage));
-            }
-            return null;
-        }
-    }
-
     private String normalizeRateLimitKey(String value) {
         if (value == null || value.isBlank()) {
             return "anonymous";
@@ -366,17 +346,13 @@ public class AuthController {
         return tokenVersion == null ? 1 : tokenVersion + 1;
     }
 
-    private void cleanupExpiredLocalRateLimits(long now) {
-        LOCAL_RATE_LIMITS.entrySet().removeIf(entry -> entry.getValue().expireAtMillis <= now);
-    }
-
-    private static final class LocalRateLimitState {
-        private int count;
-        private final long expireAtMillis;
-
-        private LocalRateLimitState(int count, long expireAtMillis) {
-            this.count = count;
-            this.expireAtMillis = expireAtMillis;
+    private ResponseEntity<?> toLimitResponse(RateLimitResult result) {
+        if (result == null || result.allowed()) {
+            return null;
         }
+        return ResponseEntity.status(429).body(Map.of(
+                "message", result.message(),
+                "retryAfterSeconds", result.retryAfterSeconds()
+        ));
     }
 }

@@ -405,6 +405,13 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         if (request == null || request.getAttemptId() == null) {
             throw new IllegalArgumentException("挑战参数不完整");
         }
+        PracticeAttempt attempt = practiceAttemptMapper.selectById(request.getAttemptId());
+        if (attempt == null || !Objects.equals(attempt.getUserId(), userId) || !Objects.equals(attempt.getLevelId(), levelId)) {
+            throw new IllegalArgumentException("挑战记录不存在");
+        }
+        if (!"started".equals(attempt.getResultStatus())) {
+            throw new IllegalStateException("挑战已提交，请返回题目列表刷新进度");
+        }
         PracticeLevel level = practiceLevelMapper.selectById(levelId);
         if (level == null || !Boolean.TRUE.equals(level.getEnabled())) {
             throw new IllegalArgumentException("关卡不存在");
@@ -412,10 +419,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         QueryWrapper<UserLevelProgress> existingProgressQuery = new QueryWrapper<>();
         existingProgressQuery.eq("user_id", userId).eq("level_id", levelId).orderByAsc("id");
         UserLevelProgress existingProgress = first(userLevelProgressMapper, existingProgressQuery);
-        PracticeAttempt attempt = practiceAttemptMapper.selectById(request.getAttemptId());
-        if (attempt == null || !Objects.equals(attempt.getUserId(), userId) || !Objects.equals(attempt.getLevelId(), levelId)) {
-            throw new IllegalArgumentException("挑战记录不存在");
-        }
         Question question = questionService.getById(level.getQuestionId());
         if (question == null || question.getDeletedAt() != null || !Boolean.TRUE.equals(question.getEnabled())) {
             throw new IllegalArgumentException("题目不存在");

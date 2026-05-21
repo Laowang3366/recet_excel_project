@@ -127,6 +127,8 @@ class PracticeServiceImplTest {
         Map<String, Object> result = service.getPracticeQuestionDetail(9L);
 
         assertThat(result).doesNotContainKey("explanation");
+        assertThat(result).doesNotContainKey("templateFileUrl");
+        assertThat(result.get("hasTemplateFile")).isEqualTo(true);
         assertThat(result.get("title")).isEqualTo("销售汇总");
         assertThat(result.get("answerSheet")).isEqualTo("Sheet1");
         assertThat(result.get("answerRange")).isEqualTo("K10:P14");
@@ -184,6 +186,7 @@ class PracticeServiceImplTest {
         when(pointsTaskService.awardTask(any(), any(), any(), any())).thenReturn(null);
         when(practiceRecordMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
         when(pointsRecordService.count(any(QueryWrapper.class))).thenReturn(0L);
+        when(pointsRecordService.addTaskPointsRecord(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
         doAnswer(invocation -> {
             PracticeRecord record = invocation.getArgument(0);
             record.setId(88L);

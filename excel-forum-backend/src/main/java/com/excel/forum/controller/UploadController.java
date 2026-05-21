@@ -1,27 +1,33 @@
 package com.excel.forum.controller;
 
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
+import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.FileStorageService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
+import com.excel.forum.service.WorkbookSecurityGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
-@Slf4j
 @RestController
 @RequestMapping("/api/upload")
 @RequiredArgsConstructor
 public class UploadController {
     private final FileStorageService fileStorageService;
-    private final StringRedisTemplate redisTemplate;
+    private final RateLimitService rateLimitService;
+    private final WorkbookSecurityGuard workbookSecurityGuard;
+    private final ExcelTemplateGradingService excelTemplateGradingService;
 
     private static final int MAX_UPLOADS_PER_MINUTE = 10;
 
@@ -43,25 +49,31 @@ public class UploadController {
             return ResponseEntity.badRequest().body("文件大小超过限制");
         }
 
-        // 频率限制：每分钟最多上传 MAX_UPLOADS_PER_MINUTE 次（Redis 不可用时跳过限流）
         Long userId = (Long) request.getAttribute("userId");
         if (userId != null) {
-            try {
-                String rateLimitKey = "upload:rate:" + userId;
-                Long count = redisTemplate.opsForValue().increment(rateLimitKey);
-                if (count != null && count == 1) {
-                    redisTemplate.expire(rateLimitKey, 60, TimeUnit.SECONDS);
-                }
-                if (count != null && count > MAX_UPLOADS_PER_MINUTE) {
-                    return ResponseEntity.status(429).body(Map.of("message", "上传频率过高，请稍后再试"));
-                }
-            } catch (RedisConnectionFailureException e) {
-                log.warn("Redis 不可用，跳过上传频率限制");
+            ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                    "upload:user:" + userId,
+                    MAX_UPLOADS_PER_MINUTE,
+                    Duration.ofMinutes(1),
+                    "上传频率过高，请稍后再试"
+            ));
+            if (limited != null) {
+                return limited;
             }
         }
 
+        if (isExcelUpload(file)) {
+            validateWorkbookSecurity(file);
+        }
+
         String fileUrl = fileStorageService.store(file);
-        return ResponseEntity.ok(Map.of("url", fileUrl));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("url", fileUrl);
+        if (isExcelUpload(file)) {
+            ExcelWorkbookSnapshot workbook = excelTemplateGradingService.loadWorkbookSnapshot(fileUrl);
+            response.put("workbook", workbook);
+        }
+        return ResponseEntity.ok(response);
     }
 
     private boolean isAllowedFileType(MultipartFile file, String scene) {
@@ -93,6 +105,23 @@ public class UploadController {
                        isContentTypeCompatible(contentType, "image/gif", "application/octet-stream")) ||
                (originalFilename.endsWith(".webp") && isWebpFile(magic) &&
                        isContentTypeCompatible(contentType, "image/webp", "application/octet-stream"));
+    }
+
+    private boolean isExcelUpload(MultipartFile file) {
+        String originalFilename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        return originalFilename.endsWith(".xlsx") || originalFilename.endsWith(".xls");
+    }
+
+    private void validateWorkbookSecurity(MultipartFile file) {
+        workbookSecurityGuard.applyZipBombProtection();
+        try (InputStream inputStream = file.getInputStream();
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            workbookSecurityGuard.assertWorkbookSafe(workbook, "上传文件");
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Excel 文件解析失败");
+        }
     }
 
     private boolean isContentTypeCompatible(String contentType, String... acceptedTypes) {
@@ -169,5 +198,15 @@ public class UploadController {
                 magic[9] == 'E' &&
                 magic[10] == 'B' &&
                 magic[11] == 'P';
+    }
+
+    private ResponseEntity<?> toLimitResponse(RateLimitResult result) {
+        if (result == null || result.allowed()) {
+            return null;
+        }
+        return ResponseEntity.status(429).body(Map.of(
+                "message", result.message(),
+                "retryAfterSeconds", result.retryAfterSeconds()
+        ));
     }
 }

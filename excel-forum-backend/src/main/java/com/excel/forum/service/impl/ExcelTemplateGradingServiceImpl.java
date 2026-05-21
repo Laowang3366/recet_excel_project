@@ -7,6 +7,7 @@ import com.excel.forum.entity.dto.ExcelTemplateExpectedSnapshot;
 import com.excel.forum.entity.dto.ExcelTemplateRuleConfig;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.service.ExcelTemplateGradingService;
+import com.excel.forum.service.WorkbookSecurityGuard;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +50,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
 
     private final ObjectMapper objectMapper;
     private final FileStorageConfig fileStorageConfig;
+    private final WorkbookSecurityGuard workbookSecurityGuard;
 
     @Override
     public ExcelWorkbookSnapshot loadWorkbookSnapshot(String fileUrl) {
@@ -60,6 +62,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             throw new IllegalArgumentException("模板文件不存在");
         }
 
+        workbookSecurityGuard.applyZipBombProtection();
         try (InputStream inputStream = Files.newInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(inputStream)) {
             return toWorkbookSnapshot(workbook);
@@ -466,8 +469,11 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             throw new IllegalArgumentException("模板文件不存在");
         }
         ExcelWorkbookSnapshot safeSubmission = submission == null ? new ExcelWorkbookSnapshot() : submission;
+        workbookSecurityGuard.assertSnapshotSafe(safeSubmission, "提交工作簿");
+        workbookSecurityGuard.applyZipBombProtection();
         try (InputStream inputStream = Files.newInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(inputStream)) {
+            workbookSecurityGuard.assertWorkbookSafe(workbook, "模板文件");
             try {
                 applySubmissionToWorkbook(workbook, safeSubmission);
                 workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
@@ -498,9 +504,11 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
             throw new IllegalArgumentException("模板文件不存在");
         }
 
+        workbookSecurityGuard.applyZipBombProtection();
         try (InputStream inputStream = Files.newInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbookSecurityGuard.assertWorkbookSafe(workbook, "模板文件");
             Sheet sheet = workbook.getSheet(answerSheet);
             if (sheet == null) {
                 throw new IllegalArgumentException("答题工作表不存在");
@@ -524,9 +532,12 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         }
 
         ExcelWorkbookSnapshot safeSubmission = submission == null ? new ExcelWorkbookSnapshot() : submission;
+        workbookSecurityGuard.assertSnapshotSafe(safeSubmission, "提交工作簿");
+        workbookSecurityGuard.applyZipBombProtection();
         try (InputStream inputStream = Files.newInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(inputStream);
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            workbookSecurityGuard.assertWorkbookSafe(workbook, "模板文件");
             applySubmissionToWorkbook(workbook, safeSubmission);
             try {
                 workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
@@ -545,6 +556,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
         ExcelTemplateRuleConfig ruleConfig = parseRuleConfig(gradingRuleJson);
         ExcelTemplateExpectedSnapshot expectedSnapshot = parseExpectedSnapshot(expectedSnapshotJson);
         ExcelWorkbookSnapshot safeSubmission = submission == null ? new ExcelWorkbookSnapshot() : submission;
+        workbookSecurityGuard.assertSnapshotSafe(safeSubmission, "提交工作簿");
 
         if (hasSimpleAnswerRule(ruleConfig)) {
             return gradeSimpleAnswerRule(safeSubmission, ruleConfig, expectedSnapshot);
@@ -786,6 +798,7 @@ public class ExcelTemplateGradingServiceImpl implements ExcelTemplateGradingServ
     }
 
     private ExcelWorkbookSnapshot toWorkbookSnapshot(Workbook workbook) {
+        workbookSecurityGuard.assertWorkbookSafe(workbook, "模板文件");
         FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
         DataFormatter formatter = new DataFormatter(Locale.SIMPLIFIED_CHINESE);
         ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();

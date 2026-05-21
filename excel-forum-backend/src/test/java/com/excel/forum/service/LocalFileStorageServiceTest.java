@@ -4,6 +4,7 @@ import com.excel.forum.config.FileStorageConfig;
 import com.excel.forum.service.impl.LocalFileStorageService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -44,5 +45,41 @@ class LocalFileStorageServiceTest {
         storage.deletePermanently(recycleUrl);
 
         assertThat(tempDir.resolve(".trash/question/7/sample.xlsx")).doesNotExist();
+    }
+
+    @Test
+    void storesExcelFilesUnderPrivatePrefix() {
+        LocalFileStorageService storage = new LocalFileStorageService(config());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "answer.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] {1, 2, 3}
+        );
+
+        String fileUrl = storage.store(file);
+
+        assertThat(fileUrl).startsWith("/uploads/private/");
+        assertThat(tempDir.resolve(fileUrl.substring("/uploads/".length()))).exists();
+    }
+
+    @Test
+    void keepsImageUploadsPublic() {
+        LocalFileStorageService storage = new LocalFileStorageService(config());
+        MockMultipartFile file = new MockMultipartFile("file", "cover.png", "image/png", new byte[] {1, 2, 3});
+
+        String fileUrl = storage.store(file);
+
+        assertThat(fileUrl).startsWith("/uploads/");
+        assertThat(fileUrl).doesNotContain("/private/");
+    }
+
+    private FileStorageConfig config() {
+        FileStorageConfig config = new FileStorageConfig();
+        FileStorageConfig.Local local = new FileStorageConfig.Local();
+        local.setPath(tempDir.toString());
+        local.setUrlPrefix("/uploads");
+        config.setLocal(local);
+        return config;
     }
 }

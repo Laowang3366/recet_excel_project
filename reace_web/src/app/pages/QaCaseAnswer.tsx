@@ -30,12 +30,15 @@ export function QaCaseAnswer() {
   const editingMode = Boolean(answerId);
 
   const loadWorkbook = async () => {
-    const fileUrl = editingMode ? editingAnswer?.answerFileUrl : qaCase?.templateFileUrl;
-    if (!fileUrl) return;
+    if (!id || (editingMode ? !answerId || !editingAnswer : !qaCase)) return;
     try {
       setLoadingWorkbook(true);
+      const snapshotUrl =
+        editingMode && answerId
+          ? `/api/qa/cases/${id}/answers/${answerId}/template-snapshot`
+          : `/api/qa/cases/${id}/template-snapshot`;
       const snapshot = await api.get<ExcelWorkbookSnapshot>(
-        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`,
+        snapshotUrl,
         { silent: true },
       );
       setWorkbook(snapshot || { sheets: [] });
@@ -154,7 +157,7 @@ export function QaCaseAnswer() {
             <button
               type="button"
               onClick={() => void loadWorkbook()}
-              disabled={loadingWorkbook || (editingMode ? !editingAnswer?.answerFileUrl : !qaCase?.templateFileUrl)}
+              disabled={loadingWorkbook || (editingMode ? !answerId || !editingAnswer : !qaCase)}
               className="mt-4 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-60"
             >
               加载模板

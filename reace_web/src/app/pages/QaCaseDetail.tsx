@@ -106,13 +106,13 @@ export function QaCaseDetail() {
     }
   };
 
-  const handleDownloadAnswer = async (answerFileUrl?: string | null) => {
-    if (!answerFileUrl) {
+  const handleDownloadAnswer = async (answer: QaCaseAnswer) => {
+    if (!id || !answer.id) {
       toast.error("答疑文件不存在");
       return;
     }
     try {
-      await api.download(answerFileUrl, "答疑模板.xlsx", { auth: false, silent: true });
+      await api.download(`/api/qa/cases/${id}/answers/${answer.id}/file`, "答疑模板.xlsx", { silent: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "下载失败");
     }
@@ -282,7 +282,7 @@ export function QaCaseDetail() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => void handleDownloadAnswer(answer.answerFileUrl)}
+                          onClick={() => void handleDownloadAnswer(answer)}
                           className={answerButtonClassName()}
                         >
                           <Download size={14} />

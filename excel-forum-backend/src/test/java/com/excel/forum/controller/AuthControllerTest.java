@@ -3,6 +3,8 @@ package com.excel.forum.controller;
 import com.excel.forum.config.GlobalExceptionHandler;
 import com.excel.forum.entity.User;
 import com.excel.forum.service.UserService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.excel.forum.util.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -23,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,7 +47,7 @@ class AuthControllerTest {
     private JwtUtil jwtUtil;
 
     @Mock
-    private StringRedisTemplate redisTemplate;
+    private RateLimitService rateLimitService;
 
     @Captor
     private ArgumentCaptor<User> userCaptor;
@@ -54,7 +56,7 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        AuthController controller = new AuthController(userService, passwordEncoder, jwtUtil, redisTemplate);
+        AuthController controller = new AuthController(userService, passwordEncoder, jwtUtil, rateLimitService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setMessageConverters(
                         new MappingJackson2HttpMessageConverter(),
@@ -75,6 +77,23 @@ class AuthControllerTest {
                 .andExpect(content().json("\"用户名不能为空\""));
 
         verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void loginReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.startsWith("auth:login:tester")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("登录过于频繁，请稍后再试", 45));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"tester","password":"Abc12345"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("登录过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(45));
+
+        verify(userService, never()).findByUsername(any());
     }
 
     @Test

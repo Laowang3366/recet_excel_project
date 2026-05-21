@@ -62,7 +62,7 @@ class PracticeCampaignRewardService {
         if (!firstClear || bonus <= 0) {
             return 0;
         }
-        pointsRecordService.addTaskPointsRecord(
+        boolean granted = pointsRecordService.addTaskPointsRecord(
                 userId,
                 null,
                 "关卡首通奖励",
@@ -72,7 +72,7 @@ class PracticeCampaignRewardService {
                 bonus,
                 "首次通关关卡《" + defaultText(level.getTitle(), "未命名关卡") + "》"
         );
-        return bonus;
+        return granted ? bonus : 0;
     }
 
     Map<String, Object> awardDailyChallengeIfNeeded(Long userId, PracticeLevel level) {
@@ -95,7 +95,7 @@ class PracticeCampaignRewardService {
             );
         }
 
-        pointsRecordService.addTaskPointsRecord(
+        boolean pointsGranted = pointsRecordService.addTaskPointsRecord(
                 userId,
                 null,
                 "每日挑战奖励",
@@ -105,7 +105,7 @@ class PracticeCampaignRewardService {
                 safeInt(challenge.getRewardPoints()),
                 "完成每日挑战《" + defaultText(level.getTitle(), "每日挑战") + "》"
         );
-        experienceService.addExp(
+        boolean expGranted = experienceService.addExp(
                 userId,
                 "daily_campaign",
                 level.getId(),
@@ -115,7 +115,7 @@ class PracticeCampaignRewardService {
         return Map.of(
                 "applied", true,
                 "completed", true,
-                "rewardGranted", true,
+                "rewardGranted", pointsGranted || expGranted,
                 "rewardExp", safeInt(challenge.getRewardExp()),
                 "rewardPoints", safeInt(challenge.getRewardPoints())
         );

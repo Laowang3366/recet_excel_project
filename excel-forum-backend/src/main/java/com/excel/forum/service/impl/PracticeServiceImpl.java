@@ -246,6 +246,24 @@ public class PracticeServiceImpl implements PracticeService {
     }
 
     @Override
+    public ExcelWorkbookSnapshot getPracticeQuestionTemplateSnapshot(Long questionId) {
+        if (questionId == null) {
+            throw new IllegalArgumentException("题目参数无效");
+        }
+        QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("id", questionId).eq("enabled", true).eq("type", "excel_template").isNull("deleted_at");
+        Question question = questionService.getOne(queryWrapper, false);
+        if (question == null) {
+            throw new IllegalArgumentException("题目不存在或已停用");
+        }
+        QuestionExcelTemplate template = questionExcelTemplateService.getByQuestionId(questionId);
+        if (template == null || !StringUtils.hasText(template.getTemplateFileUrl())) {
+            throw new IllegalArgumentException("题目模板不存在");
+        }
+        return loadStudentWorkbookSnapshot(template);
+    }
+
+    @Override
     public PracticeQuestionWorkbookFile buildPracticeQuestionWorkbookFile(Long questionId) {
         if (questionId == null) {
             throw new IllegalArgumentException("题目参数无效");
@@ -856,7 +874,7 @@ public class PracticeServiceImpl implements PracticeService {
         if (alreadyPassedBefore || hasQuestionRewardRecord(userId, question.getId())) {
             return new RewardEvaluation(0, false, false, true);
         }
-        pointsRecordService.addTaskPointsRecord(
+        boolean granted = pointsRecordService.addTaskPointsRecord(
                 userId,
                 null,
                 "题目首通奖励",
@@ -866,6 +884,9 @@ public class PracticeServiceImpl implements PracticeService {
                 rewardPoints,
                 "首次完成题目《" + question.getTitle() + "》"
         );
+        if (!granted) {
+            return new RewardEvaluation(0, false, false, true);
+        }
         return new RewardEvaluation(rewardPoints, true, true, false);
     }
 
@@ -915,7 +936,7 @@ public class PracticeServiceImpl implements PracticeService {
         item.put("categoryId", question.getQuestionCategoryId());
         item.put("categoryName", categoryName);
         if (template != null) {
-            item.put("templateFileUrl", template.getTemplateFileUrl());
+            item.put("hasTemplateFile", StringUtils.hasText(template.getTemplateFileUrl()));
             item.put("idealAnswerImageUrl", template.getIdealAnswerImageUrl());
             item.put("answerSheet", template.getAnswerSheet());
             item.put("answerRange", template.getAnswerRange());

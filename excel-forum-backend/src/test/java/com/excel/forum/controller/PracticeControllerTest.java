@@ -2,10 +2,13 @@ package com.excel.forum.controller;
 
 import com.excel.forum.config.PublicJsonCache;
 import com.excel.forum.config.PublicReadCache;
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.PracticeService;
 import com.excel.forum.service.PracticeWorkbookLinkService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,9 +27,11 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -46,6 +51,9 @@ class PracticeControllerTest {
     @Mock
     private PracticeWorkbookLinkService practiceWorkbookLinkService;
 
+    @Mock
+    private RateLimitService rateLimitService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -54,7 +62,8 @@ class PracticeControllerTest {
                 practiceService,
                 excelTemplateGradingService,
                 new PublicJsonCache(new PublicReadCache(), new ObjectMapper()),
-                practiceWorkbookLinkService
+                practiceWorkbookLinkService,
+                rateLimitService
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -144,6 +153,18 @@ class PracticeControllerTest {
     }
 
     @Test
+    void questionTemplateSnapshotUsesControlledQuestionEndpoint() throws Exception {
+        ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();
+        when(practiceService.getPracticeQuestionTemplateSnapshot(9L)).thenReturn(snapshot);
+
+        mockMvc.perform(get("/api/practice/questions/9/template-snapshot").requestAttr("userId", 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sheets").isArray());
+
+        verify(excelTemplateGradingService, never()).loadWorkbookSnapshot(any());
+    }
+
+    @Test
     void submitPracticeReturnsUnauthorizedWhenServiceReportsNotLoggedIn() throws Exception {
         when(practiceService.submitPractice(eq(7L), any())).thenThrow(new IllegalStateException("未登录"));
 
@@ -155,6 +176,24 @@ class PracticeControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("未登录"));
+    }
+
+    @Test
+    void submitPracticeReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.startsWith("practice:submit:user:7")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("答题提交过于频繁，请稍后再试", 30));
+
+        mockMvc.perform(post("/api/practice/submit")
+                        .requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"answers":[{"questionId":9,"userAnswer":"A"}]}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("答题提交过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(30));
+
+        verify(practiceService, never()).submitPractice(eq(7L), any());
     }
 
     @Test

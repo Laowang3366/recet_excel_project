@@ -88,6 +88,11 @@ type PracticeSubmissionsResponse = {
   pages?: number;
 };
 
+type ExcelUploadResponse = {
+  url: string;
+  workbook?: ExcelWorkbookSnapshot | null;
+};
+
 function defaultSubmissionForm() {
   return {
     title: "",
@@ -167,14 +172,13 @@ export function Practice() {
   };
 
   const loadTemplateWorkbook = async (
-    fileUrl: string,
+    snapshot: ExcelWorkbookSnapshot,
     answerSheet?: string | null,
     answerRange?: string | null,
     answerSnapshotJson?: string | null,
   ) => {
     setTemplateLoading(true);
     try {
-      const snapshot = await api.get<ExcelWorkbookSnapshot>(`/api/practice/template-snapshot?fileUrl=${encodeURIComponent(fileUrl)}`, { silent: true });
       const sheetName = answerSheet || snapshot?.sheets?.[0]?.name || "";
       const workbookWithAnswer = buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson);
       setTemplateWorkbook(snapshot || { sheets: [] });
@@ -258,7 +262,10 @@ export function Practice() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const uploadResult = await api.post<{ url: string }>("/api/upload", formData, { silent: true });
+      const uploadResult = await api.post<ExcelUploadResponse>("/api/upload", formData, { silent: true });
+      if (!uploadResult?.url || !uploadResult.workbook?.sheets?.length) {
+        throw new Error("模板上传后无法生成预览");
+      }
       setSubmissionForm((prev) => ({
         ...prev,
         templateFileUrl: uploadResult.url,
@@ -266,7 +273,7 @@ export function Practice() {
         answerRange: "",
         answerSnapshotJson: "",
       }));
-      await loadTemplateWorkbook(uploadResult.url);
+      await loadTemplateWorkbook(uploadResult.workbook);
       toast.success("模板上传完成");
     } catch (error) {
       if (!handleLoginRequiredError(error, "请先登录后再上传模板")) {

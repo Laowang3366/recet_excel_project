@@ -21,12 +21,6 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String store(MultipartFile file) {
         try {
-            String uploadDir = fileStorageConfig.getLocal().getPath();
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
             String originalFilename = file.getOriginalFilename();
             String fileExtension = "";
             if (originalFilename != null && originalFilename.contains(".")) {
@@ -34,10 +28,17 @@ public class LocalFileStorageService implements FileStorageService {
             }
             String fileName = UUID.randomUUID().toString() + fileExtension;
 
+            Path uploadPath = uploadRoot().resolve(storageFolderForExtension(fileExtension)).normalize();
+            if (!uploadPath.startsWith(uploadRoot())) {
+                throw new IllegalArgumentException("文件保存路径无效");
+            }
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
             Path filePath = uploadPath.resolve(fileName);
             Files.copy(file.getInputStream(), filePath);
 
-            return fileStorageConfig.getLocal().getUrlPrefix() + "/" + fileName;
+            return toFileUrl(uploadRoot().relativize(filePath));
         } catch (IOException e) {
             throw new RuntimeException("文件上传失败", e);
         }
@@ -46,19 +47,21 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String store(String fileName, byte[] content) {
         try {
-            String uploadDir = fileStorageConfig.getLocal().getPath();
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
             String extension = "";
             if (fileName != null && fileName.contains(".")) {
                 extension = fileName.substring(fileName.lastIndexOf("."));
             }
             String storedFileName = UUID.randomUUID() + extension;
-            Files.write(uploadPath.resolve(storedFileName), content == null ? new byte[0] : content);
-            return fileStorageConfig.getLocal().getUrlPrefix() + "/" + storedFileName;
+            Path uploadPath = uploadRoot().resolve(storageFolderForExtension(extension)).normalize();
+            if (!uploadPath.startsWith(uploadRoot())) {
+                throw new IllegalArgumentException("文件保存路径无效");
+            }
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+            Path filePath = uploadPath.resolve(storedFileName);
+            Files.write(filePath, content == null ? new byte[0] : content);
+            return toFileUrl(uploadRoot().relativize(filePath));
         } catch (IOException e) {
             throw new RuntimeException("文件保存失败", e);
         }
@@ -188,5 +191,13 @@ public class LocalFileStorageService implements FileStorageService {
     private String toFileUrl(Path relativePath) {
         String relativeUrl = relativePath.toString().replace('\\', '/');
         return fileStorageConfig.getLocal().getUrlPrefix() + "/" + relativeUrl;
+    }
+
+    private String storageFolderForExtension(String extension) {
+        if (extension == null) {
+            return "";
+        }
+        String normalized = extension.toLowerCase();
+        return ".xlsx".equals(normalized) || ".xls".equals(normalized) ? "private" : "";
     }
 }

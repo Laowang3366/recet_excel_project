@@ -78,7 +78,7 @@ public class PointsTaskServiceImpl implements PointsTaskService {
                 ? (rule.getDescription() == null || rule.getDescription().isBlank() ? rule.getName() : rule.getDescription())
                 : description;
 
-        pointsRecordService.addTaskPointsRecord(
+        boolean granted = pointsRecordService.addTaskPointsRecord(
                 userId,
                 rule.getId(),
                 rule.getName(),
@@ -88,6 +88,9 @@ public class PointsTaskServiceImpl implements PointsTaskService {
                 finalPoints,
                 recordDescription
         );
+        if (!granted) {
+            return null;
+        }
 
         Map<String, Object> reward = new HashMap<>();
         reward.put("ruleId", rule.getId());

@@ -1,6 +1,7 @@
 package com.excel.forum.service.impl;
 
 import com.excel.forum.config.FileStorageConfig;
+import com.excel.forum.config.WorkbookSecurityProperties;
 import com.excel.forum.entity.dto.ExcelTemplateAnswerSnapshot;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExcelTemplateGradingServiceImplTest {
 
     private final ExcelTemplateGradingServiceImpl service =
-            new ExcelTemplateGradingServiceImpl(new ObjectMapper(), new FileStorageConfig());
+            new ExcelTemplateGradingServiceImpl(new ObjectMapper(), new FileStorageConfig(), defaultGuard());
 
     @TempDir
     Path tempDir;
@@ -158,7 +159,7 @@ class ExcelTemplateGradingServiceImplTest {
     void buildStudentWorkbookFileClearsConfiguredAnswerRangeBeforeDownload() throws Exception {
         FileStorageConfig config = new FileStorageConfig();
         config.getLocal().setPath(tempDir.toString());
-        ExcelTemplateGradingServiceImpl localService = new ExcelTemplateGradingServiceImpl(new ObjectMapper(), config);
+        ExcelTemplateGradingServiceImpl localService = new ExcelTemplateGradingServiceImpl(new ObjectMapper(), config, defaultGuard());
         Path workbookPath = tempDir.resolve("practice.xlsx");
         try (Workbook workbook = new XSSFWorkbook();
              OutputStream outputStream = Files.newOutputStream(workbookPath)) {
@@ -202,5 +203,9 @@ class ExcelTemplateGradingServiceImplTest {
         ExcelWorkbookSnapshot workbook = new ExcelWorkbookSnapshot();
         workbook.getSheets().add(sheet);
         return workbook;
+    }
+
+    private static WorkbookSecurityGuardImpl defaultGuard() {
+        return new WorkbookSecurityGuardImpl(new WorkbookSecurityProperties());
     }
 }

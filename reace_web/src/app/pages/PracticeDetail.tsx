@@ -83,6 +83,11 @@ type PracticeWorkbookOpenLinkResponse = {
   url?: string;
 };
 
+type ExcelUploadResponse = {
+  url: string;
+  workbook?: ExcelWorkbookSnapshot | null;
+};
+
 export function PracticeDetail() {
   const { id } = useParams();
   const location = useLocation();
@@ -278,14 +283,8 @@ export function PracticeDetail() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("scene", "reply_attachment");
-      const uploadResult = await api.post<{ url: string }>("/api/upload", formData, { silent: true });
-      if (!uploadResult?.url) {
-        throw new Error("答卷上传失败");
-      }
-      const snapshot = await api.get<ExcelWorkbookSnapshot>(
-        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(uploadResult.url)}`,
-        { silent: true }
-      );
+      const uploadResult = await api.post<ExcelUploadResponse>("/api/upload", formData, { silent: true });
+      const snapshot = uploadResult.workbook;
       if (!snapshot?.sheets?.length) {
         throw new Error("无法识别答卷工作簿");
       }

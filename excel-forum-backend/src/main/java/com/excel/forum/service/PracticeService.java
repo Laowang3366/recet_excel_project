@@ -3,6 +3,7 @@ package com.excel.forum.service;
 import com.excel.forum.entity.dto.PracticeSubmitRequest;
 import com.excel.forum.entity.dto.PracticeQuestionSubmissionRequest;
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 
 import java.util.Map;
 
@@ -14,6 +15,8 @@ public interface PracticeService {
     Map<String, Object> getPracticeQuestions(Long questionCategoryId, Integer count, Integer difficulty);
 
     Map<String, Object> getPracticeQuestionDetail(Long questionId);
+
+    ExcelWorkbookSnapshot getPracticeQuestionTemplateSnapshot(Long questionId);
 
     PracticeQuestionWorkbookFile buildPracticeQuestionWorkbookFile(Long questionId);
 

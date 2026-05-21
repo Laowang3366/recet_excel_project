@@ -6,6 +6,8 @@ import com.excel.forum.entity.TemplateDownloadRecord;
 import com.excel.forum.entity.User;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.PointsRecordService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.TemplateCenterItemService;
 import com.excel.forum.service.TemplateDownloadRecordService;
 import com.excel.forum.service.UserService;
@@ -27,6 +29,11 @@ import java.nio.file.Path;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -52,6 +59,9 @@ class TemplateCenterControllerTest {
     @Mock
     private PointsRecordService pointsRecordService;
 
+    @Mock
+    private RateLimitService rateLimitService;
+
     @TempDir
     Path tempDir;
 
@@ -70,7 +80,8 @@ class TemplateCenterControllerTest {
                 userMapper,
                 pointsRecordService,
                 new ObjectMapper(),
-                fileStorageConfig
+                fileStorageConfig,
+                rateLimitService
         );
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
@@ -136,5 +147,18 @@ class TemplateCenterControllerTest {
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("attachment")))
                 .andExpect(content().contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
                 .andExpect(content().bytes("xlsx-bytes".getBytes()));
+    }
+
+    @Test
+    void downloadTemplateFileReturnsTooManyRequestsWhenRateLimited() throws Exception {
+        when(rateLimitService.check(argThat(key -> key != null && key.startsWith("download:template:user:7")), any(Integer.class), any(), any()))
+                .thenReturn(RateLimitResult.limited("文件下载过于频繁，请稍后再试", 20));
+
+        mockMvc.perform(get("/api/templates/3/file").requestAttr("userId", 7L))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("文件下载过于频繁，请稍后再试"))
+                .andExpect(jsonPath("$.retryAfterSeconds").value(20));
+
+        verify(templateCenterItemService, never()).getById(eq(3L));
     }
 }

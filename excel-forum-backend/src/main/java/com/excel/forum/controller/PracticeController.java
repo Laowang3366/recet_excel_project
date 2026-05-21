@@ -8,6 +8,8 @@ import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.PracticeService;
 import com.excel.forum.service.PracticeWorkbookLinkService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 
 @RestController
@@ -35,6 +38,7 @@ public class PracticeController {
     private final ExcelTemplateGradingService excelTemplateGradingService;
     private final PublicJsonCache publicJsonCache;
     private final PracticeWorkbookLinkService practiceWorkbookLinkService;
+    private final RateLimitService rateLimitService;
 
     @GetMapping("/categories")
     public ResponseEntity<String> getCategories() {
@@ -101,9 +105,38 @@ public class PracticeController {
         return buildQuestionWorkbookFileResponse(userId, questionId, ticket);
     }
 
+    @GetMapping("/questions/{questionId}/template-snapshot")
+    public ResponseEntity<?> getQuestionTemplateSnapshot(
+            @RequestAttribute Long userId,
+            @PathVariable Long questionId) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "practice:template-snapshot:user:" + userId + ":question:" + questionId,
+                30,
+                Duration.ofMinutes(1),
+                "模板预览过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
+        try {
+            return ResponseEntity.ok(practiceService.getPracticeQuestionTemplateSnapshot(questionId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
     private ResponseEntity<?> buildQuestionWorkbookFileResponse(Long userId, Long questionId, String ticket) {
         if (userId == null && !practiceWorkbookLinkService.isValid(questionId, ticket)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "未登录"));
+        }
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "download:practice-question:" + (userId == null ? "ticket" : "user:" + userId) + ":question:" + questionId,
+                30,
+                Duration.ofMinutes(1),
+                "文件下载过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
         }
         try {
             PracticeQuestionWorkbookFile workbookFile = practiceService.buildPracticeQuestionWorkbookFile(questionId);
@@ -141,6 +174,15 @@ public class PracticeController {
     public ResponseEntity<?> submitPractice(
             @RequestAttribute Long userId,
             @RequestBody PracticeSubmitRequest request) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "practice:submit:user:" + userId,
+                30,
+                Duration.ofMinutes(1),
+                "答题提交过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
         try {
             return ResponseEntity.ok(practiceService.submitPractice(userId, request));
         } catch (IllegalArgumentException e) {
@@ -160,6 +202,15 @@ public class PracticeController {
     public ResponseEntity<?> submitPracticeQuestion(
             @RequestAttribute Long userId,
             @RequestBody PracticeQuestionSubmissionRequest request) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "practice:question-submission:user:" + userId,
+                10,
+                Duration.ofMinutes(1),
+                "投稿提交过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
         try {
             return ResponseEntity.ok(practiceService.submitPracticeQuestion(userId, request));
         } catch (IllegalArgumentException e) {
@@ -198,5 +249,15 @@ public class PracticeController {
     private boolean isLoginRequired(RuntimeException e) {
         String message = e.getMessage();
         return "未登录".equals(message) || "请先登录".equals(message);
+    }
+
+    private ResponseEntity<?> toLimitResponse(RateLimitResult result) {
+        if (result == null || result.allowed()) {
+            return null;
+        }
+        return ResponseEntity.status(429).body(Map.of(
+                "message", result.message(),
+                "retryAfterSeconds", result.retryAfterSeconds()
+        ));
     }
 }

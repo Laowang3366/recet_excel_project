@@ -8,6 +8,8 @@ import com.excel.forum.entity.TemplateDownloadRecord;
 import com.excel.forum.entity.User;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.PointsRecordService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.TemplateCenterItemService;
 import com.excel.forum.service.TemplateDownloadRecordService;
 import com.excel.forum.service.UserService;
@@ -39,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +61,7 @@ public class TemplateCenterController {
     private final PointsRecordService pointsRecordService;
     private final ObjectMapper objectMapper;
     private final FileStorageConfig fileStorageConfig;
+    private final RateLimitService rateLimitService;
 
     @GetMapping
     public ResponseEntity<?> getTemplates(
@@ -151,6 +155,15 @@ public class TemplateCenterController {
     @PostMapping("/{id}/download")
     @Transactional
     public ResponseEntity<?> downloadTemplate(@RequestAttribute Long userId, @PathVariable Long id) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "download:template-request:user:" + userId + ":template:" + id,
+                20,
+                Duration.ofMinutes(1),
+                "模板下载请求过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
         TemplateCenterItem item = templateCenterItemService.getById(id);
         if (item == null || item.getDeletedAt() != null || !Boolean.TRUE.equals(item.getEnabled())) {
             return ResponseEntity.status(404).body(Map.of("message", "模板不存在"));
@@ -218,6 +231,15 @@ public class TemplateCenterController {
 
     @GetMapping("/{id}/file")
     public ResponseEntity<?> downloadTemplateFile(@RequestAttribute Long userId, @PathVariable Long id) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "download:template:user:" + userId + ":template:" + id,
+                30,
+                Duration.ofMinutes(1),
+                "文件下载过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
         TemplateCenterItem item = templateCenterItemService.getById(id);
         if (item == null || item.getDeletedAt() != null || !Boolean.TRUE.equals(item.getEnabled())) {
             return ResponseEntity.status(404).body(Map.of("message", "模板不存在"));
@@ -380,5 +402,15 @@ public class TemplateCenterController {
             log.debug("Failed to read template file size: {}", filePath, exception);
             return -1;
         }
+    }
+
+    private ResponseEntity<?> toLimitResponse(RateLimitResult result) {
+        if (result == null || result.allowed()) {
+            return null;
+        }
+        return ResponseEntity.status(429).body(Map.of(
+                "message", result.message(),
+                "retryAfterSeconds", result.retryAfterSeconds()
+        ));
     }
 }

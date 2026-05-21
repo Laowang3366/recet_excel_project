@@ -16,6 +16,7 @@ public class PointsRecord {
     private String taskKey;
     private Long bizId;
     private LocalDate taskDate;
+    private String idempotencyKey;
     @TableField("`change`")
     private Integer change;
     private Integer balance;

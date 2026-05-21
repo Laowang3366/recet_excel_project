@@ -72,6 +72,7 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/questions/*/file")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/questions/*/file/*")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/campaign/**")).permitAll()
+                .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/practice/template-snapshot")).hasRole("ADMIN")
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/tutorials/**")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/templates/records")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/templates/*/file")).authenticated()
@@ -86,6 +87,8 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/mall/items")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/mall/types")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/mall/**")).authenticated()
+                .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/.trash/**")).hasRole("ADMIN")
+                .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/private/**")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/uploads/**")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/ws/**")).authenticated()
                 // 运营角色可访问的统计与反馈接口

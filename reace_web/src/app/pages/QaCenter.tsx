@@ -14,6 +14,11 @@ import { FastWorkbookFallbackEditor } from "../components/FastWorkbookFallbackEd
 
 type QaTab = "cases" | "solutions";
 
+type ExcelUploadResponse = {
+  url: string;
+  workbook?: ExcelWorkbookSnapshot | null;
+};
+
 export function QaCenter() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -72,11 +77,11 @@ export function QaCenter() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("scene", "reply_attachment");
-      const upload = await api.post<{ url: string }>("/api/upload", formData, { silent: true });
-      const snapshot = await api.get<ExcelWorkbookSnapshot>(
-        `/api/practice/template-snapshot?fileUrl=${encodeURIComponent(upload.url)}`,
-        { silent: true },
-      );
+      const upload = await api.post<ExcelUploadResponse>("/api/upload", formData, { silent: true });
+      const snapshot = upload.workbook;
+      if (!upload?.url || !snapshot?.sheets?.length) {
+        throw new Error("模板上传后无法生成预览");
+      }
       const detectedAnswer = detectFormulaAnswerRegion(snapshot, { mode: "dynamic_array" });
       setTemplateFileUrl(upload.url);
       setWorkbook(snapshot || { sheets: [] });

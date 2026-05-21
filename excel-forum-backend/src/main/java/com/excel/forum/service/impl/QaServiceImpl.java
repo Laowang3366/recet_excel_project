@@ -16,6 +16,7 @@ import com.excel.forum.entity.QaSolutionShare;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.AssistantChatRequest;
 import com.excel.forum.entity.dto.AssistantChatResponse;
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
 import com.excel.forum.entity.dto.QaAiDraftRequest;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
@@ -301,10 +302,42 @@ public class QaServiceImpl implements QaService {
     }
 
     @Override
+    public PracticeQuestionWorkbookFile buildCaseAnswerWorkbookFile(Long userId, Long caseId, Long answerId) {
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        QaCaseHelpAnswer answer = requireVisibleCaseAnswer(caseId, answerId);
+        byte[] content = fileStorageService.load(answer.getAnswerFileUrl());
+        String extension = answer.getAnswerFileUrl() != null && answer.getAnswerFileUrl().toLowerCase().endsWith(".xls") ? ".xls" : ".xlsx";
+        String contentType = ".xls".equals(extension)
+                ? "application/vnd.ms-excel"
+                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        return new PracticeQuestionWorkbookFile("qa-answer-" + answer.getId() + extension, contentType, content);
+    }
+
+    @Override
+    public ExcelWorkbookSnapshot loadCaseTemplateSnapshot(Long userId, Long caseId) {
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        // 快照只按业务 ID 解析，避免前端传入任意 fileUrl 绕过权限和限流。
+        String templateFileUrl = requireExcelFileUrl(qaCase.getTemplateFileUrl(), "求助模板不存在");
+        return excelTemplateGradingService.loadWorkbookSnapshot(templateFileUrl);
+    }
+
+    @Override
+    public ExcelWorkbookSnapshot loadCaseAnswerSnapshot(Long userId, Long caseId, Long answerId) {
+        QaCaseHelp qaCase = requireCase(caseId);
+        ensureCaseVisible(qaCase);
+        QaCaseHelpAnswer answer = requireVisibleCaseAnswer(caseId, answerId);
+        String answerFileUrl = requireExcelFileUrl(answer.getAnswerFileUrl(), "答疑模板不存在");
+        return excelTemplateGradingService.loadWorkbookSnapshot(answerFileUrl);
+    }
+
+    @Override
     public Map<String, Object> submitCaseAnswer(Long userId, Long caseId, QaCaseAnswerRequest request) {
         QaCaseHelp qaCase = requireCase(caseId);
         ensureCaseCanReceiveAnswer(qaCase);
         String answerFileUrl = requireExcelFileUrl(request == null ? null : request.getAnswerFileUrl(), "请上传答疑 Excel 文件");
+        excelTemplateGradingService.loadWorkbookSnapshot(answerFileUrl);
 
         QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
         answer.setCaseId(caseId);
@@ -357,6 +390,7 @@ public class QaServiceImpl implements QaService {
             throw new IllegalArgumentException("已采纳的答疑不能修改");
         }
         String answerFileUrl = requireExcelFileUrl(request == null ? null : request.getAnswerFileUrl(), "请上传答疑 Excel 文件");
+        excelTemplateGradingService.loadWorkbookSnapshot(answerFileUrl);
         answer.setAnswerFileUrl(answerFileUrl);
         answer.setStatus(STATUS_ACTIVE);
         caseHelpAnswerMapper.updateById(answer);
@@ -748,6 +782,16 @@ public class QaServiceImpl implements QaService {
 
     private QaCaseHelpAnswer requireCaseAnswerForAdmin(Long answerId) {
         return requireCaseAnswer(answerId);
+    }
+
+    private QaCaseHelpAnswer requireVisibleCaseAnswer(Long caseId, Long answerId) {
+        QaCaseHelpAnswer answer = caseHelpAnswerMapper.selectById(answerId);
+        if (answer == null
+                || !Objects.equals(answer.getCaseId(), caseId)
+                || isDeletedAnswer(answer)) {
+            throw new IllegalArgumentException("答疑不存在");
+        }
+        return answer;
     }
 
     private void ensureCaseVisible(QaCaseHelp qaCase) {

@@ -6,6 +6,7 @@ import com.excel.forum.entity.PracticeRecord;
 import com.excel.forum.entity.QaCaseHelp;
 import com.excel.forum.entity.QaCaseHelpAnswer;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
 import com.excel.forum.entity.dto.QaSolutionShareRequest;
@@ -166,6 +167,46 @@ class QaServiceImplTest {
                 .hasMessageContaining("只能操作自己的求助");
 
         verify(caseHelpMapper, never()).updateById(any());
+    }
+
+    @Test
+    void loadCaseAnswerSnapshotUsesAnswerOwnedByCase() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setStatus("open");
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setAnswerFileUrl("/uploads/private/answer.xlsx");
+        answer.setStatus("active");
+        ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+        when(excelTemplateGradingService.loadWorkbookSnapshot("/uploads/private/answer.xlsx")).thenReturn(snapshot);
+
+        assertThat(service.loadCaseAnswerSnapshot(7L, 30L, 44L)).isSameAs(snapshot);
+    }
+
+    @Test
+    void loadCaseAnswerSnapshotRejectsDeletedAnswer() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setStatus("open");
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setAnswerFileUrl("/uploads/private/answer.xlsx");
+        answer.setStatus("deleted");
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        assertThatThrownBy(() -> service.loadCaseAnswerSnapshot(7L, 30L, 44L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("答疑不存在");
+
+        verify(excelTemplateGradingService, never()).loadWorkbookSnapshot(any());
     }
 
     @Test

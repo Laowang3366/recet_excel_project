@@ -1,6 +1,7 @@
 package com.excel.forum.service;
 
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
+import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.QaAiDraftRequest;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
@@ -39,6 +40,12 @@ public interface QaService {
     Map<String, Object> deleteCase(Long userId, Long caseId);
 
     PracticeQuestionWorkbookFile buildCaseWorkbookFile(Long userId, Long caseId);
+
+    PracticeQuestionWorkbookFile buildCaseAnswerWorkbookFile(Long userId, Long caseId, Long answerId);
+
+    ExcelWorkbookSnapshot loadCaseTemplateSnapshot(Long userId, Long caseId);
+
+    ExcelWorkbookSnapshot loadCaseAnswerSnapshot(Long userId, Long caseId, Long answerId);
 
     Map<String, Object> submitCaseAnswer(Long userId, Long caseId, QaCaseAnswerRequest request);
 

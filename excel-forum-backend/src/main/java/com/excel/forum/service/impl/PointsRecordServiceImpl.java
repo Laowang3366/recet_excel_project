@@ -6,47 +6,57 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.excel.forum.entity.PointsRecord;
 import com.excel.forum.entity.User;
 import com.excel.forum.mapper.PointsRecordMapper;
+import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.PointsRecordService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, PointsRecord> implements PointsRecordService {
     
     private final UserService userService;
+    private final UserMapper userMapper;
 
     @Override
+    @Transactional
     public void addPointsRecord(Long userId, String ruleName, Integer change, String description) {
         User user = userService.getById(userId);
         if (user == null) return;
-        
-        int newBalance = (user.getPoints() != null ? user.getPoints() : 0) + change;
+        int changeValue = change == null ? 0 : change;
+        int newBalance = (user.getPoints() != null ? user.getPoints() : 0) + changeValue;
         
         PointsRecord record = new PointsRecord();
         record.setUserId(userId);
         record.setRuleName(ruleName);
-        record.setChange(change);
+        record.setChange(changeValue);
         record.setBalance(newBalance);
         record.setDescription(description);
         save(record);
-        
-        user.setPoints(newBalance);
-        userService.updateById(user);
+        if (changeValue != 0 && userMapper.addPoints(userId, changeValue) == 0) {
+            throw new IllegalStateException("用户积分更新失败");
+        }
     }
 
     @Override
-    public void addTaskPointsRecord(Long userId, Long ruleId, String ruleName, String taskKey, Long bizId, LocalDate taskDate, Integer change, String description) {
+    @Transactional
+    public boolean addTaskPointsRecord(Long userId, Long ruleId, String ruleName, String taskKey, Long bizId, LocalDate taskDate, Integer change, String description) {
         User user = userService.getById(userId);
-        if (user == null) return;
+        if (user == null) return false;
 
-        int newBalance = (user.getPoints() != null ? user.getPoints() : 0) + change;
+        int changeValue = change == null ? 0 : change;
+        int newBalance = (user.getPoints() != null ? user.getPoints() : 0) + changeValue;
 
         PointsRecord record = new PointsRecord();
         record.setUserId(userId);
@@ -55,13 +65,28 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         record.setTaskKey(taskKey);
         record.setBizId(bizId);
         record.setTaskDate(taskDate);
-        record.setChange(change);
+        record.setIdempotencyKey(buildIdempotencyKey(userId, taskKey, bizId, taskDate));
+        record.setChange(changeValue);
         record.setBalance(newBalance);
         record.setDescription(description);
-        save(record);
+        try {
+            baseMapper.insert(record);
+        } catch (DuplicateKeyException exception) {
+            log.debug("Duplicate points reward skipped: key={}", record.getIdempotencyKey(), exception);
+            return false;
+        }
 
-        user.setPoints(newBalance);
-        userService.updateById(user);
+        if (changeValue != 0 && userMapper.addPoints(userId, changeValue) == 0) {
+            throw new IllegalStateException("用户积分更新失败");
+        }
+        return true;
+    }
+
+    private String buildIdempotencyKey(Long userId, String taskKey, Long bizId, LocalDate taskDate) {
+        String safeTaskKey = taskKey == null || taskKey.isBlank() ? "manual" : taskKey.trim();
+        String safeBizId = bizId == null ? "none" : String.valueOf(bizId);
+        String safeDate = taskDate == null ? "none" : taskDate.format(DateTimeFormatter.BASIC_ISO_DATE);
+        return "points:" + userId + ":" + safeTaskKey + ":" + safeBizId + ":" + safeDate;
     }
 
     @Override
