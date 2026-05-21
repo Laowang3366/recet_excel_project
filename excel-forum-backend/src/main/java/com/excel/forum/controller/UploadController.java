@@ -5,6 +5,7 @@ import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.WorkbookSecurityGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class UploadController {
     private final RateLimitService rateLimitService;
     private final WorkbookSecurityGuard workbookSecurityGuard;
     private final ExcelTemplateGradingService excelTemplateGradingService;
+    private final SecurityAbuseMonitor securityAbuseMonitor;
 
     private static final int MAX_UPLOADS_PER_MINUTE = 10;
 
@@ -37,16 +39,16 @@ public class UploadController {
             @RequestParam(value = "scene", required = false) String scene,
             HttpServletRequest request) {
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("文件为空");
+            return rejectUpload(scene, "文件为空");
         }
 
         if (!isAllowedFileType(file, scene)) {
-            return ResponseEntity.badRequest().body("不支持的文件类型");
+            return rejectUpload(scene, "不支持的文件类型");
         }
 
         // 检查文件大小 (20MB)
         if (file.getSize() > 20 * 1024 * 1024) {
-            return ResponseEntity.badRequest().body("文件大小超过限制");
+            return rejectUpload(scene, "文件大小超过限制");
         }
 
         Long userId = (Long) request.getAttribute("userId");
@@ -120,8 +122,14 @@ public class UploadController {
         } catch (IllegalArgumentException exception) {
             throw exception;
         } catch (Exception exception) {
+            securityAbuseMonitor.recordUploadRejected("excel", "Excel 文件解析失败");
             throw new IllegalArgumentException("Excel 文件解析失败");
         }
+    }
+
+    private ResponseEntity<String> rejectUpload(String scene, String reason) {
+        securityAbuseMonitor.recordUploadRejected(scene == null || scene.isBlank() ? "default" : scene, reason);
+        return ResponseEntity.badRequest().body(reason);
     }
 
     private boolean isContentTypeCompatible(String contentType, String... acceptedTypes) {

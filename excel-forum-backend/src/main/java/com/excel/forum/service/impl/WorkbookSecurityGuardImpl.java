@@ -2,6 +2,7 @@ package com.excel.forum.service.impl;
 
 import com.excel.forum.config.WorkbookSecurityProperties;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.WorkbookSecurityGuard;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
@@ -18,6 +19,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
     private final WorkbookSecurityProperties properties;
+    private final SecurityAbuseMonitor securityAbuseMonitor;
 
     @Override
     public void applyZipBombProtection() {
@@ -30,8 +32,9 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
             return;
         }
         String source = safeLabel(label);
+        String monitorLabel = safeMonitorLabel(label);
         if (workbook.getNumberOfSheets() > properties.getMaxSheets()) {
-            throw new IllegalArgumentException(source + "工作表数量超过限制");
+            throw rejected(source, monitorLabel, "工作表数量超过限制");
         }
 
         int cellCount = 0;
@@ -44,12 +47,12 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
                     }
                     cellCount += 1;
                     if (cellCount > properties.getMaxWorkbookCells()) {
-                        throw new IllegalArgumentException(source + "单元格数量超过限制");
+                        throw rejected(source, monitorLabel, "单元格数量超过限制");
                     }
                     if (cell.getCellType() == CellType.FORMULA) {
-                        assertTextLength(cell.getCellFormula(), properties.getMaxFormulaLength(), source + "公式过长");
+                        assertTextLength(cell.getCellFormula(), properties.getMaxFormulaLength(), source, monitorLabel, "公式过长");
                     } else if (cell.getCellType() == CellType.STRING) {
-                        assertTextLength(cell.getStringCellValue(), properties.getMaxTextLength(), source + "文本过长");
+                        assertTextLength(cell.getStringCellValue(), properties.getMaxTextLength(), source, monitorLabel, "文本过长");
                     }
                 }
             }
@@ -62,8 +65,9 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
             return;
         }
         String source = safeLabel(label);
+        String monitorLabel = safeMonitorLabel(label);
         if (snapshot.getSheets().size() > properties.getMaxSheets()) {
-            throw new IllegalArgumentException(source + "工作表数量超过限制");
+            throw rejected(source, monitorLabel, "工作表数量超过限制");
         }
 
         int cellCount = 0;
@@ -74,28 +78,37 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
             for (Map.Entry<String, ExcelWorkbookSnapshot.CellSnapshot> entry : sheet.getCells().entrySet()) {
                 cellCount += 1;
                 if (cellCount > properties.getMaxSnapshotCells()) {
-                    throw new IllegalArgumentException(source + "单元格数量超过限制");
+                    throw rejected(source, monitorLabel, "单元格数量超过限制");
                 }
                 ExcelWorkbookSnapshot.CellSnapshot cell = entry.getValue();
                 if (cell == null) {
                     continue;
                 }
-                assertTextLength(cell.getFormula(), properties.getMaxFormulaLength(), source + "公式过长");
-                assertTextLength(cell.getDisplay(), properties.getMaxTextLength(), source + "显示文本过长");
+                assertTextLength(cell.getFormula(), properties.getMaxFormulaLength(), source, monitorLabel, "公式过长");
+                assertTextLength(cell.getDisplay(), properties.getMaxTextLength(), source, monitorLabel, "显示文本过长");
                 if (cell.getValue() instanceof String text) {
-                    assertTextLength(text, properties.getMaxTextLength(), source + "文本过长");
+                    assertTextLength(text, properties.getMaxTextLength(), source, monitorLabel, "文本过长");
                 }
             }
         }
     }
 
-    private void assertTextLength(String value, int maxLength, String message) {
+    private void assertTextLength(String value, int maxLength, String source, String monitorLabel, String reason) {
         if (value != null && value.length() > maxLength) {
-            throw new IllegalArgumentException(message);
+            throw rejected(source, monitorLabel, reason);
         }
+    }
+
+    private IllegalArgumentException rejected(String source, String monitorLabel, String reason) {
+        securityAbuseMonitor.recordWorkbookRejected(monitorLabel, reason);
+        return new IllegalArgumentException(source + reason);
     }
 
     private String safeLabel(String label) {
         return label == null || label.isBlank() ? "" : label.trim() + "：";
+    }
+
+    private String safeMonitorLabel(String label) {
+        return label == null || label.isBlank() ? "unknown" : label.trim();
     }
 }

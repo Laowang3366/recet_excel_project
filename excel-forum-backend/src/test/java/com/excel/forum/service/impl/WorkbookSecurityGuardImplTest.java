@@ -2,12 +2,15 @@ package com.excel.forum.service.impl;
 
 import com.excel.forum.config.WorkbookSecurityProperties;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class WorkbookSecurityGuardImplTest {
 
@@ -15,7 +18,8 @@ class WorkbookSecurityGuardImplTest {
     void rejectsWorkbookWithTooManySheets() {
         WorkbookSecurityProperties properties = new WorkbookSecurityProperties();
         properties.setMaxSheets(1);
-        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties);
+        SecurityAbuseMonitor monitor = mock(SecurityAbuseMonitor.class);
+        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties, monitor);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             workbook.createSheet("Sheet1");
@@ -24,6 +28,7 @@ class WorkbookSecurityGuardImplTest {
             assertThatThrownBy(() -> guard.assertWorkbookSafe(workbook, "测试模板"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("工作表数量");
+            verify(monitor).recordWorkbookRejected("测试模板", "工作表数量超过限制");
         } catch (Exception exception) {
             throw new AssertionError(exception);
         }
@@ -33,7 +38,8 @@ class WorkbookSecurityGuardImplTest {
     void rejectsSnapshotWithTooManyCells() {
         WorkbookSecurityProperties properties = new WorkbookSecurityProperties();
         properties.setMaxSnapshotCells(1);
-        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties);
+        SecurityAbuseMonitor monitor = mock(SecurityAbuseMonitor.class);
+        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties, monitor);
         ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();
         ExcelWorkbookSnapshot.SheetSnapshot sheet = new ExcelWorkbookSnapshot.SheetSnapshot();
         sheet.setName("Sheet1");
@@ -44,13 +50,15 @@ class WorkbookSecurityGuardImplTest {
         assertThatThrownBy(() -> guard.assertSnapshotSafe(snapshot, "提交工作簿"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("单元格数量");
+        verify(monitor).recordWorkbookRejected("提交工作簿", "单元格数量超过限制");
     }
 
     @Test
     void rejectsSnapshotWithOverlongFormula() {
         WorkbookSecurityProperties properties = new WorkbookSecurityProperties();
         properties.setMaxFormulaLength(4);
-        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties);
+        SecurityAbuseMonitor monitor = mock(SecurityAbuseMonitor.class);
+        WorkbookSecurityGuardImpl guard = new WorkbookSecurityGuardImpl(properties, monitor);
         ExcelWorkbookSnapshot snapshot = new ExcelWorkbookSnapshot();
         ExcelWorkbookSnapshot.SheetSnapshot sheet = new ExcelWorkbookSnapshot.SheetSnapshot();
         sheet.setName("Sheet1");
@@ -62,5 +70,6 @@ class WorkbookSecurityGuardImplTest {
         assertThatThrownBy(() -> guard.assertSnapshotSafe(snapshot, "提交工作簿"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("公式过长");
+        verify(monitor).recordWorkbookRejected("提交工作簿", "公式过长");
     }
 }

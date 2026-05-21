@@ -4,6 +4,7 @@ import com.excel.forum.entity.PointsRecord;
 import com.excel.forum.entity.User;
 import com.excel.forum.mapper.PointsRecordMapper;
 import com.excel.forum.mapper.UserMapper;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,10 +31,12 @@ class PointsRecordServiceImplTest {
     private UserMapper userMapper;
     @Mock
     private PointsRecordMapper pointsRecordMapper;
+    @Mock
+    private SecurityAbuseMonitor securityAbuseMonitor;
 
     @Test
     void addTaskPointsRecordUsesIdempotencyKeyAndAtomicPointUpdate() {
-        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper);
+        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper, securityAbuseMonitor);
         ReflectionTestUtils.setField(service, "baseMapper", pointsRecordMapper);
 
         User user = new User();
@@ -65,7 +68,7 @@ class PointsRecordServiceImplTest {
 
     @Test
     void addTaskPointsRecordIncludesDateInIdempotencyKey() {
-        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper);
+        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper, securityAbuseMonitor);
         ReflectionTestUtils.setField(service, "baseMapper", pointsRecordMapper);
 
         User user = new User();
@@ -95,7 +98,7 @@ class PointsRecordServiceImplTest {
 
     @Test
     void addTaskPointsRecordSkipsDuplicateRewardWithoutAddingPoints() {
-        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper);
+        PointsRecordServiceImpl service = new PointsRecordServiceImpl(userService, userMapper, securityAbuseMonitor);
         ReflectionTestUtils.setField(service, "baseMapper", pointsRecordMapper);
 
         User user = new User();
@@ -117,5 +120,6 @@ class PointsRecordServiceImplTest {
 
         assertThat(granted).isFalse();
         verify(userMapper, never()).addPoints(any(), anyInt());
+        verify(securityAbuseMonitor).recordRewardIdempotencyCollision("points:7:practice_question_pass:9:none");
     }
 }

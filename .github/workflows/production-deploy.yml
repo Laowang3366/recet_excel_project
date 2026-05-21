@@ -74,6 +74,10 @@ jobs:
         working-directory: reace_web
         run: npm run build
 
+      - name: Perf Script Validation
+        shell: pwsh
+        run: ./scripts/perf/validate-k6-scripts.ps1
+
       - name: Install SSH deploy dependency
         run: python -m pip install --disable-pip-version-check paramiko
 

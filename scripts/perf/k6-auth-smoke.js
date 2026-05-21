@@ -62,7 +62,8 @@ export default function () {
   const responses = [
     http.get(`${baseUrl}/api/auth/current`, params),
     http.get(`${baseUrl}/api/notifications/unread-count`, params),
-    http.get(`${baseUrl}/api/messages/unread-count`, params),
+    http.get(`${baseUrl}/api/points/tasks`, params),
+    http.get(`${baseUrl}/api/qa/my`, params),
     http.get(`${baseUrl}/api/mall/overview`, params),
     http.get(`${baseUrl}/api/practice/history?page=1&size=10`, params),
     http.get(`${baseUrl}/api/templates/records`, params),

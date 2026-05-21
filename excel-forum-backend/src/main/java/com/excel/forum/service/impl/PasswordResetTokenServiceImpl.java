@@ -65,8 +65,7 @@ public class PasswordResetTokenServiceImpl implements PasswordResetTokenService 
         PasswordResetToken token = passwordResetTokenMapper.selectOne(new QueryWrapper<PasswordResetToken>()
                 .eq("token_hash", hash(rawToken.trim()))
                 .isNull("used_at")
-                .gt("expires_at", LocalDateTime.now())
-                .last("LIMIT 1"));
+                .gt("expires_at", LocalDateTime.now()));
         if (token == null) {
             return Optional.empty();
         }

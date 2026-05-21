@@ -2,6 +2,7 @@ package com.excel.forum.service.impl;
 
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -19,6 +20,7 @@ public class RedisBackedRateLimitService implements RateLimitService {
     private static final int MAX_LOCAL_KEYS = 10_000;
 
     private final StringRedisTemplate redisTemplate;
+    private final SecurityAbuseMonitor securityAbuseMonitor;
     private final Map<String, LocalWindow> localWindows = new ConcurrentHashMap<>();
 
     @Override
@@ -36,7 +38,9 @@ public class RedisBackedRateLimitService implements RateLimitService {
                 }
                 if (count != null && count > maxRequests) {
                     Long ttl = redisTemplate.getExpire(normalizedKey, TimeUnit.SECONDS);
-                    return RateLimitResult.limited(limitedMessage, ttl == null || ttl <= 0 ? ttlSeconds : ttl);
+                    long retryAfter = ttl == null || ttl <= 0 ? ttlSeconds : ttl;
+                    securityAbuseMonitor.recordRateLimit(normalizedKey, maxRequests, window, retryAfter);
+                    return RateLimitResult.limited(limitedMessage, retryAfter);
                 }
                 return RateLimitResult.allow();
             } catch (RuntimeException exception) {
@@ -61,6 +65,7 @@ public class RedisBackedRateLimitService implements RateLimitService {
         });
         if (state.count > maxRequests) {
             long retryAfter = Math.max(1, (state.expiresAtMillis - now + 999) / 1000);
+            securityAbuseMonitor.recordRateLimit(key, maxRequests, window, retryAfter);
             return RateLimitResult.limited(limitedMessage, retryAfter);
         }
         return RateLimitResult.allow();

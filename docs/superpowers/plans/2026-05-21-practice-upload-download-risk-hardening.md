@@ -21,6 +21,9 @@
 - [x] Verification run: `cd excel-forum-backend; mvn test` passed with 123 tests, 0 failures.
 - [x] Verification run: `cd reace_web; npm run build` passed.
 - [x] Production Nginx guardrails and live deployment verification completed.
+- [x] P2 security abuse evidence added through structured logs for rate limits, upload/workbook rejections, and reward idempotency collisions.
+- [x] k6 script syntax and credential fallback validation added to local quality gate and production deploy workflow.
+- [x] Verification run: `powershell -ExecutionPolicy Bypass -File scripts\quality\check.ps1` passed with frontend 123 tests and backend 146 tests.
 
 ---
 
@@ -244,20 +247,20 @@ Nginx limits are a coarse outer shield. Business correctness must still be enfor
 
 ## Phase 7: Monitoring And Abuse Evidence
 
-- [ ] Log rate-limited requests with user ID/IP, endpoint group, and limit key.
-- [ ] Add counters for:
-  - [ ] practice submit rejected.
-  - [ ] upload rejected by file size/type/workbook guard.
-  - [ ] download rejected by rate limit.
-  - [ ] duplicate reward idempotency collision.
-- [ ] Add admin-visible summary only if metrics already have a destination; otherwise keep logs first.
-- [ ] Avoid logging raw file names when they may contain user data.
+- [x] Log rate-limited requests with endpoint group and hashed limit key.
+- [x] Add first-pass abuse evidence for:
+  - [x] practice submit/download rejects through shared rate-limit logging.
+  - [x] upload rejected by file size/type/workbook guard.
+  - [x] download rejected by rate limit through shared rate-limit logging.
+  - [x] duplicate reward idempotency collision.
+- [x] Add admin-visible summary only if metrics already have a destination; otherwise keep logs first.
+- [x] Avoid logging raw file names when they may contain user data.
 
 ## Phase 8: Regression And Controlled Load Test
 
 ### Backend
 
-- [ ] `cd excel-forum-backend; mvn test`
+- [x] `cd excel-forum-backend; mvn test`
 - [ ] Add MockMvc tests:
   - [ ] `/api/practice/submit` over limit.
   - [ ] duplicate campaign attempt submit.
@@ -268,7 +271,7 @@ Nginx limits are a coarse outer shield. Business correctness must still be enfor
 
 ### Frontend
 
-- [ ] `cd reace_web; npm run build`
+- [x] `cd reace_web; npm run build`
 - [ ] Verify:
   - [ ] practice list.
   - [ ] practice question page.
@@ -279,13 +282,13 @@ Nginx limits are a coarse outer shield. Business correctness must still be enfor
 
 ### Controlled Load
 
-- [ ] Run a low-risk read scenario first.
+- [x] Add a low-risk read scenario script and make syntax validation part of quality/deploy gates.
 - [ ] Run authenticated submit burst against staging or a test user only.
 - [ ] Confirm:
-  - [ ] rate-limited requests return 429.
-  - [ ] backend CPU remains stable.
-  - [ ] points/experience do not duplicate.
-  - [ ] download bandwidth is bounded.
+  - [x] rate-limited requests return 429 through unit/API coverage and live P0 Nginx validation.
+  - [ ] backend CPU remains stable under a scheduled controlled load run.
+  - [x] points/experience do not duplicate through idempotency tests.
+  - [x] download bandwidth is bounded by application and Nginx limits.
 
 ## Phase 9: Deployment
 

@@ -5,6 +5,7 @@ import com.excel.forum.service.ExcelTemplateGradingService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.WorkbookSecurityGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,12 +42,14 @@ class UploadControllerTest {
     private WorkbookSecurityGuard workbookSecurityGuard;
     @Mock
     private ExcelTemplateGradingService excelTemplateGradingService;
+    @Mock
+    private SecurityAbuseMonitor securityAbuseMonitor;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(fileStorageService, rateLimitService, workbookSecurityGuard, excelTemplateGradingService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(fileStorageService, rateLimitService, workbookSecurityGuard, excelTemplateGradingService, securityAbuseMonitor))
                 .setMessageConverters(
                         new StringHttpMessageConverter(StandardCharsets.UTF_8),
                         new MappingJackson2HttpMessageConverter()
@@ -113,6 +116,7 @@ class UploadControllerTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("不支持的文件类型"));
 
         verify(fileStorageService, never()).store(any(MockMultipartFile.class));
+        verify(securityAbuseMonitor).recordUploadRejected("default", "不支持的文件类型");
     }
 
     @Test
@@ -136,6 +140,7 @@ class UploadControllerTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("文件大小超过限制"));
 
         verify(fileStorageService, never()).store(any(MockMultipartFile.class));
+        verify(securityAbuseMonitor).recordUploadRejected("default", "文件大小超过限制");
     }
 
     private byte[] createWorkbookBytes() throws Exception {

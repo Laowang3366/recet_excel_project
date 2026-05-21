@@ -144,6 +144,12 @@ if (-not $SkipFrontend) {
     }
 }
 
+Invoke-Step "Perf script validation" {
+    Invoke-InDirectory $root {
+        Invoke-Native "powershell" @("-ExecutionPolicy", "Bypass", "-File", "scripts\perf\validate-k6-scripts.ps1")
+    }
+}
+
 if (-not $SkipBackend) {
     Invoke-Step "Backend source guardrails" {
         Test-BackendSourceGuardrails

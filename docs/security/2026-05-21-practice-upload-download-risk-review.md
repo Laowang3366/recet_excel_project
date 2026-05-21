@@ -197,11 +197,14 @@ QA 求助场景还存在两条高消耗路径：
 - 题目详情不再返回敏感 `templateFileUrl`。
 - QA case/answer 快照改为业务 ID 受控接口。
 - 用户侧上传 Excel 后直接使用上传接口返回的 workbook 快照，不再调用任意 `fileUrl` 快照解析。
+- P2 观测与门禁收口：新增 `SecurityAbuseMonitor`，对限流命中、上传拒绝、工作簿拒绝、奖励幂等冲突输出脱敏结构化日志。
+- 受控 k6 脚本已纳入质量门禁和生产部署工作流；旧压测脚本中的已下线路由已替换为当前做题/教程/QA 平台接口。
 
 已验证：
 
-- `cd excel-forum-backend; mvn test`：123 tests, 0 failures。
-- `cd reace_web; npm run build`：构建通过。
+- `cd excel-forum-backend; mvn "-Dtest=RedisBackedRateLimitServiceTest,WorkbookSecurityGuardImplTest,PointsRecordServiceImplTest,UploadControllerTest,ExcelTemplateGradingServiceImplTest" test`：22 tests, 0 failures。
+- `powershell -ExecutionPolicy Bypass -File scripts\perf\validate-k6-scripts.ps1`：Validated 4 k6 script(s)。
+- `powershell -ExecutionPolicy Bypass -File scripts\quality\check.ps1`：前端 36 test files / 123 tests、后端 146 tests、构建与源码 guardrail 全部通过。
 
 线上部署与 Nginx 防护：
 

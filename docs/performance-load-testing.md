@@ -6,8 +6,9 @@ This repo keeps k6 load scripts under `scripts/perf`. Defaults are smoke-level s
 
 | Script | Coverage | Default write behavior |
 | --- | --- | --- |
-| `scripts/perf/k6-public-smoke.js` | Public home, posts, tutorials, practice category/list, templates | none |
-| `scripts/perf/k6-auth-smoke.js` | Login plus authenticated profile, unread counts, mall, practice history, template records | none |
+| `scripts/perf/k6-public-smoke.js` | Public home, level rules, tutorials, practice category/list, campaign chapters, templates | none |
+| `scripts/perf/k6-public-read-controlled.js` | Low-risk production read path mix for `www.excelcc.cn` pages and public APIs | none |
+| `scripts/perf/k6-auth-smoke.js` | Login plus authenticated profile, notifications, points tasks, QA center, mall, practice history, template records | none |
 | `scripts/perf/k6-mixed-write-smoke.js` | Login, authenticated reads, practice submit, campaign start/submit, optional template download | practice submit and campaign attempt writes enabled; template download disabled |
 
 ## Environment Variables
@@ -57,6 +58,17 @@ Run public smoke:
 cd D:\project\recet_excel_project
 $env:BASE_URL = "http://localhost:8080"
 k6 run scripts/perf/k6-public-smoke.js
+```
+
+Run controlled production read smoke only after confirming the target window:
+
+```powershell
+cd D:\project\recet_excel_project
+$env:BASE_URL = "https://www.excelcc.cn"
+$env:VUS = "10"
+$env:DURATION = "60s"
+$env:SLEEP_MS = "1000"
+k6 run scripts/perf/k6-public-read-controlled.js
 ```
 
 Run authenticated smoke:
@@ -134,6 +146,7 @@ powershell -ExecutionPolicy Bypass -File scripts/perf/validate-k6-scripts.ps1
 ```
 
 This validates JavaScript syntax with `node --check` and fails if authenticated scripts reintroduce hardcoded credential fallbacks.
+It is also part of `scripts/quality/check.ps1` and the production deploy workflow, so stale retired endpoints should fail before deployment.
 
 ## Intentionally Uncovered
 

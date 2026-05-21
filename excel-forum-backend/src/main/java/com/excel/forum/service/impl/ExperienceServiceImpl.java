@@ -12,6 +12,7 @@ import com.excel.forum.mapper.UserExpLogMapper;
 import com.excel.forum.service.ExperienceLevelRuleService;
 import com.excel.forum.service.ExperienceRuleService;
 import com.excel.forum.service.ExperienceService;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
     private final UserService userService;
     private final ExperienceRuleService experienceRuleService;
     private final ExperienceLevelRuleService experienceLevelRuleService;
+    private final SecurityAbuseMonitor securityAbuseMonitor;
 
     @Override
     @Transactional
@@ -81,6 +83,7 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
         try {
             save(expLog);
         } catch (DuplicateKeyException exception) {
+            securityAbuseMonitor.recordRewardIdempotencyCollision(buildExpCollisionKey(userId, bizType, bizId));
             log.debug("Duplicate experience award skipped: userId={}, bizType={}, bizId={}", userId, bizType, bizId, exception);
             return false;
         }
@@ -193,6 +196,12 @@ public class ExperienceServiceImpl extends ServiceImpl<UserExpLogMapper, UserExp
         }
         Integer configuredValue = experienceProperties.getRules().get(ruleKey);
         return configuredValue != null && configuredValue > 0 ? configuredValue : defaultValue;
+    }
+
+    private String buildExpCollisionKey(Long userId, String bizType, Long bizId) {
+        String safeBizType = bizType == null || bizType.isBlank() ? "unknown" : bizType.trim();
+        String safeBizId = bizId == null ? "none" : String.valueOf(bizId);
+        return "experience:" + userId + ":" + safeBizType + ":" + safeBizId;
     }
 
     private int resolveLevel(int exp) {

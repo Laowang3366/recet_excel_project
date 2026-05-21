@@ -24,9 +24,10 @@ const baseUrl = strEnv("BASE_URL", "http://localhost:8080");
 export default function () {
   const responses = [
     http.get(`${baseUrl}/api/public/home-overview`),
-    http.get(`${baseUrl}/api/posts?page=1&limit=10`),
+    http.get(`${baseUrl}/api/public/level-rules`),
     http.get(`${baseUrl}/api/tutorials/home`),
     http.get(`${baseUrl}/api/practice/categories`),
+    http.get(`${baseUrl}/api/practice/campaign/chapters`),
     http.get(`${baseUrl}/api/practice/question-list`),
     http.get(`${baseUrl}/api/templates`),
   ];

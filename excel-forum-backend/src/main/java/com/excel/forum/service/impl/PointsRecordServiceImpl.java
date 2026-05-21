@@ -8,6 +8,7 @@ import com.excel.forum.entity.User;
 import com.excel.forum.mapper.PointsRecordMapper;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.PointsRecordService;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
     
     private final UserService userService;
     private final UserMapper userMapper;
+    private final SecurityAbuseMonitor securityAbuseMonitor;
 
     @Override
     @Transactional
@@ -72,6 +74,7 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         try {
             baseMapper.insert(record);
         } catch (DuplicateKeyException exception) {
+            securityAbuseMonitor.recordRewardIdempotencyCollision(record.getIdempotencyKey());
             log.debug("Duplicate points reward skipped: key={}", record.getIdempotencyKey(), exception);
             return false;
         }

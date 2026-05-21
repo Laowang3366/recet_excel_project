@@ -69,7 +69,7 @@ public class AdminAuditLogFilter extends OncePerRequestFilter {
         if (value instanceof String text && !text.isBlank()) {
             try {
                 return Long.parseLong(text);
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException exception) {
                 return null;
             }
         }

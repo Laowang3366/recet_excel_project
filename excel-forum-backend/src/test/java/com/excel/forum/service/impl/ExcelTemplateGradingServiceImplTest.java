@@ -5,6 +5,7 @@ import com.excel.forum.config.WorkbookSecurityProperties;
 import com.excel.forum.entity.dto.ExcelTemplateAnswerSnapshot;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
+import com.excel.forum.service.SecurityAbuseMonitor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -237,7 +238,7 @@ class ExcelTemplateGradingServiceImplTest {
     }
 
     private static WorkbookSecurityGuardImpl defaultGuard() {
-        return new WorkbookSecurityGuardImpl(new WorkbookSecurityProperties());
+        return new WorkbookSecurityGuardImpl(new WorkbookSecurityProperties(), SecurityAbuseMonitor.noop());
     }
 
     private void writeTinyWorkbook(Path target) throws Exception {
