@@ -71,6 +71,7 @@ public class QaServiceImpl implements QaService {
     private static final List<String> SHARE_STATUSES = List.of(STATUS_PUBLISHED, STATUS_UNPUBLISHED, STATUS_DELETED);
     private static final List<String> THOUGHT_SOURCES = List.of("manual", "ai", "empty");
     private static final Set<String> FEEDBACK_REASONS = Set.of("unclear_requirement", "missing_expected_answer", "bad_source_data", "too_hard", "other");
+    private static final int MAX_ACTIVE_ANSWERS_PER_CASE = 50;
 
     private final QaSolutionShareMapper solutionShareMapper;
     private final QaCaseHelpMapper caseHelpMapper;
@@ -337,10 +338,14 @@ public class QaServiceImpl implements QaService {
         QaCaseHelp qaCase = requireCase(caseId);
         ensureCaseCanReceiveAnswer(qaCase);
         String answerFileUrl = requireExcelFileUrl(request == null ? null : request.getAnswerFileUrl(), "请上传答疑 Excel 文件");
+        ensureNewCaseAnswerAllowed(userId, caseId);
         excelTemplateGradingService.loadWorkbookSnapshot(answerFileUrl);
+        return createCaseAnswer(qaCase, userId, answerFileUrl);
+    }
 
+    private Map<String, Object> createCaseAnswer(QaCaseHelp qaCase, Long userId, String answerFileUrl) {
         QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
-        answer.setCaseId(caseId);
+        answer.setCaseId(qaCase.getId());
         answer.setUserId(userId);
         answer.setAnswerFileUrl(answerFileUrl);
         answer.setStatus(STATUS_ACTIVE);
@@ -351,7 +356,7 @@ public class QaServiceImpl implements QaService {
 
         if (STATUS_OPEN.equals(qaCase.getStatus())) {
             QaCaseHelp update = new QaCaseHelp();
-            update.setId(caseId);
+            update.setId(qaCase.getId());
             update.setStatus(STATUS_ANSWERED);
             caseHelpMapper.updateById(update);
         }
@@ -366,6 +371,7 @@ public class QaServiceImpl implements QaService {
         if (request == null || request.getWorkbook() == null) {
             throw new IllegalArgumentException("答疑工作簿不能为空");
         }
+        ensureNewCaseAnswerAllowed(userId, caseId);
         // 在线作答最终也落为 Excel 文件，列表和下载口径与本地上传保持一致。
         byte[] workbookFile = excelTemplateGradingService.buildWorkbookFileFromSnapshot(
                 qaCase.getTemplateFileUrl(),
@@ -375,9 +381,7 @@ public class QaServiceImpl implements QaService {
                 "qa-case-" + caseId + "-answer.xlsx",
                 workbookFile
         );
-        QaCaseAnswerRequest answerRequest = new QaCaseAnswerRequest();
-        answerRequest.setAnswerFileUrl(answerFileUrl);
-        return submitCaseAnswer(userId, caseId, answerRequest);
+        return createCaseAnswer(qaCase, userId, answerFileUrl);
     }
 
     @Override
@@ -529,6 +533,28 @@ public class QaServiceImpl implements QaService {
     public Map<String, Object> listCaseAnswers(Long userId, Long caseId) {
         ensureCaseVisible(requireCase(caseId));
         return Map.of("answers", loadCaseAnswers(caseId));
+    }
+
+    private void ensureNewCaseAnswerAllowed(Long userId, Long caseId) {
+        // Keep QA file creation bounded before Excel parsing or snapshot materialization starts.
+        if (countActiveCaseAnswers(caseId, userId) > 0) {
+            throw new IllegalArgumentException("你已提交过答疑，请编辑原答疑");
+        }
+        if (countActiveCaseAnswers(caseId, null) >= MAX_ACTIVE_ANSWERS_PER_CASE) {
+            throw new IllegalArgumentException("当前求助答疑数量已达上限");
+        }
+    }
+
+    private long countActiveCaseAnswers(Long caseId, Long userId) {
+        QueryWrapper<QaCaseHelpAnswer> wrapper = new QueryWrapper<QaCaseHelpAnswer>()
+                .eq("case_id", caseId)
+                .isNull("deleted_at")
+                .ne("status", STATUS_DELETED);
+        if (userId != null) {
+            wrapper.eq("user_id", userId);
+        }
+        Long count = caseHelpAnswerMapper.selectCount(wrapper);
+        return count == null ? 0L : count;
     }
 
     @Override

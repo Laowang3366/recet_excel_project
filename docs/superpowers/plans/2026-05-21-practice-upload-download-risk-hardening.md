@@ -16,6 +16,7 @@
 - [x] `WorkbookSecurityGuard` added and wired into upload, template parsing, workbook materialization, grading, QA upload, and QA snapshot submission.
 - [x] Sensitive Excel uploads now go under `/uploads/private/`; `/uploads/private/**` requires authentication and `/uploads/.trash/**` requires admin.
 - [x] Public practice payloads no longer expose raw `templateFileUrl`.
+- [x] P1 QA answer fan-out guard added: one active answer per user per case, 50 active answers per case, checked before snapshot-to-Excel generation.
 - [x] User-facing frontend no longer calls `/api/practice/template-snapshot?fileUrl=...`; uploaded Excel preview uses `/api/upload` workbook snapshots, and QA editor uses case/answer ID snapshot endpoints.
 - [x] `/api/practice/template-snapshot?fileUrl=...` is retained only as an admin-compatible endpoint through security rules.
 - [x] Verification run: `cd excel-forum-backend; mvn test` passed with 123 tests, 0 failures.

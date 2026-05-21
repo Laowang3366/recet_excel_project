@@ -9,6 +9,7 @@ import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
+import com.excel.forum.entity.dto.QaCaseSnapshotAnswerRequest;
 import com.excel.forum.entity.dto.QaSolutionShareRequest;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
@@ -151,6 +152,49 @@ class QaServiceImplTest {
                 contains("销售榜单求助"),
                 org.mockito.ArgumentMatchers.eq(30L)
         );
+    }
+
+    @Test
+    void submitCaseAnswerRejectsDuplicateActiveAnswerBeforeParsingFile() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setUserId(7L);
+        qaCase.setStatus("open");
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+        when(caseHelpAnswerMapper.selectCount(any())).thenReturn(1L);
+
+        QaCaseAnswerRequest request = new QaCaseAnswerRequest();
+        request.setAnswerFileUrl("/uploads/private/answer.xlsx");
+
+        assertThatThrownBy(() -> service.submitCaseAnswer(9L, 30L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("已提交过答疑");
+
+        verify(excelTemplateGradingService, never()).loadWorkbookSnapshot(any());
+        verify(caseHelpAnswerMapper, never()).insert(any());
+    }
+
+    @Test
+    void submitCaseAnswerFromSnapshotRejectsCaseAnswerCapBeforeBuildingWorkbook() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setUserId(7L);
+        qaCase.setStatus("open");
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+        when(caseHelpAnswerMapper.selectCount(any())).thenReturn(0L, 50L);
+
+        QaCaseSnapshotAnswerRequest request = new QaCaseSnapshotAnswerRequest();
+        request.setWorkbook(new ExcelWorkbookSnapshot());
+
+        assertThatThrownBy(() -> service.submitCaseAnswerFromSnapshot(9L, 30L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("答疑数量已达上限");
+
+        verify(excelTemplateGradingService, never()).buildWorkbookFileFromSnapshot(any(), any());
+        verify(fileStorageService, never()).store(any(), any());
+        verify(caseHelpAnswerMapper, never()).insert(any());
     }
 
     @Test
