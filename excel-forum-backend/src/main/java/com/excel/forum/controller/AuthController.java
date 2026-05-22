@@ -150,12 +150,8 @@ public class AuthController {
             return ResponseEntity.badRequest().body(PasswordPolicy.MESSAGE);
         }
 
-        if (userService.findByUsername(username) != null) {
-            return ResponseEntity.badRequest().body("用户名已存在");
-        }
-
-        if (userService.findByEmail(email) != null) {
-            return ResponseEntity.badRequest().body("邮箱已被注册");
+        if (userService.findByUsername(username) != null || userService.findByEmail(email) != null) {
+            return ResponseEntity.badRequest().body("注册信息不可用，请更换后重试");
         }
 
         User user = new User();

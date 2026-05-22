@@ -14,4 +14,5 @@ public class WorkbookSecurityProperties {
     private int maxFormulaLength = 8_192;
     private int maxTextLength = 32_767;
     private double minInflateRatio = 0.01d;
+    private boolean blockDangerousFormulas = true;
 }

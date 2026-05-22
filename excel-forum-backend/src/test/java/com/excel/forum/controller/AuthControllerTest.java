@@ -186,6 +186,26 @@ class AuthControllerTest {
     }
 
     @Test
+    void registerDoesNotRevealWhetherUsernameOrEmailExists() throws Exception {
+        User existingUser = new User();
+        existingUser.setId(1L);
+        existingUser.setUsername("tester");
+        when(userService.findByUsername("tester")).thenReturn(existingUser);
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"tester","email":"user@example.com","password":"Abc12345!"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().json("\"注册信息不可用，请更换后重试\""))
+                .andExpect(content().string(not(containsString("用户名已存在"))))
+                .andExpect(content().string(not(containsString("邮箱已被注册"))));
+
+        verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
     void forgotPasswordDoesNotResetPasswordDirectly() throws Exception {
         mockMvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)

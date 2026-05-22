@@ -33,6 +33,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -433,12 +435,12 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         submitRequest.setQuestionCategoryId(question.getQuestionCategoryId());
         submitRequest.setMode("campaign");
         submitRequest.setDifficulty(question.getDifficulty());
-        submitRequest.setDurationSeconds(request.getUsedSeconds());
+        int usedSeconds = resolveServerUsedSeconds(attempt, request.getUsedSeconds(), LocalDateTime.now());
+        submitRequest.setDurationSeconds(usedSeconds);
         submitRequest.setAnswers(List.of(answerRequest));
 
         Map<String, Object> submitResult = practiceService.submitPractice(userId, submitRequest);
         boolean passed = toInt(submitResult.get("correctCount")) > 0;
-        int usedSeconds = request.getUsedSeconds() == null ? 0 : request.getUsedSeconds();
         int targetSeconds = level.getTargetTimeSeconds() == null ? 0 : level.getTargetTimeSeconds();
         int stars = 0;
         if (passed) {
@@ -451,7 +453,7 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             }
         }
 
-        attempt.setUsedSeconds(request.getUsedSeconds());
+        attempt.setUsedSeconds(usedSeconds);
         attempt.setResultStatus(passed ? "passed" : "failed");
         attempt.setScore(toInt(submitResult.get("score")));
         attempt.setStars(stars);
@@ -817,6 +819,19 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
 
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    static int resolveServerUsedSeconds(PracticeAttempt attempt, Integer clientUsedSeconds, LocalDateTime now) {
+        if (attempt != null && attempt.getSubmitTime() != null && now != null) {
+            long elapsed = ChronoUnit.SECONDS.between(attempt.getSubmitTime(), now);
+            if (elapsed > 0) {
+                return (int) Math.min(elapsed, 6 * 60 * 60);
+            }
+        }
+        if (clientUsedSeconds == null || clientUsedSeconds <= 0) {
+            return 0;
+        }
+        return Math.min(clientUsedSeconds, 6 * 60 * 60);
     }
 
     private String defaultText(String value, String fallback) {

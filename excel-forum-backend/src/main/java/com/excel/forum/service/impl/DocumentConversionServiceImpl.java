@@ -2,6 +2,7 @@ package com.excel.forum.service.impl;
 
 import com.excel.forum.config.FileStorageConfig;
 import com.excel.forum.service.DocumentConversionService;
+import com.excel.forum.service.WorkbookSecurityGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -34,17 +35,22 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentConversionServiceImpl implements DocumentConversionService {
-    private static final long MAX_FILE_SIZE = 25L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 20L * 1024 * 1024;
+    private static final long CONVERSION_TIMEOUT_SECONDS = 90;
     private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final DataFormatter EXCEL_DATA_FORMATTER = new DataFormatter(Locale.SIMPLIFIED_CHINESE);
 
     private final FileStorageConfig fileStorageConfig;
+    private final WorkbookSecurityGuard workbookSecurityGuard;
 
     @Override
     public Map<String, Object> convert(MultipartFile file, String targetType) {
@@ -52,7 +58,7 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
             throw new IllegalArgumentException("请上传文件");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("文件大小不能超过25MB");
+            throw new IllegalArgumentException("文件大小不能超过20MB");
         }
 
         ConversionTarget target = ConversionTarget.from(targetType);
@@ -60,9 +66,10 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
         if (sourceType == SourceType.UNKNOWN) {
             throw new IllegalArgumentException("仅支持 Word、Excel、PDF 文件");
         }
+        validateSourceFileSafety(file, sourceType);
 
         Path uploadRoot = resolveUploadRoot();
-        Path conversionDir = uploadRoot.resolve("conversions");
+        Path conversionDir = uploadRoot.resolve("private").resolve("conversions");
         Path tempDir = conversionDir.resolve("tmp");
         try {
             Files.createDirectories(conversionDir);
@@ -88,7 +95,7 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
             return Map.of(
                     "message", "转换成功",
                     "fileName", outputFilename,
-                    "url", fileStorageConfig.getLocal().getUrlPrefix() + "/conversions/" + outputFilename,
+                    "url", fileStorageConfig.getLocal().getUrlPrefix() + "/private/conversions/" + outputFilename,
                     "sourceType", sourceType.label,
                     "targetType", target.label
             );
@@ -119,8 +126,13 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
 
         String output;
         try {
+            boolean finished = process.waitFor(CONVERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException("文件转换超时，请缩小文件或简化内容后重试");
+            }
             output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exitCode = process.waitFor();
+            int exitCode = process.exitValue();
             if (exitCode != 0) {
                 throw new IllegalStateException(normalizeScriptError(output));
             }
@@ -163,8 +175,13 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
             processBuilder.directory(sourcePath.getParent().toFile());
             processBuilder.environment().put("HOME", profileDir.toString());
             Process process = processBuilder.start();
+            boolean finished = process.waitFor(CONVERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException("文件转换超时，请缩小文件或简化内容后重试");
+            }
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            int exitCode = process.waitFor();
+            int exitCode = process.exitValue();
             if (exitCode != 0) {
                 throw new IllegalStateException(normalizeLibreOfficeError(output));
             }
@@ -186,6 +203,47 @@ public class DocumentConversionServiceImpl implements DocumentConversionService 
 
     private boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private void validateSourceFileSafety(MultipartFile file, SourceType sourceType) {
+        String extension = SourceType.extensionOf(file.getOriginalFilename());
+        if (".doc".equals(extension) || ".xls".equals(extension)) {
+            throw new IllegalArgumentException("不支持旧版 Office 文件，请先转为 docx/xlsx 后再上传");
+        }
+        if (".docx".equals(extension) || ".xlsx".equals(extension)) {
+            rejectDangerousOfficePackage(file);
+        }
+        if (sourceType == SourceType.EXCEL) {
+            workbookSecurityGuard.applyZipBombProtection();
+            try (InputStream inputStream = file.getInputStream();
+                 Workbook workbook = WorkbookFactory.create(inputStream)) {
+                workbookSecurityGuard.assertWorkbookSafe(workbook, "转换文件");
+            } catch (IllegalArgumentException exception) {
+                throw exception;
+            } catch (Exception exception) {
+                throw new IllegalArgumentException("Excel 文件解析失败");
+            }
+        }
+    }
+
+    private void rejectDangerousOfficePackage(MultipartFile file) {
+        try (InputStream inputStream = file.getInputStream();
+             ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
+            ZipEntry entry;
+            while ((entry = zipInputStream.getNextEntry()) != null) {
+                String name = entry.getName() == null ? "" : entry.getName().toLowerCase(Locale.ROOT);
+                if (name.endsWith("vbaproject.bin")
+                        || name.contains("/externallinks/")
+                        || name.contains("/embeddings/")
+                        || name.contains("/oleobjects/")) {
+                    throw new IllegalArgumentException("文件包含宏、外部链接或嵌入对象，无法转换");
+                }
+            }
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("文件结构解析失败");
+        }
     }
 
     private String findOfficeExecutable() {

@@ -13,6 +13,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -50,7 +51,9 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
                         throw rejected(source, monitorLabel, "单元格数量超过限制");
                     }
                     if (cell.getCellType() == CellType.FORMULA) {
-                        assertTextLength(cell.getCellFormula(), properties.getMaxFormulaLength(), source, monitorLabel, "公式过长");
+                        String formula = cell.getCellFormula();
+                        assertTextLength(formula, properties.getMaxFormulaLength(), source, monitorLabel, "公式过长");
+                        assertFormulaSafe(formula, source, monitorLabel);
                     } else if (cell.getCellType() == CellType.STRING) {
                         assertTextLength(cell.getStringCellValue(), properties.getMaxTextLength(), source, monitorLabel, "文本过长");
                     }
@@ -85,6 +88,7 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
                     continue;
                 }
                 assertTextLength(cell.getFormula(), properties.getMaxFormulaLength(), source, monitorLabel, "公式过长");
+                assertFormulaSafe(cell.getFormula(), source, monitorLabel);
                 assertTextLength(cell.getDisplay(), properties.getMaxTextLength(), source, monitorLabel, "显示文本过长");
                 if (cell.getValue() instanceof String text) {
                     assertTextLength(text, properties.getMaxTextLength(), source, monitorLabel, "文本过长");
@@ -97,6 +101,53 @@ public class WorkbookSecurityGuardImpl implements WorkbookSecurityGuard {
         if (value != null && value.length() > maxLength) {
             throw rejected(source, monitorLabel, reason);
         }
+    }
+
+    private void assertFormulaSafe(String formula, String source, String monitorLabel) {
+        if (!properties.isBlockDangerousFormulas() || formula == null || formula.isBlank()) {
+            return;
+        }
+        String normalized = formula.trim();
+        if (normalized.startsWith("=")) {
+            normalized = normalized.substring(1);
+        }
+        String upper = normalized.toUpperCase(Locale.ROOT);
+        // 用户提交的 workbook 会被其他用户下载打开，这里只拦会触发外部资源、DDE 或宏类调用的公式。
+        if (upper.contains("HYPERLINK(")
+                || upper.contains("WEBSERVICE(")
+                || upper.contains("IMPORTXML(")
+                || upper.contains("IMPORTDATA(")
+                || upper.contains("IMPORTRANGE(")
+                || upper.contains("IMAGE(")
+                || upper.contains("CALL(")
+                || upper.contains("REGISTER.ID(")
+                || upper.contains("HTTP://")
+                || upper.contains("HTTPS://")
+                || upper.contains("FTP://")
+                || upper.contains("FILE://")
+                || containsExternalWorkbookReference(upper)
+                || upper.contains("|")) {
+            throw rejected(source, monitorLabel, "包含外部链接或危险公式");
+        }
+    }
+
+    private boolean containsExternalWorkbookReference(String upperFormula) {
+        int start = upperFormula.indexOf('[');
+        while (start >= 0) {
+            int end = upperFormula.indexOf(']', start + 1);
+            if (end > start) {
+                String reference = upperFormula.substring(start + 1, end);
+                if (reference.contains(".XLS")
+                        || reference.contains(".CSV")
+                        || reference.contains("HTTP")
+                        || reference.contains("\\")
+                        || reference.contains("/")) {
+                    return true;
+                }
+            }
+            start = upperFormula.indexOf('[', start + 1);
+        }
+        return false;
     }
 
     private IllegalArgumentException rejected(String source, String monitorLabel, String reason) {

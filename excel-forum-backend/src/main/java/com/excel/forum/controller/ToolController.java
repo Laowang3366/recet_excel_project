@@ -7,12 +7,20 @@ import com.excel.forum.entity.User;
 import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.DocumentConversionService;
 import com.excel.forum.service.DocumentConversionRecordService;
+import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.PointsRecordService;
+import com.excel.forum.service.RateLimitResult;
+import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +28,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +47,8 @@ public class ToolController {
     private final UserService userService;
     private final UserMapper userMapper;
     private final PointsRecordService pointsRecordService;
+    private final RateLimitService rateLimitService;
+    private final FileStorageService fileStorageService;
 
     @GetMapping("/overview")
     public ResponseEntity<?> getToolOverview(@RequestAttribute(value = "userId", required = false) Long userId) {
@@ -75,6 +87,15 @@ public class ToolController {
                     "currentPoints", safeInt(user.getPoints())
             ));
         }
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "tools:convert:user:" + userId,
+                5,
+                Duration.ofMinutes(10),
+                "文档转换过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
         int deducted = userMapper.deductPoints(userId, CONVERSION_COST_POINTS);
         if (deducted == 0) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -96,6 +117,7 @@ public class ToolController {
             record.setResultUrl(String.valueOf(result.get("url")));
             record.setStatus("success");
             documentConversionRecordService.save(record);
+            result.put("url", buildConversionDownloadUrl(record.getId()));
 
             PointsRecord costRecord = new PointsRecord();
             costRecord.setUserId(userId);
@@ -133,7 +155,7 @@ public class ToolController {
                     record.put("sourceType", item.getSourceType());
                     record.put("targetType", item.getTargetType());
                     record.put("resultFileName", item.getResultFileName());
-                    record.put("resultUrl", item.getResultUrl());
+                    record.put("resultUrl", buildConversionDownloadUrl(item.getId()));
                     record.put("status", item.getStatus());
                     record.put("createTime", item.getCreateTime());
                     return record;
@@ -142,7 +164,47 @@ public class ToolController {
         return ResponseEntity.ok(Map.of("records", records));
     }
 
+    @GetMapping("/conversions/{recordId}/file")
+    public ResponseEntity<?> downloadConversionFile(@RequestAttribute Long userId, @PathVariable Long recordId) {
+        ResponseEntity<?> limited = toLimitResponse(rateLimitService.check(
+                "download:tool-conversion:user:" + userId + ":record:" + recordId,
+                20,
+                Duration.ofMinutes(1),
+                "文件下载过于频繁，请稍后再试"
+        ));
+        if (limited != null) {
+            return limited;
+        }
+        DocumentConversionRecord record = documentConversionRecordService.getById(recordId);
+        if (record == null || !userId.equals(record.getUserId()) || !"success".equals(record.getStatus())) {
+            return ResponseEntity.status(404).body(Map.of("message", "转换记录不存在"));
+        }
+        byte[] content = fileStorageService.load(record.getResultUrl());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(content.length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(record.getResultFileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(new ByteArrayResource(content));
+    }
+
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private String buildConversionDownloadUrl(Long recordId) {
+        return "/api/tools/conversions/" + recordId + "/file";
+    }
+
+    private ResponseEntity<?> toLimitResponse(RateLimitResult result) {
+        if (result == null || result.allowed()) {
+            return null;
+        }
+        return ResponseEntity.status(429).body(Map.of(
+                "message", result.message(),
+                "retryAfterSeconds", result.retryAfterSeconds()
+        ));
     }
 }

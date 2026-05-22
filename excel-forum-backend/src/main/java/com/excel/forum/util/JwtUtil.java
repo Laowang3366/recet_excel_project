@@ -11,8 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -128,15 +130,24 @@ public class JwtUtil {
             return Boolean.TRUE.equals(exists);
         } catch (RedisConnectionFailureException exception) {
             log.debug("Redis unavailable while checking token blacklist", exception);
-            return false;
+            return true;
         } catch (Exception exception) {
             log.debug("Token blacklist lookup failed", exception);
-            return false;
+            return true;
         }
     }
 
     private String buildBlacklistKey(String token) {
-        return "jwt:blacklist:" + token;
+        return "jwt:blacklist:sha256:" + sha256(token);
+    }
+
+    private String sha256(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException("JWT blacklist key generation failed", exception);
+        }
     }
 
     private void pruneLocalBlacklist() {
