@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
-import { buildWorkbookWithAnswerSnapshot, clearDynamicArraySpillChildren, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
+import { buildWorkbookWithAnswerSnapshot, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
@@ -170,6 +170,7 @@ export function AdminQuestions() {
       const sheetName = answerSheet || snapshot.sheets?.[0]?.name || "";
       const workbookWithAnswer = buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson, {
         dynamicArrayRules: Array.isArray(dynamicArrayRules) ? dynamicArrayRules : [],
+        preserveDynamicArraySpillChildren: true,
       });
       setTemplateWorkbook(snapshot);
       setEditorWorkbook(workbookWithAnswer);
@@ -522,9 +523,6 @@ export function AdminQuestions() {
         anchorCell: detectedRegion.anchorCell,
         spillRange: detectedRegion.dynamicSpillRange,
       };
-      if (form.gradingMode === "dynamic_array") {
-        setEditorWorkbook(clearDynamicArraySpillChildren(snapshot, [nextDynamicRule]));
-      }
       setForm({
         ...form,
         templateFileUrl: uploadResult.url,
@@ -556,15 +554,8 @@ export function AdminQuestions() {
     }
   };
 
-  const removeCurrentTemplate = async () => {
+  const removeCurrentTemplate = () => {
     if (!form.templateFileUrl) return;
-    const confirmed = await openAdminConfirm({
-      title: "移除当前模板",
-      message: "移除后会清空当前模板、答题区域和标准答案；保存题目前不会影响已发布题目。",
-      confirmLabel: "移除模板",
-      destructive: true,
-    });
-    if (!confirmed) return;
     resetEditorState();
     setForm((prev) => ({
       ...prev,
@@ -1584,6 +1575,7 @@ export function AdminQuestions() {
                   onSnapshotCaptureReady={(capture) => {
                     editorSnapshotGetterRef.current = capture;
                   }}
+                  preserveDynamicArraySpillChildren
                 />
               </Suspense>
             </ExcelEditorErrorBoundary>

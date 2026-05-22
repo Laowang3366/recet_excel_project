@@ -33,9 +33,26 @@ describe("admin questions layout", () => {
 
   it("allows removing the current Excel template before uploading a replacement", () => {
     const source = adminQuestionsSource();
+    const removeTemplateBlock = source.slice(
+      source.indexOf("const removeCurrentTemplate"),
+      source.indexOf("const uploadIdealAnswerImageFile"),
+    );
 
     expect(source).toContain("removeCurrentTemplate");
     expect(source).toContain("移除模板");
     expect(source).toContain("尚未上传模板文件");
+    expect(removeTemplateBlock).toContain("resetEditorState();");
+    expect(removeTemplateBlock).not.toContain("openAdminConfirm");
+  });
+
+  it("keeps uploaded dynamic array spill values visible in the admin editor", () => {
+    const source = adminQuestionsSource();
+    const uploadBlock = source.slice(
+      source.indexOf("const handleTemplateUpload"),
+      source.indexOf("const removeCurrentTemplate"),
+    );
+
+    expect(uploadBlock).toContain("loadTemplateWorkbook(uploadResult.url)");
+    expect(uploadBlock).not.toContain("clearDynamicArraySpillChildren(snapshot, [nextDynamicRule])");
   });
 });

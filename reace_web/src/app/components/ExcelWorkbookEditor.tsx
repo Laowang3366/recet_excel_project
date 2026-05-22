@@ -48,6 +48,7 @@ type ExcelWorkbookEditorProps = {
   confirmSelectionLabel?: string;
   onConfirmSelection?: () => void;
   onSnapshotCaptureReady?: (capture: (() => ExcelWorkbookSnapshot | null) | null) => void;
+  preserveDynamicArraySpillChildren?: boolean;
   className?: string;
   viewportClassName?: string;
 };
@@ -92,11 +93,12 @@ function createWorkbookId() {
   return "excel-practice-workbook";
 }
 
-function isEditableKeyboardTarget(target: EventTarget | null) {
+function shouldSkipRangeClearForKeyboardTarget(target: EventTarget | null, key: string) {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
   const tagName = target.tagName.toLowerCase();
-  return tagName === "input" || tagName === "textarea" || tagName === "select";
+  if (tagName === "input" || tagName === "textarea" || tagName === "select") return true;
+  const editable = target.isContentEditable || Boolean(target.closest("[contenteditable='true']"));
+  return editable && key === "Backspace";
 }
 
 function workbookSnapshotToUniverData(workbook: ExcelWorkbookSnapshot): Partial<IWorkbookData> {
@@ -146,8 +148,14 @@ function resolveEditorCellInspector(
   };
 }
 
-function applyWorkbookSnapshotToUniver(workbookFacade: FWorkbook, snapshot: ExcelWorkbookSnapshot) {
-  const hydratedSnapshot = clearInferredDynamicArraySpillChildren(snapshot);
+function applyWorkbookSnapshotToUniver(
+  workbookFacade: FWorkbook,
+  snapshot: ExcelWorkbookSnapshot,
+  options: { preserveDynamicArraySpillChildren?: boolean } = {},
+) {
+  const hydratedSnapshot = options.preserveDynamicArraySpillChildren
+    ? snapshot
+    : clearInferredDynamicArraySpillChildren(snapshot);
   const targetSheets = hydratedSnapshot.sheets || [];
   if (targetSheets.length === 0) {
     return;
@@ -207,6 +215,7 @@ export function ExcelWorkbookEditor({
   confirmSelectionLabel = "确认区域",
   onConfirmSelection,
   onSnapshotCaptureReady,
+  preserveDynamicArraySpillChildren = false,
   className = "",
   viewportClassName,
 }: ExcelWorkbookEditorProps) {
@@ -299,7 +308,7 @@ export function ExcelWorkbookEditor({
 
       const univerWorkbook = univerAPI.createWorkbook(workbookSnapshotToUniverData(workbook));
       hydratingRef.current = true;
-      applyWorkbookSnapshotToUniver(univerWorkbook, workbook);
+      applyWorkbookSnapshotToUniver(univerWorkbook, workbook, { preserveDynamicArraySpillChildren });
       hydratingRef.current = false;
       latestEditorSnapshotRef.current = workbook;
       lastAppliedExternalRef.current = workbookKey;
@@ -415,7 +424,7 @@ export function ExcelWorkbookEditor({
       onSnapshotCaptureReady?.(null);
       bindingRef.current = null;
     };
-  }, [instanceVersion]);
+  }, [instanceVersion, preserveDynamicArraySpillChildren]);
 
   useEffect(() => {
     const binding = bindingRef.current;
@@ -585,10 +594,12 @@ export function ExcelWorkbookEditor({
 
   const handleEditorKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (handleFullscreenEscape(event)) return;
-    if (event.defaultPrevented || (event.key !== "Backspace" && event.key !== "Delete")) return;
-    if (isEditableKeyboardTarget(event.target)) return;
+    if (event.key !== "Backspace" && event.key !== "Delete") return;
+    if (shouldSkipRangeClearForKeyboardTarget(event.target, event.key)) return;
+    if (event.defaultPrevented && !hasActiveEditorSelection()) return;
     if (!clearActiveSelectionContent()) return;
     event.preventDefault();
+    event.stopPropagation();
   };
 
   const formatSelection = (formatSelection: WorkbookCellFormatKind) => {
@@ -659,6 +670,23 @@ export function ExcelWorkbookEditor({
     document.addEventListener("pointermove", handlePointerMove);
     document.addEventListener("pointerup", handlePointerUp);
   };
+
+  useEffect(() => {
+    const handleDocumentRangeClear = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      const target = event.target;
+      if (!(target instanceof Node) || !shellRef.current?.contains(target)) return;
+      if (shouldSkipRangeClearForKeyboardTarget(target, event.key)) return;
+      if (event.defaultPrevented && !hasActiveEditorSelection()) return;
+      if (!clearActiveSelectionContent()) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener("keydown", handleDocumentRangeClear, true);
+    return () => {
+      document.removeEventListener("keydown", handleDocumentRangeClear, true);
+    };
+  });
 
   useEffect(() => {
     if (!requestFullscreenVersion || !shellRef.current) return;

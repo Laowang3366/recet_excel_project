@@ -50,6 +50,7 @@ export type DynamicArrayHydrationRule = {
 
 type BuildWorkbookWithAnswerSnapshotOptions = {
   dynamicArrayRules?: DynamicArrayHydrationRule[];
+  preserveDynamicArraySpillChildren?: boolean;
 };
 
 function mapFormulaOutsideStringLiterals(formula: string, mapper: (text: string) => string) {
@@ -668,7 +669,9 @@ export function buildWorkbookWithAnswerSnapshot(
   answerSnapshotJson: string | null | undefined,
   options: BuildWorkbookWithAnswerSnapshotOptions = {},
 ) {
-  const next = clearDynamicArraySpillChildren(templateWorkbook, options.dynamicArrayRules);
+  const next = options.preserveDynamicArraySpillChildren
+    ? cloneWorkbookSnapshot(templateWorkbook)
+    : clearDynamicArraySpillChildren(templateWorkbook, options.dynamicArrayRules);
   if (!sheetName || !rangeRef || !answerSnapshotJson) {
     return next;
   }
@@ -687,7 +690,7 @@ export function buildWorkbookWithAnswerSnapshot(
   for (let rowOffset = 0; rowOffset <= range.endRow - range.startRow; rowOffset += 1) {
     for (let colOffset = 0; colOffset <= range.endCol - range.startCol; colOffset += 1) {
       const cellRef = toCellRef(range.startRow + rowOffset, range.startCol + colOffset);
-      if (isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)) {
+      if (!options.preserveDynamicArraySpillChildren && isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)) {
         delete sheet.cells[cellRef];
         continue;
       }

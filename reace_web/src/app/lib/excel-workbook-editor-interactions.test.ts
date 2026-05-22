@@ -20,6 +20,8 @@ describe("ExcelWorkbookEditor interactions", () => {
 
     expect(source).toContain("clearWorkbookRange");
     expect(source).toContain("clearActiveSelectionContent");
+    expect(source).toContain("shouldSkipRangeClearForKeyboardTarget");
+    expect(source).toContain('event.stopPropagation()');
   });
 
   it("exposes cell format controls for date percent text and number conversion", () => {
