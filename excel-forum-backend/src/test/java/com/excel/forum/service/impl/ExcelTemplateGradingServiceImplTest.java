@@ -14,6 +14,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.STCellType;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.ByteArrayInputStream;
@@ -135,6 +136,25 @@ class ExcelTemplateGradingServiceImplTest {
             assertThat(output.getValue()).isInstanceOf(Number.class);
             assertThat(output.getDisplay()).contains("2026");
             assertThat(output.getNumberFormat()).isEqualTo("yyyy-mm-dd");
+        }
+    }
+
+    @Test
+    void workbookSnapshotUsesCachedFormulaValueWithoutEvaluatingUnsupportedDynamicFormula() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Sheet1");
+            org.apache.poi.xssf.usermodel.XSSFCell cell =
+                    (org.apache.poi.xssf.usermodel.XSSFCell) sheet.createRow(0).createCell(0);
+            cell.getCTCell().addNewF().setStringValue("LET(start,N4,n,N5,months,SEQUENCE(1,n,0),VSTACK(months))");
+            cell.getCTCell().setT(STCellType.N);
+            cell.getCTCell().setV("8");
+
+            ExcelWorkbookSnapshot snapshot = ReflectionTestUtils.invokeMethod(service, "toWorkbookSnapshot", workbook);
+            ExcelWorkbookSnapshot.CellSnapshot output = snapshot.getSheets().get(0).getCells().get("A1");
+
+            assertThat(output.getFormula()).contains("LET");
+            assertThat(output.getValue()).isEqualTo(8L);
+            assertThat(output.getDisplay()).isEqualTo("8");
         }
     }
 

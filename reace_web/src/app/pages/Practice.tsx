@@ -769,6 +769,7 @@ export function Practice() {
                           onSnapshotCaptureReady={(capture) => {
                             editorSnapshotGetterRef.current = capture;
                           }}
+                          preserveDynamicArraySpillChildren
                           className="min-w-[1170px]"
                           viewportClassName="h-[460px] max-h-[50vh] w-full"
                         />

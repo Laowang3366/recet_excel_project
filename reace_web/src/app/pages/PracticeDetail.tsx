@@ -471,6 +471,7 @@ export function PracticeDetail() {
                     onSnapshotCaptureReady={(capture) => {
                       editorSnapshotGetterRef.current = capture;
                     }}
+                    preserveDynamicArraySpillChildren
                   />
                 </Suspense>
               ) : (

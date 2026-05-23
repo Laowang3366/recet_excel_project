@@ -27,7 +27,11 @@ import {
   type WorkbookCellFormatKind,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
-import { orderWorkbookHydrationEntries, resolveWorkbookHydrationValue } from "../lib/excel-editor-hydration";
+import {
+  orderWorkbookHydrationEntries,
+  preserveImportedFormulaCachedValues,
+  resolveWorkbookHydrationValue,
+} from "../lib/excel-editor-hydration";
 import { getStoredUser } from "../lib/session-store";
 import { AssistantWidget } from "./layout/AssistantWidget";
 
@@ -339,12 +343,17 @@ export function ExcelWorkbookEditor({
       const snapshotOptions: UniverWorkbookSnapshotOptions = {
         moveFormulaRefOffset: formulaEngine?.moveFormulaRefOffset?.bind(formulaEngine),
       };
-      const captureSnapshot = () => captureUniverWorkbookSnapshot(univerWorkbook, snapshotOptions);
+      const captureSnapshot = () => {
+        const captured = captureUniverWorkbookSnapshot(univerWorkbook, snapshotOptions);
+        return preserveDynamicArraySpillChildren
+          ? preserveImportedFormulaCachedValues(latestEditorSnapshotRef.current, captured)
+          : captured;
+      };
       onSnapshotCaptureReady?.(captureSnapshot);
 
       const syncWorkbookSnapshot = () => {
         if (hydratingRef.current) return;
-        const nextSnapshot = captureUniverWorkbookSnapshot(univerWorkbook, snapshotOptions);
+        const nextSnapshot = captureSnapshot();
         const nextKey = JSON.stringify(nextSnapshot);
         latestEditorSnapshotRef.current = nextSnapshot;
         lastInternalSnapshotRef.current = nextKey;
