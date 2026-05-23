@@ -689,16 +689,40 @@ export function buildWorkbookWithAnswerSnapshot(
     return next;
   }
   const dynamicArrayHydrationIndex = buildDynamicArrayHydrationIndex(options);
+  const inferredDynamicArrayAnchorRefs = new Set<string>();
   for (let rowOffset = 0; rowOffset <= range.endRow - range.startRow; rowOffset += 1) {
     for (let colOffset = 0; colOffset <= range.endCol - range.startCol; colOffset += 1) {
       const cellRef = toCellRef(range.startRow + rowOffset, range.startCol + colOffset);
-      if (!shouldPreserveSpillChildren && isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)) {
+      const formula = normalizeExcelFormulaText(answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "");
+      const templateFormula = normalizeExcelFormulaText(sheet.cells[cellRef]?.formula);
+      if (isDynamicArrayFormula(formula || templateFormula)) {
+        inferredDynamicArrayAnchorRefs.add(cellRef);
+      }
+    }
+  }
+  for (let rowOffset = 0; rowOffset <= range.endRow - range.startRow; rowOffset += 1) {
+    for (let colOffset = 0; colOffset <= range.endCol - range.startCol; colOffset += 1) {
+      const cellRef = toCellRef(range.startRow + rowOffset, range.startCol + colOffset);
+      const isInferredDynamicArraySpillChild = inferredDynamicArrayAnchorRefs.size > 0
+        && !inferredDynamicArrayAnchorRefs.has(cellRef);
+      if (
+        !shouldPreserveSpillChildren
+        && (
+          isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)
+          || isInferredDynamicArraySpillChild
+        )
+      ) {
         delete sheet.cells[cellRef];
         continue;
       }
       const formula = normalizeExcelFormulaText(answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "");
       const templateFormula = normalizeExcelFormulaText(sheet.cells[cellRef]?.formula);
-      const resolvedFormula = formula || (dynamicArrayHydrationIndex.anchorCells.get(sheetName)?.has(cellRef) ? templateFormula : "");
+      const resolvedFormula = formula || (
+        dynamicArrayHydrationIndex.anchorCells.get(sheetName)?.has(cellRef)
+        || inferredDynamicArrayAnchorRefs.has(cellRef)
+          ? templateFormula
+          : ""
+      );
       const value = answerSnapshot?.values?.[rowOffset]?.[colOffset] ?? "";
       const display = answerSnapshot?.displays?.[rowOffset]?.[colOffset];
       const numberFormat = answerSnapshot?.numberFormats?.[rowOffset]?.[colOffset];

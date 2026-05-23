@@ -201,6 +201,52 @@ describe("buildWorkbookWithAnswerSnapshot dynamic arrays", () => {
     expect(next.sheets[0].cells.M12).toBeUndefined();
   });
 
+  it("infers dynamic array spill children from the answer range when legacy rules are missing", () => {
+    const templateWorkbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            H11: {
+              formula: "LET(data,A11:F33,FILTER(CHOOSECOLS(data,2,3,4),A11:A33<>\"\"))",
+              value: "销售部",
+              display: "销售部",
+            },
+            I11: { value: "零食", display: "零食" },
+            J11: { value: 1069, display: "1069" },
+            H12: { value: "C线", display: "C线" },
+            I12: { value: "日化", display: "日化" },
+            J12: { value: 1145, display: "1145" },
+          },
+        },
+      ],
+    };
+
+    const next = buildWorkbookWithAnswerSnapshot(
+      templateWorkbook,
+      "Sheet1",
+      "H11:J12",
+      JSON.stringify({
+        values: [["销售部", "零食", 1069], ["C线", "日化", 1145]],
+        formulas: [["", "", ""], ["", "", ""]],
+        displays: [["销售部", "零食", "1069"], ["C线", "日化", "1145"]],
+      }),
+      {
+        preserveDynamicArraySpillChildren: true,
+      },
+    );
+
+    expect(next.sheets[0].cells.H11).toMatchObject({
+      formula: "LET(data,A11:F33,FILTER(CHOOSECOLS(data,2,3,4),A11:A33<>\"\"))",
+      value: "销售部",
+    });
+    expect(next.sheets[0].cells.I11).toBeUndefined();
+    expect(next.sheets[0].cells.J11).toBeUndefined();
+    expect(next.sheets[0].cells.H12).toBeUndefined();
+    expect(next.sheets[0].cells.I12).toBeUndefined();
+    expect(next.sheets[0].cells.J12).toBeUndefined();
+  });
+
   it("clears inferred cached spill children before editor rehydration", () => {
     const workbook: ExcelWorkbookSnapshot = {
       sheets: [
