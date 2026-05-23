@@ -56,14 +56,15 @@ describe("admin questions layout", () => {
     expect(uploadBlock).not.toContain("clearDynamicArraySpillChildren(snapshot, [nextDynamicRule])");
   });
 
-  it("loads existing templates without overlaying saved answer snapshots into the editor", () => {
+  it("loads existing templates with saved answer snapshots visible in the editor", () => {
     const source = adminQuestionsSource();
     const editBlock = source.slice(
       source.indexOf("const openEdit"),
       source.indexOf("const submit"),
     );
 
-    expect(editBlock).toContain("hydrateAnswerSnapshot: false");
+    expect(editBlock).toContain("loadTemplateWorkbook(item.templateFileUrl, item.answerSheet, item.answerRange, item.answerSnapshotJson, dynamicArrayRules)");
+    expect(editBlock).not.toContain("hydrateAnswerSnapshot: false");
   });
 
   it("does not recapture stored answers when saving existing metadata outside template edit mode", () => {

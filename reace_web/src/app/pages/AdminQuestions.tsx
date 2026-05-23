@@ -235,9 +235,7 @@ export function AdminQuestions() {
     setIsSelectingAnswerRange(false);
     setOpen(true);
     if (item.templateFileUrl) {
-      await loadTemplateWorkbook(item.templateFileUrl, item.answerSheet, item.answerRange, item.answerSnapshotJson, dynamicArrayRules, {
-        hydrateAnswerSnapshot: false,
-      });
+      await loadTemplateWorkbook(item.templateFileUrl, item.answerSheet, item.answerRange, item.answerSnapshotJson, dynamicArrayRules);
     } else {
       resetEditorState();
     }
