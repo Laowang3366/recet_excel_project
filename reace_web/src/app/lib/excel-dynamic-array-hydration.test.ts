@@ -109,6 +109,51 @@ describe("buildWorkbookWithAnswerSnapshot dynamic arrays", () => {
     expect(next.sheets[0].cells.A5).toMatchObject({ value: 4, display: "4" });
   });
 
+  it("does not write saved answer spill values back into spill child cells", () => {
+    const templateWorkbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            A2: { formula: "SEQUENCE(4)", value: 1, display: "1" },
+            A3: { value: 2, display: "2" },
+            A4: { value: 3, display: "3" },
+            A5: { value: 4, display: "4" },
+          },
+        },
+      ],
+    };
+
+    const next = buildWorkbookWithAnswerSnapshot(
+      templateWorkbook,
+      "Sheet1",
+      "A2:A5",
+      JSON.stringify({
+        values: [[1], [2], [3], [4]],
+        formulas: [["SEQUENCE(4)"], [""], [""], [""]],
+        displays: [["1"], ["2"], ["3"], ["4"]],
+      }),
+      {
+        dynamicArrayRules: [
+          {
+            sheet: "Sheet1",
+            anchorCell: "A2",
+            spillRange: "A2:A5",
+          },
+        ],
+        preserveDynamicArraySpillChildren: true,
+      },
+    );
+
+    expect(next.sheets[0].cells.A2).toMatchObject({
+      formula: "SEQUENCE(4)",
+      display: "=SEQUENCE(4)",
+    });
+    expect(next.sheets[0].cells.A3).toBeUndefined();
+    expect(next.sheets[0].cells.A4).toBeUndefined();
+    expect(next.sheets[0].cells.A5).toBeUndefined();
+  });
+
   it("clears inferred cached spill children before editor rehydration", () => {
     const workbook: ExcelWorkbookSnapshot = {
       sheets: [

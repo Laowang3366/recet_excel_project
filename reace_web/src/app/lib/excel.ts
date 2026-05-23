@@ -669,10 +669,12 @@ export function buildWorkbookWithAnswerSnapshot(
   answerSnapshotJson: string | null | undefined,
   options: BuildWorkbookWithAnswerSnapshotOptions = {},
 ) {
-  const next = options.preserveDynamicArraySpillChildren
+  const hasAnswerSnapshot = Boolean(String(answerSnapshotJson || "").trim());
+  const shouldPreserveSpillChildren = Boolean(options.preserveDynamicArraySpillChildren && !hasAnswerSnapshot);
+  const next = shouldPreserveSpillChildren
     ? cloneWorkbookSnapshot(templateWorkbook)
     : clearDynamicArraySpillChildren(templateWorkbook, options.dynamicArrayRules);
-  if (!sheetName || !rangeRef || !answerSnapshotJson) {
+  if (!sheetName || !rangeRef || !hasAnswerSnapshot) {
     return next;
   }
   const sheet = getSheetSnapshot(next, sheetName);
@@ -690,7 +692,7 @@ export function buildWorkbookWithAnswerSnapshot(
   for (let rowOffset = 0; rowOffset <= range.endRow - range.startRow; rowOffset += 1) {
     for (let colOffset = 0; colOffset <= range.endCol - range.startCol; colOffset += 1) {
       const cellRef = toCellRef(range.startRow + rowOffset, range.startCol + colOffset);
-      if (!options.preserveDynamicArraySpillChildren && isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)) {
+      if (!shouldPreserveSpillChildren && isDynamicArraySpillChild(dynamicArrayHydrationIndex, sheetName, cellRef)) {
         delete sheet.cells[cellRef];
         continue;
       }
