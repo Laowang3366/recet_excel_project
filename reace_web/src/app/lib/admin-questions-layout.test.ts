@@ -55,4 +55,26 @@ describe("admin questions layout", () => {
     expect(uploadBlock).toContain("loadTemplateWorkbook(uploadResult.url)");
     expect(uploadBlock).not.toContain("clearDynamicArraySpillChildren(snapshot, [nextDynamicRule])");
   });
+
+  it("loads existing templates without overlaying saved answer snapshots into the editor", () => {
+    const source = adminQuestionsSource();
+    const editBlock = source.slice(
+      source.indexOf("const openEdit"),
+      source.indexOf("const submit"),
+    );
+
+    expect(editBlock).toContain("hydrateAnswerSnapshot: false");
+  });
+
+  it("does not recapture stored answers when saving existing metadata outside template edit mode", () => {
+    const source = adminQuestionsSource();
+    const submitBlock = source.slice(
+      source.indexOf("const submit"),
+      source.indexOf("const toggleEnabled"),
+    );
+
+    expect(submitBlock).toContain("shouldReuseStoredAnswerSnapshot");
+    expect(submitBlock).toContain("form.answerSnapshotJson");
+    expect(submitBlock).toContain("answerSnapshotJson: resolvedAnswerSnapshotJson");
+  });
 });

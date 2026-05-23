@@ -28,6 +28,7 @@ import {
   type WorkbookCellFormatKind,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
+import { orderWorkbookHydrationEntries } from "../lib/excel-editor-hydration";
 import { getStoredUser } from "../lib/session-store";
 import { AssistantWidget } from "./layout/AssistantWidget";
 
@@ -186,7 +187,7 @@ function applyWorkbookSnapshotToUniver(
     if (worksheet.getSheetName() !== sheetSnapshot.name) {
       worksheet.setName(sheetSnapshot.name);
     }
-    Object.entries(sheetSnapshot.cells || {}).forEach(([cellRef, cell]) => {
+    orderWorkbookHydrationEntries(sheetSnapshot.cells).forEach(({ cellRef, cell }) => {
       const value = workbookCellSnapshotToUniverValue(cell);
       if (value === null || value === undefined || (typeof value !== "object" && String(value).trim() === "")) {
         return;

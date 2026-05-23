@@ -149,6 +149,7 @@ export function AdminQuestions() {
     answerRange?: string | null,
     answerSnapshotJson?: string | null,
     dynamicArrayRules?: DynamicArrayHydrationRule[] | null,
+    options: { hydrateAnswerSnapshot?: boolean } = {},
   ) => {
     void preloadExcelWorkbookEditor();
     setTemplateLoading(true);
@@ -168,10 +169,12 @@ export function AdminQuestions() {
         return null;
       }
       const sheetName = answerSheet || snapshot.sheets?.[0]?.name || "";
-      const workbookWithAnswer = buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson, {
-        dynamicArrayRules: Array.isArray(dynamicArrayRules) ? dynamicArrayRules : [],
-        preserveDynamicArraySpillChildren: true,
-      });
+      const workbookWithAnswer = options.hydrateAnswerSnapshot === false
+        ? snapshot
+        : buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson, {
+          dynamicArrayRules: Array.isArray(dynamicArrayRules) ? dynamicArrayRules : [],
+          preserveDynamicArraySpillChildren: true,
+        });
       setTemplateWorkbook(snapshot);
       setEditorWorkbook(workbookWithAnswer);
       setSelectedSheetName(sheetName);
@@ -232,7 +235,9 @@ export function AdminQuestions() {
     setIsSelectingAnswerRange(false);
     setOpen(true);
     if (item.templateFileUrl) {
-      await loadTemplateWorkbook(item.templateFileUrl, item.answerSheet, item.answerRange, item.answerSnapshotJson, dynamicArrayRules);
+      await loadTemplateWorkbook(item.templateFileUrl, item.answerSheet, item.answerRange, item.answerSnapshotJson, dynamicArrayRules, {
+        hydrateAnswerSnapshot: false,
+      });
     } else {
       resetEditorState();
     }
@@ -280,39 +285,44 @@ export function AdminQuestions() {
         return;
       }
     }
-    const capturedWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
-    const resolvedSelection = (() => {
-      const parsedRange = parseRangeRef(resolvedRange);
-      if (!parsedRange || !resolvedSheetName) return null;
-      return normalizeSelection(
-        resolvedSheetName,
-        parsedRange.startRow,
-        parsedRange.startCol,
-        parsedRange.endRow,
-        parsedRange.endCol,
+    const shouldReuseStoredAnswerSnapshot = Boolean(editing && !isTemplateEditMode && form.answerSnapshotJson);
+    let resolvedAnswerSnapshotJson = form.answerSnapshotJson;
+    if (!shouldReuseStoredAnswerSnapshot) {
+      const capturedWorkbook = editorSnapshotGetterRef.current?.() || editorWorkbook;
+      const resolvedSelection = (() => {
+        const parsedRange = parseRangeRef(resolvedRange);
+        if (!parsedRange || !resolvedSheetName) return null;
+        return normalizeSelection(
+          resolvedSheetName,
+          parsedRange.startRow,
+          parsedRange.startCol,
+          parsedRange.endRow,
+          parsedRange.endCol,
+        );
+      })();
+      const dateNormalized = convertWorkbookSelectionToDateFormat(capturedWorkbook, resolvedSelection);
+      const latestWorkbook = dateNormalized.changed > 0 ? dateNormalized.workbook : capturedWorkbook;
+      if (latestWorkbook !== editorWorkbook) {
+        setEditorWorkbook(latestWorkbook);
+      }
+      const answerSnapshot = extractRangeAnswerSnapshot(latestWorkbook, resolvedSheetName, resolvedRange);
+      const hasEmptyAnswerCell = answerSnapshot.values.some((row) =>
+        row.some((value) => String(value ?? "").trim().length === 0),
       );
-    })();
-    const dateNormalized = convertWorkbookSelectionToDateFormat(capturedWorkbook, resolvedSelection);
-    const latestWorkbook = dateNormalized.changed > 0 ? dateNormalized.workbook : capturedWorkbook;
-    if (latestWorkbook !== editorWorkbook) {
-      setEditorWorkbook(latestWorkbook);
-    }
-    const answerSnapshot = extractRangeAnswerSnapshot(latestWorkbook, resolvedSheetName, resolvedRange);
-    const hasEmptyAnswerCell = answerSnapshot.values.some((row) =>
-      row.some((value) => String(value ?? "").trim().length === 0),
-    );
-    if (hasEmptyAnswerCell) {
-      toast.error("标准答案存在空白单元格，请补全答题区域内的值");
-      return;
-    }
-    const missingFormulaCells = !isDynamicArrayMode && Boolean(form.checkFormula)
-      ? findMissingFormulaCellRefs(answerSnapshot, resolvedRange)
-      : [];
-    if (missingFormulaCells.length > 0) {
-      const visibleCells = missingFormulaCells.slice(0, 6).join("、");
-      const suffix = missingFormulaCells.length > 6 ? ` 等 ${missingFormulaCells.length} 个单元格` : "";
-      toast.error(`检测函数公式已开启，${visibleCells}${suffix} 必须填写公式`);
-      return;
+      if (hasEmptyAnswerCell) {
+        toast.error("标准答案存在空白单元格，请补全答题区域内的值");
+        return;
+      }
+      const missingFormulaCells = !isDynamicArrayMode && Boolean(form.checkFormula)
+        ? findMissingFormulaCellRefs(answerSnapshot, resolvedRange)
+        : [];
+      if (missingFormulaCells.length > 0) {
+        const visibleCells = missingFormulaCells.slice(0, 6).join("、");
+        const suffix = missingFormulaCells.length > 6 ? ` 等 ${missingFormulaCells.length} 个单元格` : "";
+        toast.error(`检测函数公式已开启，${visibleCells}${suffix} 必须填写公式`);
+        return;
+      }
+      resolvedAnswerSnapshotJson = JSON.stringify(answerSnapshot);
     }
     const resolvedDifficulty = normalizeQuestionDifficulty(form.difficulty);
     const resolvedPoints = resolveQuestionPointsByDifficulty(resolvedDifficulty);
@@ -328,7 +338,7 @@ export function AdminQuestions() {
       idealAnswerImageUrl: form.idealAnswerImageUrl,
       answerSheet: resolvedSheetName,
       answerRange: resolvedRange,
-      answerSnapshotJson: JSON.stringify(answerSnapshot),
+      answerSnapshotJson: resolvedAnswerSnapshotJson,
       checkFormula: isDynamicArrayMode ? Boolean(primaryDynamicRule.requireAnchorFormula) : Boolean(form.checkFormula),
       gradingRuleJson: isDynamicArrayMode ? buildDynamicArrayRuleJson(normalizedDynamicRules) : "",
       sheetCountLimit: Number(form.sheetCountLimit || 5),
