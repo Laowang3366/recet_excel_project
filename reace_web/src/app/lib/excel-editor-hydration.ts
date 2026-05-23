@@ -133,18 +133,14 @@ export function preserveImportedFormulaCachedValues(
 
 export function resolveWorkbookHydrationValue(
   cell: ExcelCellSnapshot | null | undefined,
-  options: WorkbookHydrationValueOptions = {},
+  _options: WorkbookHydrationValueOptions = {},
 ): UniverCellValue | null | undefined {
   const normalizedFormula = normalizeExcelFormulaText(cell?.formula);
   const cachedValue = resolveCachedCellValue(cell);
 
-  // Imported Excel 365 dynamic-array formulas often have reliable cached results
-  // but cannot be fully recalculated by the browser editor. In preserved-spill
-  // mode, hydrate those cached results instead of forcing a broken recalculation.
-  if (normalizedFormula && !options.hydrateFormulaAsCachedValue) {
-    return `=${normalizedFormula}`;
-  }
-  if (normalizedFormula && cachedValue === undefined) {
+  // Keep the formula in the editor model so admins can inspect and save dynamic
+  // array anchors instead of accidentally persisting Excel's cached display value.
+  if (normalizedFormula) {
     return `=${normalizedFormula}`;
   }
 

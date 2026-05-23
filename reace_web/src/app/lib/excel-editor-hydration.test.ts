@@ -27,7 +27,7 @@ describe("orderWorkbookHydrationEntries", () => {
 });
 
 describe("resolveWorkbookHydrationValue", () => {
-  it("uses cached values for imported formulas when spill children are preserved", () => {
+  it("hydrates imported formulas as formulas so the editor formula bar remains editable", () => {
     expect(
       resolveWorkbookHydrationValue(
         {
@@ -37,7 +37,7 @@ describe("resolveWorkbookHydrationValue", () => {
         },
         { hydrateFormulaAsCachedValue: true },
       ),
-    ).toBe("2026-05");
+    ).toBe("=LET(start,N4,n,N5,months,EDATE(start,SEQUENCE(1,n,0)),VSTACK(TEXT(months,\"yyyy-mm\")))");
   });
 
   it("hydrates editable formulas as formulas when cached formula mode is disabled", () => {

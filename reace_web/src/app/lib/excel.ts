@@ -697,15 +697,22 @@ export function buildWorkbookWithAnswerSnapshot(
         continue;
       }
       const formula = normalizeExcelFormulaText(answerSnapshot?.formulas?.[rowOffset]?.[colOffset] || "");
+      const templateFormula = normalizeExcelFormulaText(sheet.cells[cellRef]?.formula);
+      const resolvedFormula = formula || (dynamicArrayHydrationIndex.anchorCells.get(sheetName)?.has(cellRef) ? templateFormula : "");
       const value = answerSnapshot?.values?.[rowOffset]?.[colOffset] ?? "";
       const display = answerSnapshot?.displays?.[rowOffset]?.[colOffset];
       const numberFormat = answerSnapshot?.numberFormats?.[rowOffset]?.[colOffset];
-      if (!formula && (value === null || value === undefined || String(value).trim() === "")) {
+      if (!resolvedFormula && (value === null || value === undefined || String(value).trim() === "")) {
         delete sheet.cells[cellRef];
         continue;
       }
-      sheet.cells[cellRef] = formula
-        ? { value, formula, display: `=${formula}`, numberFormat: numberFormat || null }
+      sheet.cells[cellRef] = resolvedFormula
+        ? {
+          value,
+          formula: resolvedFormula,
+          display: formula ? `=${resolvedFormula}` : (display || sheet.cells[cellRef]?.display || `=${resolvedFormula}`),
+          numberFormat: numberFormat || sheet.cells[cellRef]?.numberFormat || null,
+        }
         : {
           value,
           formula: null,

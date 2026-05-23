@@ -154,6 +154,53 @@ describe("buildWorkbookWithAnswerSnapshot dynamic arrays", () => {
     expect(next.sheets[0].cells.A5).toBeUndefined();
   });
 
+  it("keeps the template anchor formula when a stored dynamic answer snapshot only has cached values", () => {
+    const templateWorkbook: ExcelWorkbookSnapshot = {
+      sheets: [
+        {
+          name: "Sheet1",
+          cells: {
+            M11: {
+              formula: "LET(ids,A11:A17,FILTER(ids,ids<>\"\"))",
+              value: "U714",
+              display: "U714",
+            },
+            M12: { value: "U715", display: "U715" },
+          },
+        },
+      ],
+    };
+
+    const next = buildWorkbookWithAnswerSnapshot(
+      templateWorkbook,
+      "Sheet1",
+      "M11:R17",
+      JSON.stringify({
+        values: [["U714", "张三"], ["U715", "李四"]],
+        formulas: [["", ""], ["", ""]],
+        displays: [["U714", "张三"], ["U715", "李四"]],
+      }),
+      {
+        dynamicArrayRules: [
+          {
+            sheet: "Sheet1",
+            anchorCell: "M11",
+            spillRange: "M11:R17",
+          },
+        ],
+        preserveDynamicArraySpillChildren: true,
+      },
+    );
+
+    expect(next.sheets[0].cells.M11).toMatchObject({
+      formula: "LET(ids,A11:A17,FILTER(ids,ids<>\"\"))",
+      value: "U714",
+      display: "U714",
+    });
+    expect(next.sheets[0].cells.N11).toBeUndefined();
+    expect(next.sheets[0].cells.M12).toBeUndefined();
+  });
+
   it("clears inferred cached spill children before editor rehydration", () => {
     const workbook: ExcelWorkbookSnapshot = {
       sheets: [
