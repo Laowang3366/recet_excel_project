@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { orderWorkbookHydrationEntries, type ExcelWorkbookSnapshot } from "./excel-editor-hydration";
+import {
+  orderWorkbookHydrationEntries,
+  resolveWorkbookHydrationValue,
+  type ExcelWorkbookSnapshot,
+} from "./excel-editor-hydration";
 
 describe("orderWorkbookHydrationEntries", () => {
   it("hydrates source values before formulas so dynamic formulas can calculate against complete data", () => {
@@ -18,5 +22,33 @@ describe("orderWorkbookHydrationEntries", () => {
       "M10",
       "O10",
     ]);
+  });
+});
+
+describe("resolveWorkbookHydrationValue", () => {
+  it("uses cached values for imported formulas when spill children are preserved", () => {
+    expect(
+      resolveWorkbookHydrationValue(
+        {
+          formula: "LET(start,N4,n,N5,months,EDATE(start,SEQUENCE(1,n,0)),VSTACK(TEXT(months,\"yyyy-mm\")))",
+          value: "2026-05",
+          display: "2026-05",
+        },
+        { hydrateFormulaAsCachedValue: true },
+      ),
+    ).toBe("2026-05");
+  });
+
+  it("hydrates editable formulas as formulas when cached formula mode is disabled", () => {
+    expect(
+      resolveWorkbookHydrationValue(
+        {
+          formula: "SUM(A1:A3)",
+          value: 6,
+          display: "6",
+        },
+        { hydrateFormulaAsCachedValue: false },
+      ),
+    ).toBe("=SUM(A1:A3)");
   });
 });

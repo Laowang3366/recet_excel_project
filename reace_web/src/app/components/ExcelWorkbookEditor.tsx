@@ -20,7 +20,6 @@ import {
   normalizeSelection,
   parseRangeRef,
   parseSheetAndRange,
-  resolveExcelCellNumberFormat,
   selectionToRangeRef,
   toCellRef,
   type ExcelCellErrorInfo,
@@ -28,7 +27,7 @@ import {
   type WorkbookCellFormatKind,
 } from "../lib/excel";
 import { captureUniverWorkbookSnapshot, type UniverWorkbookSnapshotOptions } from "../lib/univer-workbook";
-import { orderWorkbookHydrationEntries } from "../lib/excel-editor-hydration";
+import { orderWorkbookHydrationEntries, resolveWorkbookHydrationValue } from "../lib/excel-editor-hydration";
 import { getStoredUser } from "../lib/session-store";
 import { AssistantWidget } from "./layout/AssistantWidget";
 
@@ -112,18 +111,6 @@ function workbookSnapshotToUniverData(workbook: ExcelWorkbookSnapshot): Partial<
   };
 }
 
-function workbookCellSnapshotToUniverValue(cell: ExcelWorkbookSnapshot["sheets"][number]["cells"][string]) {
-  const normalizedFormula = normalizeExcelFormulaText(cell?.formula);
-  const formula = normalizedFormula ? `=${normalizedFormula}` : "";
-  if (formula) return formula;
-  const value = cell?.value;
-  const numberFormat = resolveExcelCellNumberFormat(cell);
-  if (numberFormat) {
-    return { v: value, s: { n: { pattern: numberFormat } } };
-  }
-  return value;
-}
-
 function resolveEditorCellInspector(
   workbook: ExcelWorkbookSnapshot | null | undefined,
   selection: ExcelRangeSelection | null | undefined,
@@ -188,7 +175,9 @@ function applyWorkbookSnapshotToUniver(
       worksheet.setName(sheetSnapshot.name);
     }
     orderWorkbookHydrationEntries(sheetSnapshot.cells).forEach(({ cellRef, cell }) => {
-      const value = workbookCellSnapshotToUniverValue(cell);
+      const value = resolveWorkbookHydrationValue(cell, {
+        hydrateFormulaAsCachedValue: Boolean(options.preserveDynamicArraySpillChildren),
+      });
       if (value === null || value === undefined || (typeof value !== "object" && String(value).trim() === "")) {
         return;
       }
