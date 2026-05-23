@@ -223,6 +223,8 @@ export function ExcelWorkbookEditor({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bindingRef = useRef<UniverBinding | null>(null);
   const hydratingRef = useRef(false);
+  const hydrationReleaseTimerRef = useRef<number | null>(null);
+  const hydrationReleaseGenerationRef = useRef(0);
   const lastAppliedExternalRef = useRef("");
   const lastInternalSnapshotRef = useRef("");
   const latestSelectionRef = useRef<ExcelRangeSelection | null>(selection);
@@ -245,6 +247,36 @@ export function ExcelWorkbookEditor({
   const lastErrorSignatureRef = useRef("");
 
   const workbookKey = useMemo(() => JSON.stringify(workbook), [workbook]);
+
+  const cancelHydrationRelease = () => {
+    hydrationReleaseGenerationRef.current += 1;
+    if (hydrationReleaseTimerRef.current !== null) {
+      window.clearTimeout(hydrationReleaseTimerRef.current);
+      hydrationReleaseTimerRef.current = null;
+    }
+  };
+
+  const releaseHydrationAfterCommandFlush = () => {
+    cancelHydrationRelease();
+    const generation = hydrationReleaseGenerationRef.current;
+    const release = () => {
+      if (generation !== hydrationReleaseGenerationRef.current) return;
+      // Univer can emit command/recalc callbacks after the setValue loop; keep those out of React state.
+      hydrationReleaseTimerRef.current = window.setTimeout(() => {
+        if (generation !== hydrationReleaseGenerationRef.current) return;
+        hydratingRef.current = false;
+        hydrationReleaseTimerRef.current = null;
+      }, 200);
+    };
+
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(release);
+      });
+      return;
+    }
+    release();
+  };
 
   const refreshCellInspector = (
     nextWorkbook: ExcelWorkbookSnapshot | null | undefined,
@@ -309,7 +341,7 @@ export function ExcelWorkbookEditor({
       const univerWorkbook = univerAPI.createWorkbook(workbookSnapshotToUniverData(workbook));
       hydratingRef.current = true;
       applyWorkbookSnapshotToUniver(univerWorkbook, workbook, { preserveDynamicArraySpillChildren });
-      hydratingRef.current = false;
+      releaseHydrationAfterCommandFlush();
       latestEditorSnapshotRef.current = workbook;
       lastAppliedExternalRef.current = workbookKey;
       lastInternalSnapshotRef.current = workbookKey;
@@ -420,6 +452,8 @@ export function ExcelWorkbookEditor({
 
     return () => {
       disposed = true;
+      cancelHydrationRelease();
+      hydratingRef.current = false;
       disposeBinding?.();
       onSnapshotCaptureReady?.(null);
       bindingRef.current = null;

@@ -48,4 +48,12 @@ describe("ExcelWorkbookEditor interactions", () => {
     expect(source).toContain("handleFormulaBarResizeStart");
     expect(source).toContain('aria-label="调整公式栏高度"');
   });
+
+  it("keeps hydration guarded until initial Univer commands have flushed", () => {
+    const source = editorSource();
+
+    expect(source).toContain("releaseHydrationAfterCommandFlush");
+    expect(source).toContain("hydrationReleaseTimerRef");
+    expect(source).toContain("window.requestAnimationFrame");
+  });
 });
