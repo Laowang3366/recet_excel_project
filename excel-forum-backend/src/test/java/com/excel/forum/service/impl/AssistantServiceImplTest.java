@@ -1,9 +1,15 @@
 package com.excel.forum.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.excel.forum.entity.Question;
+import com.excel.forum.entity.TutorialArticle;
 import com.excel.forum.entity.dto.AssistantChatRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.excel.forum.service.AiAssistantCallLogService;
+import com.excel.forum.service.AiCompletionService;
+import com.excel.forum.service.QuestionService;
+import com.excel.forum.service.TutorialArticleService;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
+import org.springframework.core.env.Environment;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -12,6 +18,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AssistantServiceImplTest {
 
@@ -20,9 +32,7 @@ class AssistantServiceImplTest {
             null,
             null,
             null,
-            null,
-            null,
-            new ObjectMapper()
+            null
     );
 
     @Test
@@ -56,80 +66,6 @@ class AssistantServiceImplTest {
     }
 
     @Test
-    void timeoutUsesConfiguredValue() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty("AI_ASSISTANT_TIMEOUT_MS", "120000");
-        AssistantServiceImpl assistantService = new AssistantServiceImpl(
-                null,
-                null,
-                null,
-                null,
-                null,
-                environment,
-                new ObjectMapper()
-        );
-
-        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
-
-        assertThat(timeoutMs).isEqualTo(120000);
-    }
-
-    @Test
-    void timeoutSupportsUpToSixtyMinutes() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty("AI_ASSISTANT_TIMEOUT_MS", "7200000");
-        AssistantServiceImpl assistantService = new AssistantServiceImpl(
-                null,
-                null,
-                null,
-                null,
-                null,
-                environment,
-                new ObjectMapper()
-        );
-
-        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
-
-        assertThat(timeoutMs).isEqualTo(3_600_000);
-    }
-
-    @Test
-    void timeoutCanBeConfiguredInMinutes() {
-        MockEnvironment environment = new MockEnvironment()
-                .withProperty("AI_ASSISTANT_TIMEOUT_MINUTES", "45");
-        AssistantServiceImpl assistantService = new AssistantServiceImpl(
-                null,
-                null,
-                null,
-                null,
-                null,
-                environment,
-                new ObjectMapper()
-        );
-
-        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
-
-        assertThat(timeoutMs).isEqualTo(2_700_000);
-    }
-
-    @Test
-    void timeoutFallsBackToSixtySecondsWhenMissing() {
-        AssistantServiceImpl assistantService = new AssistantServiceImpl(
-                null,
-                null,
-                null,
-                null,
-                null,
-                new MockEnvironment(),
-                new ObjectMapper()
-        );
-
-        Integer timeoutMs = ReflectionTestUtils.invokeMethod(assistantService, "environmentTimeoutMs");
-
-        assertThat(timeoutMs).isEqualTo(60000);
-    }
-
-    @Test
     void buildPromptLeavesAnswerFormatToSystemPrompt() {
         String prompt = ReflectionTestUtils.invokeMethod(
                 service,
@@ -148,6 +84,36 @@ class AssistantServiceImplTest {
                 .doesNotContain("输出格式硬性要求")
                 .doesNotContain("结论：先用一句话回答")
                 .doesNotContain("你是 ExcelCC.cn 的 Excel AI 助手");
+    }
+
+    @Test
+    void chatRecordsAssistantChatToolType() {
+        TutorialArticleService tutorialArticleService = mock(TutorialArticleService.class);
+        QuestionService questionService = mock(QuestionService.class);
+        AiAssistantCallLogService callLogService = mock(AiAssistantCallLogService.class);
+        Environment environment = mock(Environment.class);
+        AiCompletionService aiCompletionService = mock(AiCompletionService.class);
+        when(tutorialArticleService.list(org.mockito.ArgumentMatchers.<QueryWrapper<TutorialArticle>>any())).thenReturn(List.of());
+        when(questionService.list(org.mockito.ArgumentMatchers.<QueryWrapper<Question>>any())).thenReturn(List.of());
+        when(environment.getProperty(eq("AI_ASSISTANT_MAX_INPUT_CHARS"), eq(Integer.class), any()))
+                .thenReturn(6000);
+        when(environment.getProperty(eq("AI_ASSISTANT_MAX_OUTPUT_TOKENS"), eq(Integer.class), any()))
+                .thenReturn(1200);
+        when(aiCompletionService.complete(any()))
+                .thenReturn(new AiCompletionService.Result("回答", "gpt-test", false, 9L));
+        AssistantServiceImpl chatService = new AssistantServiceImpl(
+                tutorialArticleService,
+                questionService,
+                callLogService,
+                environment,
+                aiCompletionService
+        );
+        AssistantChatRequest request = new AssistantChatRequest();
+        request.setMessage("怎么求和");
+
+        chatService.chat(7L, request);
+
+        verify(callLogService).record(eq(7L), eq(9L), eq("gpt-test"), eq("assistant_chat"), eq(true), eq(false), anyLong(), eq(null));
     }
 
     @SuppressWarnings("unchecked")

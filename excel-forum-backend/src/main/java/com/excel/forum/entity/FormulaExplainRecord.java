@@ -10,19 +10,31 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("ai_assistant_call_log")
-public class AiAssistantCallLog {
+@TableName("formula_explain_record")
+public class FormulaExplainRecord {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
-    private Long configId;
+    private String formula;
+    private String normalizedFormula;
+    private String formulaHash;
+    private String locale;
+    private String detailLevel;
+    private String workbookContext;
+    private String expectedResult;
+    private String errorMessageInput;
+    private String responseJson;
+    private String summary;
     private String model;
-    private String toolType;
-    private Boolean success;
     private Boolean fallbackUsed;
-    private Long latencyMs;
+    private Boolean cacheHit;
+    private Integer pointsCost;
+    private String status;
     private String errorMessage;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
 }

@@ -101,5 +101,9 @@ export const mallKeys = {
 
 export const toolsKeys = {
   overview: () => ["tools", "overview"] as const,
+  convert: () => ["tools", "convert"] as const,
   history: () => ["tools", "history"] as const,
+  formulaExplain: () => ["tools", "formula-explain"] as const,
+  formulaHistory: (params: Record<string, unknown>) => ["tools", "formula-history", params] as const,
+  formulaDetail: (id: number | string) => ["tools", "formula-detail", id] as const,
 };

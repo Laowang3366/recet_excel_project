@@ -19,6 +19,11 @@ public class AiAssistantCallLogServiceImpl extends ServiceImpl<AiAssistantCallLo
 
     @Override
     public void record(Long userId, Long configId, String model, boolean success, boolean fallbackUsed, long latencyMs, String errorMessage) {
+        record(userId, configId, model, "assistant_chat", success, fallbackUsed, latencyMs, errorMessage);
+    }
+
+    @Override
+    public void record(Long userId, Long configId, String model, String toolType, boolean success, boolean fallbackUsed, long latencyMs, String errorMessage) {
         if (userId == null) {
             return;
         }
@@ -26,6 +31,7 @@ public class AiAssistantCallLogServiceImpl extends ServiceImpl<AiAssistantCallLo
         log.setUserId(userId);
         log.setConfigId(configId);
         log.setModel(model);
+        log.setToolType(clamp(toolType, 50) == null ? "assistant_chat" : clamp(toolType, 50));
         log.setSuccess(success);
         log.setFallbackUsed(fallbackUsed);
         log.setLatencyMs(Math.max(0L, latencyMs));

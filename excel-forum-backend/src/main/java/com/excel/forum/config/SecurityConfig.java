@@ -83,6 +83,7 @@ public class SecurityConfig {
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/feedback/**")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/upload")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/tools/overview")).permitAll()
+                .requestMatchers(AntPathRequestMatcher.antMatcher("/api/tools/formula/explain")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher("/api/tools/convert")).authenticated()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/mall/items")).permitAll()
                 .requestMatchers(AntPathRequestMatcher.antMatcher(HttpMethod.GET, "/api/mall/types")).permitAll()

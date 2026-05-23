@@ -2,15 +2,15 @@ package com.excel.forum.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.excel.forum.entity.DocumentConversionRecord;
-import com.excel.forum.entity.PointsRecord;
 import com.excel.forum.entity.User;
-import com.excel.forum.mapper.UserMapper;
+import com.excel.forum.entity.dto.FormulaExplainRequest;
 import com.excel.forum.service.DocumentConversionService;
 import com.excel.forum.service.DocumentConversionRecordService;
 import com.excel.forum.service.FileStorageService;
-import com.excel.forum.service.PointsRecordService;
+import com.excel.forum.service.FormulaExplainService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
+import com.excel.forum.service.ToolBillingService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
@@ -23,13 +23,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -45,10 +48,10 @@ public class ToolController {
     private final DocumentConversionService documentConversionService;
     private final DocumentConversionRecordService documentConversionRecordService;
     private final UserService userService;
-    private final UserMapper userMapper;
-    private final PointsRecordService pointsRecordService;
     private final RateLimitService rateLimitService;
     private final FileStorageService fileStorageService;
+    private final FormulaExplainService formulaExplainService;
+    private final ToolBillingService toolBillingService;
 
     @GetMapping("/overview")
     public ResponseEntity<?> getToolOverview(@RequestAttribute(value = "userId", required = false) Long userId) {
@@ -65,6 +68,58 @@ public class ToolController {
             ));
         }
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/formula/explain")
+    public ResponseEntity<?> explainFormula(
+            @RequestAttribute(value = "userId", required = false) Long userId,
+            @RequestBody FormulaExplainRequest request) {
+        if (userId == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "请先登录"));
+        }
+        ResponseEntity<?> minuteLimit = toLimitResponse(rateLimitService.check(
+                "tools:formula:explain:10m:" + userId,
+                20,
+                Duration.ofMinutes(10),
+                "公式解释过于频繁，请稍后再试"
+        ));
+        if (minuteLimit != null) {
+            return minuteLimit;
+        }
+        ResponseEntity<?> dailyLimit = toLimitResponse(rateLimitService.check(
+                "tools:formula:explain:day:" + userId + ":" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE),
+                100,
+                Duration.ofDays(1),
+                "今日公式解释额度已用完，请明天再来"
+        ));
+        if (dailyLimit != null) {
+            return dailyLimit;
+        }
+        try {
+            return ResponseEntity.ok(formulaExplainService.explain(userId, request));
+        } catch (IllegalArgumentException e) {
+            int status = "请先登录".equals(e.getMessage()) ? 401 : e.getMessage() != null && e.getMessage().contains("积分不足") ? 402 : 400;
+            return ResponseEntity.status(status).body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(502).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/formula/history")
+    public ResponseEntity<?> getFormulaHistory(
+            @RequestAttribute Long userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(formulaExplainService.history(userId, page, size));
+    }
+
+    @GetMapping("/formula/history/{id}")
+    public ResponseEntity<?> getFormulaHistoryDetail(@RequestAttribute Long userId, @PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(formulaExplainService.detail(userId, id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
+        }
     }
 
     @PostMapping("/convert")
@@ -96,8 +151,10 @@ public class ToolController {
         if (limited != null) {
             return limited;
         }
-        int deducted = userMapper.deductPoints(userId, CONVERSION_COST_POINTS);
-        if (deducted == 0) {
+        ToolBillingService.BillingResult billing;
+        try {
+            billing = toolBillingService.charge(userId, CONVERSION_COST_POINTS, "tool_conversion", "文件转换扣除 " + CONVERSION_COST_POINTS + " 积分");
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "积分不足，实用功能每次转换需要 " + CONVERSION_COST_POINTS + " 积分",
                     "requiredPoints", CONVERSION_COST_POINTS,
@@ -118,26 +175,17 @@ public class ToolController {
             record.setStatus("success");
             documentConversionRecordService.save(record);
             result.put("url", buildConversionDownloadUrl(record.getId()));
-
-            PointsRecord costRecord = new PointsRecord();
-            costRecord.setUserId(userId);
-            costRecord.setRuleName("实用功能转换");
-            costRecord.setTaskKey("tool_conversion");
-            costRecord.setBizId(record.getId());
-            costRecord.setChange(-CONVERSION_COST_POINTS);
-            costRecord.setBalance(updatedUser == null ? Math.max(0, safeInt(user.getPoints()) - CONVERSION_COST_POINTS) : safeInt(updatedUser.getPoints()));
-            costRecord.setDescription("文件转换扣除 " + CONVERSION_COST_POINTS + " 积分");
-            pointsRecordService.save(costRecord);
+            toolBillingService.recordCharge(userId, CONVERSION_COST_POINTS, "tool_conversion", record.getId(), "文件转换扣除 " + CONVERSION_COST_POINTS + " 积分", updatedUser == null ? billing.currentPoints() : safeInt(updatedUser.getPoints()));
 
             result.put("recordId", record.getId());
             result.put("costPoints", CONVERSION_COST_POINTS);
-            result.put("currentPoints", updatedUser == null ? 0 : safeInt(updatedUser.getPoints()));
+            result.put("currentPoints", updatedUser == null ? billing.currentPoints() : safeInt(updatedUser.getPoints()));
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            userMapper.addPoints(userId, CONVERSION_COST_POINTS);
+            toolBillingService.refund(userId, CONVERSION_COST_POINTS);
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (RuntimeException e) {
-            userMapper.addPoints(userId, CONVERSION_COST_POINTS);
+            toolBillingService.refund(userId, CONVERSION_COST_POINTS);
             throw e;
         }
     }
