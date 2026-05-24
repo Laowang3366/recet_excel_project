@@ -260,7 +260,7 @@ export function Tools() {
         <LitePanel>
           <LiteSectionTitle
             eyebrow="输出结构"
-            title="解释内容"
+            title="公式优化排版"
             description="结果会按整体用途、公式片段、函数含义、风险点和优化建议展示。"
           />
           <div className="mt-6 space-y-3">
