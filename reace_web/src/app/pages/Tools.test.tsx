@@ -17,6 +17,8 @@ describe("Tools", () => {
     expect(markup).toContain("函数公式解释器");
     expect(markup).toContain("解释公式");
     expect(markup).toContain("公式历史");
+    expect(markup).toContain(">输入公式<");
+    expect(markup).toContain(">公式解释<");
     expect(markup).not.toContain("文件转换");
     expect(markup).not.toContain("粘贴需要解释的公式");
     expect(markup).not.toContain("公式优化排版");

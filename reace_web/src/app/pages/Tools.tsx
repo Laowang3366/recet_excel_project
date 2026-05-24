@@ -157,6 +157,7 @@ export function Tools() {
 
       <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
         <LitePanel>
+          <h2 className="mb-4 text-base font-black text-slate-900">输入公式</h2>
           <textarea
             value={formula}
             onChange={(event) => {
@@ -254,43 +255,45 @@ export function Tools() {
 
         {result ? (
           <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
+            <h2 className="mb-3 text-base font-black text-slate-900">公式解释</h2>
             <FormulaExplainResult result={result} />
           </div>
         ) : (
           <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
-          <LitePanel>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code>LET(</code>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  <span className="rounded bg-amber-100 px-1 font-black text-amber-800 ring-1 ring-amber-200">data</span>,</code>
-                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">定义 LET 参数 data</span>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  A2:A100,</code>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  FILTER(</code>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>,</code>
-                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>&lt;&gt;&quot;&quot;</code>
-                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  )</code>
-                </div>
-                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code>)</code>
+            <h2 className="mb-3 text-base font-black text-slate-900">公式解释</h2>
+            <LitePanel>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code>LET(</code>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">  <span className="rounded bg-amber-100 px-1 font-black text-amber-800 ring-1 ring-amber-200">data</span>,</code>
+                    <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">定义 LET 参数 data</span>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">  A2:A100,</code>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">  FILTER(</code>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>,</code>
+                    <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>&lt;&gt;&quot;&quot;</code>
+                    <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code className="whitespace-pre">  )</code>
+                  </div>
+                  <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                    <code>)</code>
+                  </div>
                 </div>
               </div>
-            </div>
-          </LitePanel>
+            </LitePanel>
           </div>
         )}
       </section>
