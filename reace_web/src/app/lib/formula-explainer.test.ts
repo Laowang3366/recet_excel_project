@@ -110,10 +110,10 @@ describe("formula explainer helpers", () => {
     expect(copyText).not.toContain("函数调用关系：");
   });
 
-  it("adds a deterministic performance optimization suggestion for complex formulas", () => {
+  it("adds formula-specific performance suggestions for dynamic array LET formulas", () => {
     const response: FormulaExplainResponse = {
-      formula: "=LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
-      normalizedFormula: "LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
+      formula: "=LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100=\"已成交\"),MAP(filtered,LAMBDA(row,INDEX(row,1))))",
+      normalizedFormula: "LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100=\"已成交\"),MAP(filtered,LAMBDA(row,INDEX(row,1))))",
       summary: "筛选已成交销售记录。",
       segments: [],
       functions: [],
@@ -124,8 +124,55 @@ describe("formula explainer helpers", () => {
     const suggestions = buildFormulaOptimizationSuggestions(response);
     const copyText = formatFormulaExplanationForCopy(response);
 
-    expect(suggestions).toContain("性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。");
+    expect(suggestions).toEqual(expect.arrayContaining([
+      expect.stringContaining("src"),
+      expect.stringContaining("filtered"),
+      expect.stringContaining("FILTER、MAP"),
+      expect.stringContaining("Sales!A2:D100"),
+    ]));
+    expect(suggestions.join("\n")).not.toContain("复杂公式建议用 LET 缓存重复计算结果");
     expect(copyText).toContain("优化建议：");
-    expect(copyText).toContain("- 性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。");
+    expect(copyText).toContain("FILTER、MAP");
+    expect(copyText).toContain("Sales!A2:D100");
+  });
+
+  it("points to exact full-column references instead of using broad performance advice", () => {
+    const response: FormulaExplainResponse = {
+      formula: "=SUMIFS(Sales!D:D,Sales!A:A,A2)",
+      normalizedFormula: "SUMIFS(Sales!D:D,Sales!A:A,A2)",
+      summary: "按销售表统计金额。",
+      segments: [],
+      functions: [],
+      warnings: [],
+      suggestions: ["性能优化：建议检查公式复杂度。"],
+    };
+
+    const suggestions = buildFormulaOptimizationSuggestions(response);
+
+    expect(suggestions).toContain("性能优化：建议检查公式复杂度。");
+    expect(suggestions).toEqual(expect.arrayContaining([
+      expect.stringContaining("Sales!D:D、Sales!A:A"),
+      expect.stringContaining("实际行区间"),
+    ]));
+  });
+
+  it("names repeated calculated expressions that should be cached", () => {
+    const response: FormulaExplainResponse = {
+      formula: "=IF(SUM(A:A)>0,SUM(A:A),0)",
+      normalizedFormula: "IF(SUM(A:A)>0,SUM(A:A),0)",
+      summary: "判断并返回汇总值。",
+      segments: [],
+      functions: [],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const suggestions = buildFormulaOptimizationSuggestions(response);
+
+    expect(suggestions).toEqual(expect.arrayContaining([
+      expect.stringContaining("SUM(A:A)"),
+      expect.stringContaining("重复计算 2 次"),
+      expect.stringContaining("LET"),
+    ]));
   });
 });

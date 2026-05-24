@@ -23,7 +23,11 @@ describe("FormulaExplainResult", () => {
     expect(markup).toContain("引用 LET 参数 src");
     expect(markup).toContain("引用 LAMBDA 参数 row");
     expect(markup).toContain("优化建议");
-    expect(markup).toContain("性能优化：复杂公式建议用 LET 缓存重复计算结果");
+    expect(markup).toContain("src");
+    expect(markup).toContain("filtered");
+    expect(markup).toContain("FILTER、MAP");
+    expect(markup).toContain("Sales!A2:D100");
+    expect(markup).not.toContain("复杂公式建议用 LET 缓存重复计算结果");
     expect(markup).not.toContain("参数 4 调用 FILTER");
     expect(markup).not.toContain("MAP 参数 2 调用 LAMBDA");
     expect(markup).not.toContain("函数调用关系");

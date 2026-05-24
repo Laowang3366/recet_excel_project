@@ -194,9 +194,12 @@ export function buildFormulaOptimizationSuggestions(
   layout = buildFormulaLayout(response.formula || response.normalizedFormula),
 ) {
   const suggestions = [...(response.suggestions || [])];
-  const performanceSuggestion = buildFormulaPerformanceSuggestion(layout);
-  if (performanceSuggestion && !suggestions.some((item) => item.includes("性能优化"))) {
-    suggestions.push(performanceSuggestion);
+  const performanceSuggestions = buildFormulaPerformanceSuggestions(layout);
+  for (const suggestion of performanceSuggestions) {
+    const suggestionKey = normalizeSuggestionKey(suggestion);
+    if (!suggestions.some((item) => normalizeSuggestionKey(item) === suggestionKey)) {
+      suggestions.push(suggestion);
+    }
   }
   return suggestions;
 }
@@ -223,8 +226,6 @@ type ParsedFormulaFunction = {
 
 type FormulaParameterDefinition = Pick<FormulaParameterHighlight, "name" | "sourceFunction">;
 
-const COMPLEX_FORMULA_PERFORMANCE_SUGGESTION = "性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。";
-
 const DYNAMIC_ARRAY_FUNCTIONS = new Set([
   "BYCOL",
   "BYROW",
@@ -248,6 +249,23 @@ const DYNAMIC_ARRAY_FUNCTIONS = new Set([
   "VSTACK",
   "WRAPCOLS",
   "WRAPROWS",
+  "XLOOKUP",
+  "XMATCH",
+]);
+
+const REPEATED_CALCULATION_FUNCTIONS = new Set([
+  "AVERAGE",
+  "AVERAGEIFS",
+  "COUNTIF",
+  "COUNTIFS",
+  "FILTER",
+  "IFERROR",
+  "INDEX",
+  "MATCH",
+  "SUM",
+  "SUMIF",
+  "SUMIFS",
+  "VLOOKUP",
   "XLOOKUP",
   "XMATCH",
 ]);
@@ -290,12 +308,170 @@ function collectFormulaBlocks(
   });
 }
 
-function buildFormulaPerformanceSuggestion(layout: FormulaLayout) {
-  const performanceSignals = new Set(["跨表引用", "动态数组", "自定义函数结构", "嵌套较深", "嵌套调用"]);
-  const hasPerformanceSignal = layout.signals.some((signal) => performanceSignals.has(signal));
-  const hasFullColumnReference = /(^|[^A-Z0-9_.])\$?[A-Z]{1,3}:\$?[A-Z]{1,3}($|[^A-Z0-9_.])/i.test(layout.normalizedSource);
-  if (!hasPerformanceSignal && !hasFullColumnReference && layout.blocks.length < 2) return "";
-  return COMPLEX_FORMULA_PERFORMANCE_SUGGESTION;
+function buildFormulaPerformanceSuggestions(layout: FormulaLayout) {
+  const suggestions: string[] = [];
+  const fullColumnReferences = extractFullColumnReferences(layout.normalizedSource);
+  const repeatedBlocks = collectRepeatedFormulaBlocks(layout.blocks);
+  const dynamicFunctions = collectDynamicArrayFunctions(layout.blocks);
+  const referencedParameters = collectReferencedParameterNames(layout.parameterHighlights);
+  const rangeReferences = extractRangeReferences(layout.normalizedSource)
+    .filter((reference) => !fullColumnReferences.includes(reference));
+  const sheetNames = extractSheetNames(layout.normalizedSource);
+
+  if (repeatedBlocks.length > 0) {
+    const repeated = repeatedBlocks[0];
+    suggestions.push(
+      `性能优化：${repeated.text} 在公式中重复计算 ${repeated.count} 次，可用 LET 先命名该结果再复用，避免重复扫描同一引用。`,
+    );
+  }
+
+  if (fullColumnReferences.length > 0) {
+    suggestions.push(
+      `性能优化：${formatFormulaEvidenceList(fullColumnReferences, 4)} 是整列引用，建议改成实际行区间或表格结构化引用，避免每次重算扫描整列。`,
+    );
+  }
+
+  if (dynamicFunctions.length > 0) {
+    const functionText = formatFormulaEvidenceList(dynamicFunctions, 4);
+    const sourceText = rangeReferences.length > 0
+      ? `当前输入涉及 ${formatFormulaEvidenceList(rangeReferences, 3)}`
+      : referencedParameters.length > 0
+        ? `当前输入复用 ${formatFormulaEvidenceList(referencedParameters, 4)}`
+        : `当前输入来自 ${layout.blocks.find((block) => DYNAMIC_ARRAY_FUNCTIONS.has(block.name))?.name || dynamicFunctions[0]} 的参数`;
+    const parameterText = referencedParameters.length > 0
+      ? `，并复用 ${formatFormulaEvidenceList(referencedParameters, 4)}`
+      : "";
+    suggestions.push(
+      `性能优化：${functionText} 会按动态数组重算，${sourceText}${parameterText}；建议优先收窄这些源范围或参数对应的数据量。`,
+    );
+  }
+
+  if (referencedParameters.length > 0) {
+    suggestions.push(
+      `性能优化：${formatFormulaEvidenceList(referencedParameters, 4)} 已作为自定义参数被调用，继续优化时优先检查这些定义行绑定的源范围，避免复用过大的中间数组。`,
+    );
+  }
+
+  if (sheetNames.length > 0 && fullColumnReferences.length === 0) {
+    suggestions.push(
+      `性能优化：公式跨表读取 ${formatFormulaEvidenceList(sheetNames, 4)}，建议把跨表源区域先限定到实际数据区间，减少跨工作表重算。`,
+    );
+  }
+
+  const deepestBlock = collectDeepestFormulaBlock(layout.blocks);
+  if (deepestBlock && deepestBlock.depth >= 3) {
+    suggestions.push(
+      `性能优化：${deepestBlock.text} 位于第 ${deepestBlock.depth + 1} 层嵌套，建议拆成 LET 命名步骤或辅助列，方便单独缓存和审计。`,
+    );
+  }
+
+  return dedupeSuggestions(suggestions);
+}
+
+function normalizeSuggestionKey(value: string) {
+  return value.replace(/\s+/g, "");
+}
+
+function dedupeSuggestions(suggestions: string[]) {
+  const seen = new Set<string>();
+  return suggestions.filter((suggestion) => {
+    const key = normalizeSuggestionKey(suggestion);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function collectRepeatedFormulaBlocks(blocks: FormulaLayoutBlock[]) {
+  const grouped = new Map<string, { text: string; count: number; firstIndex: number }>();
+  blocks.forEach((block, index) => {
+    if (!REPEATED_CALCULATION_FUNCTIONS.has(block.name)) return;
+    const key = normalizeFormulaBlockText(block.text);
+    if (key.length < 8) return;
+
+    const current = grouped.get(key) || { text: block.text, count: 0, firstIndex: index };
+    current.count += 1;
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()]
+    .filter((item) => item.count > 1)
+    .sort((left, right) => right.count - left.count || left.firstIndex - right.firstIndex);
+}
+
+function collectDynamicArrayFunctions(blocks: FormulaLayoutBlock[]) {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  blocks.forEach((block) => {
+    const name = block.name.replace(/^_XLFN\./, "");
+    if (!DYNAMIC_ARRAY_FUNCTIONS.has(name) || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  });
+  return names;
+}
+
+function collectReferencedParameterNames(highlights: FormulaParameterHighlight[]) {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  highlights.forEach((highlight) => {
+    if (highlight.role !== "reference") return;
+    const key = `${highlight.sourceFunction}:${highlight.name.toUpperCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(highlight.name);
+  });
+  return names;
+}
+
+function collectDeepestFormulaBlock(blocks: FormulaLayoutBlock[]) {
+  return blocks.reduce<FormulaLayoutBlock | null>((deepest, block) => {
+    if (!deepest || block.depth > deepest.depth) return block;
+    return deepest;
+  }, null);
+}
+
+function extractFullColumnReferences(expression: string) {
+  return dedupeFormulaEvidence(expression.match(/(?:'[^']+'!|[A-Za-z_][A-Za-z0-9_ .]*!)?\$?[A-Z]{1,3}:\$?[A-Z]{1,3}(?![0-9])/gi) || []);
+}
+
+function extractRangeReferences(expression: string) {
+  return dedupeFormulaEvidence(expression.match(/(?:'[^']+'!|[A-Za-z_][A-Za-z0-9_ .]*!)?\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+/gi) || []);
+}
+
+function extractSheetNames(expression: string) {
+  const names: string[] = [];
+  const pattern = /'([^']+)'!|([A-Za-z_][A-Za-z0-9_ .]*)!/g;
+  let match = pattern.exec(expression);
+  while (match) {
+    const name = (match[1] || match[2] || "").trim();
+    if (name) names.push(name);
+    match = pattern.exec(expression);
+  }
+  return dedupeFormulaEvidence(names);
+}
+
+function dedupeFormulaEvidence(items: string[]) {
+  const seen = new Set<string>();
+  const values: string[] = [];
+  items.forEach((item) => {
+    const normalized = item.trim();
+    const key = normalized.toUpperCase();
+    if (!normalized || seen.has(key)) return;
+    seen.add(key);
+    values.push(normalized);
+  });
+  return values;
+}
+
+function formatFormulaEvidenceList(values: string[], limit: number) {
+  const visible = values.slice(0, limit);
+  const suffix = values.length > limit ? ` 等 ${values.length} 项` : "";
+  return `${visible.join("、")}${suffix}`;
+}
+
+function normalizeFormulaBlockText(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
 }
 
 function collectFormulaParameterHighlights(expression: string, formattedLines: string): FormulaParameterHighlight[] {
