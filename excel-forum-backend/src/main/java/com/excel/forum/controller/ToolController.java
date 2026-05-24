@@ -8,6 +8,7 @@ import com.excel.forum.service.DocumentConversionService;
 import com.excel.forum.service.DocumentConversionRecordService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.FormulaExplainService;
+import com.excel.forum.service.FormulaExplainTaskService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.ToolBillingService;
@@ -51,6 +52,7 @@ public class ToolController {
     private final RateLimitService rateLimitService;
     private final FileStorageService fileStorageService;
     private final FormulaExplainService formulaExplainService;
+    private final FormulaExplainTaskService formulaExplainTaskService;
     private final ToolBillingService toolBillingService;
 
     @GetMapping("/overview")
@@ -102,6 +104,40 @@ public class ToolController {
             return ResponseEntity.status(status).body(Map.of("message", e.getMessage()));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(502).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/formula/explain/tasks")
+    public ResponseEntity<?> startFormulaExplainTask(
+            @RequestAttribute(value = "userId", required = false) Long userId,
+            @RequestBody FormulaExplainRequest request) {
+        if (userId == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "请先登录"));
+        }
+        ResponseEntity<?> limited = checkFormulaExplainLimits(userId);
+        if (limited != null) {
+            return limited;
+        }
+        try {
+            return ResponseEntity.accepted().body(formulaExplainTaskService.start(userId, request));
+        } catch (IllegalArgumentException e) {
+            int status = "请先登录".equals(e.getMessage()) ? 401 : 400;
+            return ResponseEntity.status(status).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/formula/explain/tasks/{taskId}")
+    public ResponseEntity<?> getFormulaExplainTask(
+            @RequestAttribute(value = "userId", required = false) Long userId,
+            @PathVariable String taskId) {
+        if (userId == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "请先登录"));
+        }
+        try {
+            return ResponseEntity.ok(formulaExplainTaskService.status(userId, taskId));
+        } catch (IllegalArgumentException e) {
+            int status = "请先登录".equals(e.getMessage()) ? 401 : 404;
+            return ResponseEntity.status(status).body(Map.of("message", e.getMessage()));
         }
     }
 
@@ -253,6 +289,24 @@ public class ToolController {
         return ResponseEntity.status(429).body(Map.of(
                 "message", result.message(),
                 "retryAfterSeconds", result.retryAfterSeconds()
+        ));
+    }
+
+    private ResponseEntity<?> checkFormulaExplainLimits(Long userId) {
+        ResponseEntity<?> minuteLimit = toLimitResponse(rateLimitService.check(
+                "tools:formula:explain:10m:" + userId,
+                20,
+                Duration.ofMinutes(10),
+                "公式解释过于频繁，请稍后再试"
+        ));
+        if (minuteLimit != null) {
+            return minuteLimit;
+        }
+        return toLimitResponse(rateLimitService.check(
+                "tools:formula:explain:day:" + userId + ":" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE),
+                100,
+                Duration.ofDays(1),
+                "今日公式解释额度已用完，请明天再来"
         ));
     }
 }

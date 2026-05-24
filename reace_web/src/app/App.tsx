@@ -7,7 +7,7 @@ import { SessionProvider, useSession } from "./lib/session";
 import { queryClient } from "./lib/query-client";
 import { GlobalFeedbackDialog } from "./components/GlobalFeedbackDialog";
 import { GlobalConfirmPromptDialog } from "./components/GlobalConfirmPromptDialog";
-import { FORMULA_EXPLAIN_TASK_OPEN_EVENT } from "./lib/formula-explain-task";
+import { FORMULA_EXPLAIN_TASK_OPEN_EVENT, hydrateFormulaExplainTask } from "./lib/formula-explain-task";
 import { applyThemePreference } from "./lib/theme";
 
 function ThemeBridge() {
@@ -33,6 +33,7 @@ function ThemeBridge() {
 
 function FormulaExplainTaskNavigationBridge() {
   useEffect(() => {
+    void hydrateFormulaExplainTask()?.catch(() => undefined);
     const handleOpenResult = () => {
       void router.navigate("/tools");
     };

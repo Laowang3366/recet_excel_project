@@ -2,10 +2,12 @@ package com.excel.forum.controller;
 
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.dto.FormulaExplainResponse;
+import com.excel.forum.entity.dto.FormulaExplainTaskResponse;
 import com.excel.forum.service.DocumentConversionRecordService;
 import com.excel.forum.service.DocumentConversionService;
 import com.excel.forum.service.FileStorageService;
 import com.excel.forum.service.FormulaExplainService;
+import com.excel.forum.service.FormulaExplainTaskService;
 import com.excel.forum.service.RateLimitResult;
 import com.excel.forum.service.RateLimitService;
 import com.excel.forum.service.ToolBillingService;
@@ -52,6 +54,8 @@ class ToolControllerTest {
     @Mock
     private FormulaExplainService formulaExplainService;
     @Mock
+    private FormulaExplainTaskService formulaExplainTaskService;
+    @Mock
     private ToolBillingService toolBillingService;
 
     private MockMvc mockMvc;
@@ -65,6 +69,7 @@ class ToolControllerTest {
                         rateLimitService,
                         fileStorageService,
                         formulaExplainService,
+                        formulaExplainTaskService,
                         toolBillingService
                 ))
                 .setMessageConverters(new MappingJackson2HttpMessageConverter())
@@ -132,6 +137,48 @@ class ToolControllerTest {
                 .andExpect(jsonPath("$.cacheHit").value(false))
                 .andExpect(jsonPath("$.pointsCost").value(1))
                 .andExpect(jsonPath("$.currentPoints").value(99));
+    }
+
+    @Test
+    void startFormulaExplainTaskReturnsAcceptedTaskForBackgroundPolling() throws Exception {
+        FormulaExplainTaskResponse task = new FormulaExplainTaskResponse();
+        task.setTaskId("task-1");
+        task.setStatus("pending");
+        when(rateLimitService.check(any(), any(Integer.class), any(), any())).thenReturn(RateLimitResult.allow());
+        when(formulaExplainTaskService.start(eq(7L), any())).thenReturn(task);
+
+        mockMvc.perform(post("/api/tools/formula/explain/tasks")
+                        .requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"formula":"=SUM(A1:A10)"}
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.taskId").value("task-1"))
+                .andExpect(jsonPath("$.status").value("pending"));
+
+        verify(formulaExplainTaskService).start(eq(7L), any());
+        verify(formulaExplainService, never()).explain(eq(7L), any());
+    }
+
+    @Test
+    void getFormulaExplainTaskReturnsCompletedResultForCurrentUser() throws Exception {
+        FormulaExplainResponse response = new FormulaExplainResponse();
+        response.setFormula("=SUM(A1:A10)");
+        response.setNormalizedFormula("SUM(A1:A10)");
+        response.setSummary("求和。");
+        FormulaExplainTaskResponse task = new FormulaExplainTaskResponse();
+        task.setTaskId("task-1");
+        task.setStatus("success");
+        task.setResult(response);
+        when(formulaExplainTaskService.status(7L, "task-1")).thenReturn(task);
+
+        mockMvc.perform(get("/api/tools/formula/explain/tasks/task-1")
+                        .requestAttr("userId", 7L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.taskId").value("task-1"))
+                .andExpect(jsonPath("$.status").value("success"))
+                .andExpect(jsonPath("$.result.summary").value("求和。"));
     }
 
     @Test

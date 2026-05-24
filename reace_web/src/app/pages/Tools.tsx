@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock3, Code2, FileUp, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -47,6 +47,14 @@ export function Tools() {
   const formulaTask = useFormulaExplainTask();
   const result = formulaTask.result || null;
   const isExplainPending = formulaTask.status === "pending";
+
+  useEffect(() => {
+    if (!formulaTask.taskId || !formulaTask.request) return;
+    setFormula(formulaTask.request.formula || "");
+    setWorkbookContext(formulaTask.request.workbookContext || "");
+    setExpectedResult(formulaTask.request.expectedResult || "");
+    setErrorMessageInput(formulaTask.request.errorMessageInput || "");
+  }, [formulaTask.taskId, formulaTask.request]);
 
   const handleExplain = () => {
     if (!isAuthenticated) {
