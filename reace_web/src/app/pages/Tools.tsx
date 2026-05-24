@@ -87,7 +87,7 @@ export function Tools() {
   };
 
   return (
-    <LitePageFrame>
+    <LitePageFrame className="pt-0 sm:pt-0">
       <LiteHero
         eyebrow="实用工具"
         title="函数公式解释器"

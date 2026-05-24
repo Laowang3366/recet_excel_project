@@ -14,6 +14,7 @@ describe("Tools", () => {
   it("renders the formula interpreter without conversion entry or removed section titles", () => {
     const markup = renderToStaticMarkup(<Tools />);
 
+    expect(markup).toContain("px-4 py-5 sm:px-6 sm:py-8 pt-0 sm:pt-0");
     expect(markup).toContain("函数公式解释器");
     expect(markup).toContain("解释公式");
     expect(markup).toContain("公式历史");
