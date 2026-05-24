@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { Clock3, Code2, FileUp, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { FormulaExplainResult } from "../components/tools/FormulaExplainResult";
 import { LiteHero, LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
-import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import {
   validateFormulaInput,
   type FormulaExplainRequest,
-  type FormulaExplainResponse,
 } from "../lib/formula-explainer";
-import { toolsKeys } from "../lib/query-keys";
+import {
+  getFormulaExplainTaskSnapshot,
+  resetFormulaExplainTask,
+  startFormulaExplainTask,
+  useFormulaExplainTask,
+} from "../lib/formula-explain-task";
 import { useSession } from "../lib/session";
 
 const exampleFormulas = [
@@ -37,65 +39,43 @@ const exampleFormulas = [
 export function Tools() {
   const navigate = useNavigate();
   const { isAuthenticated } = useSession();
-  const [formula, setFormula] = useState(exampleFormulas[0].formula);
-  const [workbookContext, setWorkbookContext] = useState("");
-  const [expectedResult, setExpectedResult] = useState("");
-  const [errorMessageInput, setErrorMessageInput] = useState("");
-  const [result, setResult] = useState<FormulaExplainResponse | null>(null);
-
-  const explainMutation = useMutation({
-    mutationKey: toolsKeys.formulaExplain(),
-    mutationFn: async () => {
-      const validation = validateFormulaInput(formula, {
-        workbookContext,
-        expectedResult,
-        errorMessageInput,
-      });
-      if (!validation.ok) {
-        throw new Error(validation.message);
-      }
-      const payload: FormulaExplainRequest = {
-        formula,
-        locale: "zh-CN",
-        detailLevel: "standard",
-        workbookContext: workbookContext.trim() || undefined,
-        expectedResult: expectedResult.trim() || undefined,
-        errorMessageInput: errorMessageInput.trim() || undefined,
-      };
-      return api.post<FormulaExplainResponse>("/api/tools/formula/explain", payload, { silent: true });
-    },
-    onSuccess: (data) => {
-      setResult(data);
-      toast.success("公式解释已生成");
-    },
-    onError: (error: unknown) => {
-      if (error instanceof ApiError && error.status === 401) {
-        navigate(buildCurrentAuthRedirectPath());
-        return;
-      }
-      if (error instanceof ApiError && error.status === 402) {
-        toast.info(error.message || "积分不足，请获取积分后再使用公式解释器");
-        return;
-      }
-      if (error instanceof ApiError && error.status === 400) {
-        toast.info(error.message || "公式或上下文格式不正确，请检查后重试");
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : "公式解释失败，请稍后重试");
-    },
-  });
+  const initialTask = getFormulaExplainTaskSnapshot();
+  const [formula, setFormula] = useState(initialTask.request?.formula || exampleFormulas[0].formula);
+  const [workbookContext, setWorkbookContext] = useState(initialTask.request?.workbookContext || "");
+  const [expectedResult, setExpectedResult] = useState(initialTask.request?.expectedResult || "");
+  const [errorMessageInput, setErrorMessageInput] = useState(initialTask.request?.errorMessageInput || "");
+  const formulaTask = useFormulaExplainTask();
+  const result = formulaTask.result || null;
+  const isExplainPending = formulaTask.status === "pending";
 
   const handleExplain = () => {
     if (!isAuthenticated) {
       navigate(buildCurrentAuthRedirectPath());
       return;
     }
-    void explainMutation.mutateAsync();
+    const validation = validateFormulaInput(formula, {
+      workbookContext,
+      expectedResult,
+      errorMessageInput,
+    });
+    if (!validation.ok) {
+      toast.info(validation.message);
+      return;
+    }
+    const payload: FormulaExplainRequest = {
+      formula,
+      locale: "zh-CN",
+      detailLevel: "standard",
+      workbookContext: workbookContext.trim() || undefined,
+      expectedResult: expectedResult.trim() || undefined,
+      errorMessageInput: errorMessageInput.trim() || undefined,
+    };
+    void startFormulaExplainTask(payload).catch(() => undefined);
   };
 
   const applyExample = (value: string) => {
     setFormula(value);
-    setResult(null);
+    resetFormulaExplainTask();
   };
 
   return (
@@ -109,11 +89,11 @@ export function Tools() {
             <button
               type="button"
               onClick={handleExplain}
-              disabled={explainMutation.isPending}
+              disabled={isExplainPending}
               className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-black text-slate-900 disabled:cursor-not-allowed disabled:bg-white/60"
             >
-              {explainMutation.isPending ? <LoaderCircle size={16} className="animate-spin" /> : <WandSparkles size={16} />}
-              {explainMutation.isPending ? "正在解释..." : "解释公式"}
+              {isExplainPending ? <LoaderCircle size={16} className="animate-spin" /> : <WandSparkles size={16} />}
+              {isExplainPending ? "后台解释中..." : "解释公式"}
             </button>
             <button
               type="button"
@@ -138,9 +118,10 @@ export function Tools() {
                 setWorkbookContext("");
                 setExpectedResult("");
                 setErrorMessageInput("");
-                setResult(null);
+                resetFormulaExplainTask();
               }}
-              className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/10 px-6 py-3 text-sm font-bold text-white"
+              disabled={isExplainPending}
+              className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/10 px-6 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Trash2 size={16} />
               清空
@@ -185,10 +166,11 @@ export function Tools() {
             value={formula}
             onChange={(event) => {
               setFormula(event.target.value);
-              setResult(null);
+              resetFormulaExplainTask();
             }}
+            disabled={isExplainPending}
             spellCheck={false}
-            className="mt-6 min-h-[220px] w-full resize-y rounded-[26px] border border-slate-200 bg-slate-50 px-5 py-4 font-mono text-sm leading-7 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100"
+            className="mt-6 min-h-[220px] w-full resize-y rounded-[26px] border border-slate-200 bg-slate-50 px-5 py-4 font-mono text-sm leading-7 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
             placeholder="=IFERROR(XLOOKUP(A2,客户表[手机号],客户表[姓名]),&quot;未找到&quot;)"
           />
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -196,9 +178,13 @@ export function Tools() {
               <span className="text-sm font-black text-slate-700">表格上下文</span>
               <textarea
                 value={workbookContext}
-                onChange={(event) => setWorkbookContext(event.target.value)}
+                onChange={(event) => {
+                  setWorkbookContext(event.target.value);
+                  resetFormulaExplainTask();
+                }}
+                disabled={isExplainPending}
                 spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
                 placeholder="例如：A列为客户手机号，B列为客户姓名，F2 是待查询手机号"
               />
             </label>
@@ -206,9 +192,13 @@ export function Tools() {
               <span className="text-sm font-black text-slate-700">期望结果</span>
               <textarea
                 value={expectedResult}
-                onChange={(event) => setExpectedResult(event.target.value)}
+                onChange={(event) => {
+                  setExpectedResult(event.target.value);
+                  resetFormulaExplainTask();
+                }}
+                disabled={isExplainPending}
                 spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
                 placeholder="例如：查询到手机号对应的客户姓名，找不到时显示未找到"
               />
             </label>
@@ -216,9 +206,13 @@ export function Tools() {
               <span className="text-sm font-black text-slate-700">错误信息</span>
               <textarea
                 value={errorMessageInput}
-                onChange={(event) => setErrorMessageInput(event.target.value)}
+                onChange={(event) => {
+                  setErrorMessageInput(event.target.value);
+                  resetFormulaExplainTask();
+                }}
+                disabled={isExplainPending}
                 spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
                 placeholder="例如：#N/A、#VALUE! 或公式当前返回的异常结果"
               />
             </label>
@@ -229,7 +223,8 @@ export function Tools() {
                 key={item.name}
                 type="button"
                 onClick={() => applyExample(item.formula)}
-                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+                disabled={isExplainPending}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-teal-300 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {item.name}
               </button>
@@ -238,12 +233,17 @@ export function Tools() {
           <button
             type="button"
             onClick={handleExplain}
-            disabled={explainMutation.isPending}
+            disabled={isExplainPending}
             className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 px-5 text-sm font-black text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:bg-teal-300"
           >
-            {explainMutation.isPending ? <LoaderCircle size={18} className="animate-spin" /> : <WandSparkles size={18} />}
-            {explainMutation.isPending ? "正在解释..." : "解释公式"}
+            {isExplainPending ? <LoaderCircle size={18} className="animate-spin" /> : <WandSparkles size={18} />}
+            {isExplainPending ? "后台解释中..." : "解释公式"}
           </button>
+          {isExplainPending ? (
+            <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold leading-6 text-sky-800">
+              公式解释已在后台运行，切换页面不会中断，完成后会弹出通知。
+            </div>
+          ) : null}
           {result ? (
             <div className="mt-5 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
               {typeof result.pointsCost === "number" ? <span className="rounded-full bg-slate-100 px-3 py-1.5">消耗 {result.pointsCost} 积分</span> : null}
