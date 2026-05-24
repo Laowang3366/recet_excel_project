@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Clock3, Code2, FileUp, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { Clock3, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { FormulaExplainResult } from "../components/tools/FormulaExplainResult";
-import { LiteHero, LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
+import { LiteHero, LitePageFrame, LitePanel } from "../components/LiteSurface";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import {
   validateFormulaInput,
@@ -105,14 +105,6 @@ export function Tools() {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/tools/convert")}
-              className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/10 px-6 py-3 text-sm font-bold text-white"
-            >
-              <FileUp size={16} />
-              文件转换
-            </button>
-            <button
-              type="button"
               onClick={() => navigate("/tools/formula-history")}
               className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/10 px-6 py-3 text-sm font-bold text-white"
             >
@@ -165,11 +157,6 @@ export function Tools() {
 
       <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
         <LitePanel>
-          <LiteSectionTitle
-            eyebrow="输入公式"
-            title="粘贴需要解释的公式"
-            description="可以保留开头等号，也可以只输入函数主体。"
-          />
           <textarea
             value={formula}
             onChange={(event) => {
@@ -178,7 +165,7 @@ export function Tools() {
             }}
             disabled={isExplainPending}
             spellCheck={false}
-            className="mt-6 min-h-[220px] w-full resize-y rounded-[26px] border border-slate-200 bg-slate-50 px-5 py-4 font-mono text-sm leading-7 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
+            className="min-h-[220px] w-full resize-y rounded-[26px] border border-slate-200 bg-slate-50 px-5 py-4 font-mono text-sm leading-7 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
             placeholder="=IFERROR(XLOOKUP(A2,客户表[手机号],客户表[姓名]),&quot;未找到&quot;)"
           />
           <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -272,17 +259,8 @@ export function Tools() {
         ) : (
           <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
           <LitePanel>
-            <LiteSectionTitle
-              eyebrow="输出结构"
-              title="公式优化排版"
-              description="生成后会在这里直接显示缩进排版和参数引用标记。"
-            />
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <span className="text-teal-600"><Code2 size={18} /></span>
-                公式优化排版
-              </div>
-              <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
                   <code>LET(</code>
                 </div>

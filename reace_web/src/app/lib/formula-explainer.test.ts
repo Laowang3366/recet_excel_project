@@ -101,7 +101,7 @@ describe("formula explainer helpers", () => {
 
     const copyText = formatFormulaExplanationForCopy(response);
 
-    expect(copyText).toContain("公式优化排版：");
+    expect(copyText).toContain("公式结构：");
     expect(copyText).toContain("LET(");
     expect(copyText).toContain("自定义参数：");
     expect(copyText).toContain("- 定义 LET 参数 src");
@@ -109,6 +109,25 @@ describe("formula explainer helpers", () => {
     expect(copyText).not.toContain("调用注释：");
     expect(copyText).not.toContain("LET 参数 3 调用 FILTER");
     expect(copyText).not.toContain("函数调用关系：");
+  });
+
+  it("hides gpt5.5 from copied model metadata", () => {
+    const response: FormulaExplainResponse = {
+      formula: "=SUM(A1:A10)",
+      normalizedFormula: "SUM(A1:A10)",
+      summary: "汇总 A1 到 A10。",
+      segments: [],
+      functions: [],
+      warnings: [],
+      suggestions: [],
+      model: "gpt5.5",
+      cacheHit: false,
+    };
+
+    const copyText = formatFormulaExplanationForCopy(response);
+
+    expect(copyText).not.toContain("gpt5.5");
+    expect(copyText).toContain("模型信息：实时生成");
   });
 
   it("adds code-comment style function annotations to formatted formulas", () => {

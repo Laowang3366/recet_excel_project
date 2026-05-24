@@ -159,7 +159,7 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
   const lines = [
     `公式：${response.formula}`,
     "",
-    "公式优化排版：",
+    "公式结构：",
     ...formatFormulaLayoutLinesForCopy(layout.formattedLines, functionAnnotations),
     ...(parameterAnnotationLines.length > 0 ? ["", "自定义参数：", ...parameterAnnotationLines] : []),
     ...(layout.signals.length > 0 ? ["", `审计标记：${layout.signals.join(" / ")}`] : []),
@@ -185,7 +185,7 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     lines.push("", "修复建议：", ...response.fixes.map((item) => `- ${item}`));
   }
   const metadata = [
-    response.model,
+    getVisibleFormulaModel(response.model),
     response.cacheHit === true ? "缓存命中" : response.cacheHit === false ? "实时生成" : "",
     typeof response.pointsCost === "number" ? `消耗 ${response.pointsCost} 积分` : "",
     typeof response.currentPoints === "number" ? `当前 ${response.currentPoints} 积分` : "",
@@ -194,6 +194,14 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     lines.push("", `模型信息：${metadata.join(" / ")}`);
   }
   return lines.join("\n").trim();
+}
+
+export function getVisibleFormulaModel(model?: string | null) {
+  const value = (model || "").trim();
+  if (!value) return "";
+  const normalized = value.toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized.startsWith("gpt5.5") || normalized.startsWith("gpt55")) return "";
+  return value;
 }
 
 export function buildFormulaFunctionAnnotations(

@@ -7,7 +7,7 @@ import { LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSu
 import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { toolsKeys } from "../lib/query-keys";
-import type { FormulaExplainResponse } from "../lib/formula-explainer";
+import { getVisibleFormulaModel, type FormulaExplainResponse } from "../lib/formula-explainer";
 
 const PAGE_SIZE = 10;
 
@@ -108,6 +108,7 @@ export function FormulaHistory() {
 
           {records.map((item) => {
             const active = item.id === selectedId;
+            const visibleModel = getVisibleFormulaModel(item.model);
             return (
               <button
                 key={item.id}
@@ -122,7 +123,7 @@ export function FormulaHistory() {
                     <div className="truncate font-mono text-sm font-black text-slate-900">{item.formula || "-"}</div>
                     <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{item.summary || "点击查看详情"}</div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-500">
-                      {item.model ? <span className="rounded-full bg-white px-2.5 py-1">{item.model}</span> : null}
+                      {visibleModel ? <span className="rounded-full bg-white px-2.5 py-1">{visibleModel}</span> : null}
                       {typeof item.pointsCost === "number" ? <span className="rounded-full bg-white px-2.5 py-1">消耗 {item.pointsCost}</span> : null}
                       {item.cacheHit ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">缓存命中</span> : null}
                       {item.createTime ? <span className="rounded-full bg-white px-2.5 py-1">{item.createTime.replace("T", " ")}</span> : null}

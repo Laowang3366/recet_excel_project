@@ -9,6 +9,7 @@ describe("FormulaExplainResult", () => {
       formula: '=LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100="已成交"),MAP(filtered,LAMBDA(row,INDEX(row,1))))',
       normalizedFormula: 'LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100="已成交"),MAP(filtered,LAMBDA(row,INDEX(row,1))))',
       summary: "筛选已成交销售记录。",
+      model: "gpt5.5",
       segments: [],
       functions: [
         { name: "LET", purpose: "定义可复用的中间变量。" },
@@ -23,7 +24,9 @@ describe("FormulaExplainResult", () => {
 
     const markup = renderToStaticMarkup(<FormulaExplainResult result={result} />);
 
-    expect(markup).toContain("公式优化排版");
+    expect(markup).not.toContain("公式优化排版");
+    expect(markup).not.toContain("gpt5.5");
+    expect(markup).toContain("公式结构");
     expect(markup).toContain("LET");
     expect(markup).toContain("定义 LET 参数 src");
     expect(markup).toContain("引用 LET 参数 src");
@@ -41,5 +44,22 @@ describe("FormulaExplainResult", () => {
     expect(markup).not.toContain("MAP 参数 2 调用 LAMBDA");
     expect(markup).not.toContain("函数调用关系");
     expect(markup).not.toContain("未识别到嵌套函数调用");
+  });
+
+  it("keeps non-hidden model names visible", () => {
+    const result: FormulaExplainResponse = {
+      formula: "=SUM(A1:A10)",
+      normalizedFormula: "SUM(A1:A10)",
+      summary: "汇总 A1 到 A10。",
+      model: "gpt-test",
+      segments: [],
+      functions: [],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const markup = renderToStaticMarkup(<FormulaExplainResult result={result} />);
+
+    expect(markup).toContain("gpt-test");
   });
 });

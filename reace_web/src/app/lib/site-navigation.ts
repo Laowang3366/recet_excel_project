@@ -63,7 +63,7 @@ export const publicNavItems: PublicNavItem[] = [
     name: "实用工具",
     shortName: "工具",
     path: "/tools",
-    description: "文件转换与效率工具",
+    description: "公式解释与效率工具",
   },
   {
     key: "assistant",

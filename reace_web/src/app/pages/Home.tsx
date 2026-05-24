@@ -27,7 +27,7 @@ export function Home() {
     },
     {
       title: "实用工具",
-      text: "文件转换、历史记录和效率工具集中处理。",
+      text: "公式解释、历史记录和效率工具集中处理。",
       icon: <Wrench size={24} />,
       action: () => navigate("/tools"),
     },

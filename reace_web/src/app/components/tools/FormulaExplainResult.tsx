@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { AlertTriangle, Code2, Copy, Cpu, FunctionSquare, Lightbulb, ListTree, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { LitePanel, LiteSectionTitle } from "../LiteSurface";
+import { LitePanel } from "../LiteSurface";
 import {
   buildFormulaFunctionAnnotations,
   buildFormulaLayout,
   buildFormulaOptimizationSuggestions,
   formatFormulaAnalysis,
   formatFormulaExplanationForCopy,
+  getVisibleFormulaModel,
   type FormulaExplainResponse,
   type FormulaFunctionAnnotation,
   type FormulaParameterHighlight,
@@ -24,6 +25,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights, functionAnnotations);
   const parameterSummary = buildParameterSummary(formulaLayout.parameterHighlights);
   const optimizationSuggestions = buildFormulaOptimizationSuggestions(result, formulaLayout);
+  const visibleModel = getVisibleFormulaModel(result.model);
   const copyResult = async () => {
     await navigator.clipboard.writeText(formatFormulaExplanationForCopy(result));
     toast.success("解释结果已复制");
@@ -31,31 +33,26 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
 
   return (
     <LitePanel>
-      <LiteSectionTitle
-        eyebrow="解释结果"
-        title="公式优化排版"
-        description="自定义参数定义、引用高亮和风险信号。"
-        action={
-          <button
-            type="button"
-            onClick={copyResult}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-black text-white transition hover:bg-slate-800"
-          >
-            <Copy size={16} />
-            复制
-          </button>
-        }
-      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={copyResult}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-black text-white transition hover:bg-slate-800"
+        >
+          <Copy size={16} />
+          复制
+        </button>
+      </div>
 
       <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm leading-7 text-emerald-950">
         {result.summary}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
-        {result.model ? (
+        {visibleModel ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5">
             <Cpu size={13} />
-            {result.model}
+            {visibleModel}
           </span>
         ) : null}
         {typeof result.cacheHit === "boolean" ? (
@@ -77,7 +74,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
 
       <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <SectionTitle icon={<Code2 size={18} />} title="公式优化排版" />
+          <SectionTitle icon={<Code2 size={18} />} title="公式结构" />
           {formulaLayout.signals.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {formulaLayout.signals.map((signal) => (
