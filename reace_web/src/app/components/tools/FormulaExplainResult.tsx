@@ -33,7 +33,8 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
 
   return (
     <LitePanel>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-black text-slate-900">公式解释</h2>
         <button
           type="button"
           onClick={copyResult}

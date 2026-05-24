@@ -26,6 +26,7 @@ describe("FormulaExplainResult", () => {
 
     expect(markup).not.toContain("公式优化排版");
     expect(markup).not.toContain("gpt5.5");
+    expect(markup).toContain(">公式解释<");
     expect(markup).toContain("公式结构");
     expect(markup).toContain("LET");
     expect(markup).toContain("定义 LET 参数 src");

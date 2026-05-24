@@ -255,13 +255,12 @@ export function Tools() {
 
         {result ? (
           <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
-            <h2 className="mb-3 text-base font-black text-slate-900">公式解释</h2>
             <FormulaExplainResult result={result} />
           </div>
         ) : (
           <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
-            <h2 className="mb-3 text-base font-black text-slate-900">公式解释</h2>
             <LitePanel>
+              <h2 className="mb-4 text-base font-black text-slate-900">公式解释</h2>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
                   <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
