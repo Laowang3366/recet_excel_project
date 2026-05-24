@@ -6,8 +6,8 @@ import {
   buildFormulaLayout,
   formatFormulaAnalysis,
   formatFormulaExplanationForCopy,
-  type FormulaCallEdge,
   type FormulaExplainResponse,
+  type FormulaParameterHighlight,
 } from "../../lib/formula-explainer";
 
 type FormulaExplainResultProps = {
@@ -17,7 +17,8 @@ type FormulaExplainResultProps = {
 export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const analysisText = formatFormulaAnalysis(result.analysis);
   const formulaLayout = buildFormulaLayout(result.formula || result.normalizedFormula);
-  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.callEdges);
+  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights);
+  const parameterSummary = buildParameterSummary(formulaLayout.parameterHighlights);
   const copyResult = async () => {
     await navigator.clipboard.writeText(formatFormulaExplanationForCopy(result));
     toast.success("解释结果已复制");
@@ -28,7 +29,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
       <LiteSectionTitle
         eyebrow="解释结果"
         title="公式优化排版"
-        description="函数高亮、参数层级、行内注释和风险信号。"
+        description="自定义参数定义、引用高亮和风险信号。"
         action={
           <button
             type="button"
@@ -87,32 +88,43 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
           {annotatedLines.map((line, index) => (
             <div key={`${line.raw}-${index}`} className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] items-start gap-4">
               <code className="whitespace-pre">
-                {line.functionName ? (
-                  <>
-                    {line.indent}
-                    <span className="rounded bg-teal-50 px-1 font-black text-teal-700">{line.functionName}</span>
-                    {line.suffix}
-                  </>
-                ) : (
-                  line.raw
-                )}
+                {line.segments.map((segment, segmentIndex) => (
+                  segment.highlight ? (
+                    <span
+                      key={`${segment.text}-${segmentIndex}`}
+                      className={`rounded px-1 font-black ring-1 ${getParameterHighlightClass(segment.highlight)}`}
+                    >
+                      {segment.text}
+                    </span>
+                  ) : (
+                    <span key={`${segment.text}-${segmentIndex}`}>{segment.text}</span>
+                  )
+                ))}
               </code>
-              {line.annotation ? (
-                <span className="mt-0.5 rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black leading-5 text-teal-700">
-                  {line.annotation}
+              {line.annotations.length > 0 ? (
+                <span className="mt-0.5 flex flex-wrap justify-end gap-1.5">
+                  {line.annotations.map((annotation) => (
+                    <span
+                      key={`${annotation.role}-${annotation.sourceFunction}-${annotation.name}`}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-black leading-5 ${getParameterBadgeClass(annotation)}`}
+                    >
+                      {formatParameterAnnotation(annotation)}
+                    </span>
+                  ))}
                 </span>
               ) : null}
             </div>
           ))}
         </div>
 
-        {formulaLayout.blocks.length > 0 ? (
+        {parameterSummary.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {formulaLayout.blocks.map((block) => (
-              <span key={block.id} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
-                <span className="font-black text-slate-900">{block.name}</span>
-                <span>深度 {block.depth}</span>
-                {block.children.length > 0 ? <span className="text-teal-700">调用 {block.children.join("、")}</span> : null}
+            {parameterSummary.map((item) => (
+              <span key={item.key} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600">
+                <span className="font-black text-slate-900">{item.name}</span>
+                <span>{item.sourceFunction}</span>
+                <span className="text-amber-700">定义 {item.definitions}</span>
+                <span className="text-teal-700">引用 {item.references}</span>
               </span>
             ))}
           </div>
@@ -176,31 +188,131 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
 
 type AnnotatedFormulaLine = {
   raw: string;
-  indent: string;
-  functionName?: string;
-  suffix?: string;
-  annotation?: string;
+  segments: Array<{
+    text: string;
+    highlight?: FormulaParameterHighlight;
+  }>;
+  annotations: FormulaParameterHighlight[];
 };
 
-function buildAnnotatedFormulaLines(formattedLines: string, callEdges: FormulaCallEdge[]): AnnotatedFormulaLine[] {
-  const pendingEdges = [...callEdges];
-  return formattedLines.split("\n").map((raw) => {
-    const match = raw.match(/^(\s*)([A-Z_][A-Z0-9_.]*)(\()$/);
-    if (!match) {
-      return { raw, indent: "" };
-    }
+type FormulaParameterSummary = {
+  key: string;
+  name: string;
+  sourceFunction: FormulaParameterHighlight["sourceFunction"];
+  definitions: number;
+  references: number;
+};
 
-    const functionName = match[2];
-    const edgeIndex = pendingEdges.findIndex((edge) => edge.to === functionName);
-    const edge = edgeIndex >= 0 ? pendingEdges.splice(edgeIndex, 1)[0] : null;
+function buildAnnotatedFormulaLines(formattedLines: string, highlights: FormulaParameterHighlight[]): AnnotatedFormulaLine[] {
+  const highlightsByLine = new Map<number, FormulaParameterHighlight[]>();
+  highlights.forEach((highlight) => {
+    const lineHighlights = highlightsByLine.get(highlight.lineIndex) || [];
+    lineHighlights.push(highlight);
+    highlightsByLine.set(highlight.lineIndex, lineHighlights);
+  });
+
+  return formattedLines.split("\n").map((raw, lineIndex) => {
+    const lineHighlights = highlightsByLine.get(lineIndex) || [];
     return {
       raw,
-      indent: match[1],
-      functionName,
-      suffix: match[3],
-      annotation: edge ? `${edge.from} 参数 ${edge.argumentIndex} 调用 ${edge.to}` : undefined,
+      segments: splitFormulaLineByParameters(raw, lineHighlights),
+      annotations: lineHighlights,
     };
   });
+}
+
+function splitFormulaLineByParameters(line: string, highlights: FormulaParameterHighlight[]) {
+  if (highlights.length === 0) return [{ text: line }];
+
+  const matches = findParameterMatches(line, highlights);
+  if (matches.length === 0) return [{ text: line }];
+
+  const segments: AnnotatedFormulaLine["segments"] = [];
+  let cursor = 0;
+  matches.forEach((match) => {
+    if (match.start > cursor) {
+      segments.push({ text: line.slice(cursor, match.start) });
+    }
+    segments.push({ text: line.slice(match.start, match.end), highlight: match.highlight });
+    cursor = match.end;
+  });
+  if (cursor < line.length) {
+    segments.push({ text: line.slice(cursor) });
+  }
+  return segments;
+}
+
+function findParameterMatches(line: string, highlights: FormulaParameterHighlight[]) {
+  const orderedHighlights = [...highlights].sort((left, right) => right.name.length - left.name.length);
+  const matches: Array<{ start: number; end: number; highlight: FormulaParameterHighlight }> = [];
+  const normalizedLine = line.toUpperCase();
+  let inString = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const current = line[index];
+    if (current === "\"") {
+      if (inString && line[index + 1] === "\"") {
+        index += 1;
+        continue;
+      }
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    const match = orderedHighlights.find((highlight) => {
+      const normalizedName = highlight.name.toUpperCase();
+      if (normalizedLine.slice(index, index + normalizedName.length) !== normalizedName) return false;
+      return !isFormulaIdentifierPart(line[index - 1]) && !isFormulaIdentifierPart(line[index + normalizedName.length]);
+    });
+    if (!match) continue;
+
+    matches.push({ start: index, end: index + match.name.length, highlight: match });
+    index += match.name.length - 1;
+  }
+
+  return matches;
+}
+
+function buildParameterSummary(highlights: FormulaParameterHighlight[]): FormulaParameterSummary[] {
+  const summary = new Map<string, FormulaParameterSummary>();
+  highlights.forEach((highlight) => {
+    const key = `${highlight.sourceFunction}:${highlight.name.toUpperCase()}`;
+    const item = summary.get(key) || {
+      key,
+      name: highlight.name,
+      sourceFunction: highlight.sourceFunction,
+      definitions: 0,
+      references: 0,
+    };
+    if (highlight.role === "definition") {
+      item.definitions += 1;
+    } else {
+      item.references += 1;
+    }
+    summary.set(key, item);
+  });
+  return [...summary.values()];
+}
+
+function formatParameterAnnotation(highlight: FormulaParameterHighlight) {
+  return `${highlight.role === "definition" ? "定义" : "引用"} ${highlight.sourceFunction} 参数 ${highlight.name}`;
+}
+
+function getParameterHighlightClass(highlight: FormulaParameterHighlight) {
+  return highlight.role === "definition"
+    ? "bg-amber-100 text-amber-800 ring-amber-200"
+    : "bg-teal-50 text-teal-700 ring-teal-100";
+}
+
+function getParameterBadgeClass(highlight: FormulaParameterHighlight) {
+  return highlight.role === "definition"
+    ? "border-amber-100 bg-amber-50 text-amber-700"
+    : "border-teal-100 bg-teal-50 text-teal-700";
+}
+
+function isFormulaIdentifierPart(value: string | undefined) {
+  return typeof value === "string" && /[A-Za-z0-9_.]/.test(value);
 }
 
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {

@@ -33,12 +33,20 @@ export type FormulaCallEdge = {
   argumentIndex: number;
 };
 
+export type FormulaParameterHighlight = {
+  name: string;
+  role: "definition" | "reference";
+  sourceFunction: "LET" | "LAMBDA";
+  lineIndex: number;
+};
+
 export type FormulaLayout = {
   source: string;
   normalizedSource: string;
   formattedLines: string;
   blocks: FormulaLayoutBlock[];
   callEdges: FormulaCallEdge[];
+  parameterHighlights: FormulaParameterHighlight[];
   signals: string[];
 };
 
@@ -119,15 +127,17 @@ export function buildFormulaLayout(formula: string): FormulaLayout {
   const normalizedSource = source.startsWith("=") ? source.slice(1).trim() : source;
   const blocks: FormulaLayoutBlock[] = [];
   const callEdges: FormulaCallEdge[] = [];
+  const formattedLines = formatFormulaExpression(normalizedSource, 0).join("\n");
 
   collectFormulaBlocks(normalizedSource, 0, undefined, undefined, blocks, callEdges);
 
   return {
     source,
     normalizedSource,
-    formattedLines: formatFormulaExpression(normalizedSource, 0).join("\n"),
+    formattedLines,
     blocks,
     callEdges,
+    parameterHighlights: collectFormulaParameterHighlights(normalizedSource, formattedLines),
     signals: detectFormulaSignals(normalizedSource, blocks),
   };
 }
@@ -135,13 +145,15 @@ export function buildFormulaLayout(formula: string): FormulaLayout {
 export function formatFormulaExplanationForCopy(response: FormulaExplainResponse) {
   const analysisText = formatFormulaAnalysis(response.analysis);
   const layout = buildFormulaLayout(response.formula || response.normalizedFormula);
-  const callAnnotationLines = layout.callEdges.map((edge) => `- ${edge.from} 参数 ${edge.argumentIndex} 调用 ${edge.to}`);
+  const parameterAnnotationLines = layout.parameterHighlights.map((item) => (
+    `- ${item.role === "definition" ? "定义" : "引用"} ${item.sourceFunction} 参数 ${item.name}`
+  ));
   const lines = [
     `公式：${response.formula}`,
     "",
     "公式优化排版：",
     layout.formattedLines,
-    ...(callAnnotationLines.length > 0 ? ["", "调用注释：", ...callAnnotationLines] : []),
+    ...(parameterAnnotationLines.length > 0 ? ["", "自定义参数：", ...parameterAnnotationLines] : []),
     ...(layout.signals.length > 0 ? ["", `审计标记：${layout.signals.join(" / ")}`] : []),
     "",
     `整体解释：${response.summary}`,
@@ -195,6 +207,8 @@ type ParsedFormulaFunction = {
   args: string[];
   closeIndex: number;
 };
+
+type FormulaParameterDefinition = Pick<FormulaParameterHighlight, "name" | "sourceFunction">;
 
 const DYNAMIC_ARRAY_FUNCTIONS = new Set([
   "BYCOL",
@@ -259,6 +273,137 @@ function collectFormulaBlocks(
   findDirectFunctionCalls(expression).forEach((child) => {
     collectFormulaBlocks(child.raw, depth, parent, argumentIndex, blocks, callEdges);
   });
+}
+
+function collectFormulaParameterHighlights(expression: string, formattedLines: string): FormulaParameterHighlight[] {
+  const definitions = dedupeParameterDefinitions(collectFormulaParameterDefinitions(expression));
+  if (definitions.length === 0) return [];
+
+  const lines = formattedLines.split("\n");
+  const highlights: FormulaParameterHighlight[] = [];
+  const definitionLineKeys = new Set<string>();
+  const usedDefinitionLines = new Set<number>();
+
+  definitions.forEach((definition) => {
+    const lineIndex = findParameterDefinitionLine(lines, definition.name, usedDefinitionLines);
+    if (lineIndex < 0) return;
+
+    highlights.push({ ...definition, role: "definition", lineIndex });
+    definitionLineKeys.add(getParameterHighlightKey(definition, "definition", lineIndex));
+    usedDefinitionLines.add(lineIndex);
+  });
+
+  lines.forEach((line, lineIndex) => {
+    definitions.forEach((definition) => {
+      if (definitionLineKeys.has(getParameterHighlightKey(definition, "definition", lineIndex))) return;
+      if (!lineContainsParameterToken(line, definition.name)) return;
+
+      highlights.push({ ...definition, role: "reference", lineIndex });
+    });
+  });
+
+  return dedupeParameterHighlights(highlights);
+}
+
+function collectFormulaParameterDefinitions(expression: string, definitions: FormulaParameterDefinition[] = []) {
+  const parsed = parseEntireFunctionCall(expression);
+  if (parsed) {
+    if (parsed.name === "LET") {
+      for (let index = 0; index < parsed.args.length - 1; index += 2) {
+        const name = normalizeFormulaParameterName(parsed.args[index]);
+        if (name) definitions.push({ name, sourceFunction: "LET" });
+      }
+    }
+
+    if (parsed.name === "LAMBDA") {
+      for (let index = 0; index < parsed.args.length - 1; index += 1) {
+        const name = normalizeFormulaParameterName(parsed.args[index]);
+        if (name) definitions.push({ name, sourceFunction: "LAMBDA" });
+      }
+    }
+
+    parsed.args.forEach((arg) => collectFormulaParameterDefinitions(arg, definitions));
+    return definitions;
+  }
+
+  findDirectFunctionCalls(expression).forEach((child) => {
+    collectFormulaParameterDefinitions(child.raw, definitions);
+  });
+  return definitions;
+}
+
+function dedupeParameterDefinitions(definitions: FormulaParameterDefinition[]) {
+  const seen = new Set<string>();
+  return definitions.filter((definition) => {
+    const key = `${definition.sourceFunction}:${definition.name.toUpperCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeParameterHighlights(highlights: FormulaParameterHighlight[]) {
+  const seen = new Set<string>();
+  return highlights.filter((highlight) => {
+    const key = getParameterHighlightKey(highlight, highlight.role, highlight.lineIndex);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getParameterHighlightKey(
+  item: Pick<FormulaParameterHighlight, "name" | "sourceFunction">,
+  role: FormulaParameterHighlight["role"],
+  lineIndex: number,
+) {
+  return `${lineIndex}:${role}:${item.sourceFunction}:${item.name.toUpperCase()}`;
+}
+
+function findParameterDefinitionLine(lines: string[], parameterName: string, usedLineIndexes: Set<number>) {
+  const normalizedName = parameterName.toUpperCase();
+  return lines.findIndex((line, index) => {
+    if (usedLineIndexes.has(index)) return false;
+    return normalizeFormulaLineToken(line).toUpperCase() === normalizedName;
+  });
+}
+
+function normalizeFormulaLineToken(line: string) {
+  const trimmed = line.trim();
+  return trimmed.endsWith(",") ? trimmed.slice(0, -1).trim() : trimmed;
+}
+
+function normalizeFormulaParameterName(value: string) {
+  const candidate = value.trim();
+  if (!isIdentifierStart(candidate[0])) return "";
+  for (let index = 1; index < candidate.length; index += 1) {
+    if (!isIdentifierPart(candidate[index])) return "";
+  }
+  return candidate;
+}
+
+function lineContainsParameterToken(line: string, parameterName: string) {
+  const normalizedLine = line.toUpperCase();
+  const normalizedName = parameterName.toUpperCase();
+  let inString = false;
+
+  for (let index = 0; index <= line.length - parameterName.length; index += 1) {
+    const current = line[index];
+    if (current === "\"") {
+      if (inString && line[index + 1] === "\"") {
+        index += 1;
+        continue;
+      }
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (normalizedLine.slice(index, index + normalizedName.length) !== normalizedName) continue;
+    if (isIdentifierPart(line[index - 1]) || isIdentifierPart(line[index + parameterName.length])) continue;
+    return true;
+  }
+  return false;
 }
 
 function formatFormulaExpression(expression: string, depth: number): string[] {

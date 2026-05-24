@@ -258,13 +258,16 @@ export function Tools() {
         </LitePanel>
 
         {result ? (
-          <FormulaExplainResult result={result} />
+          <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
+            <FormulaExplainResult result={result} />
+          </div>
         ) : (
+          <div className="max-h-[calc(100dvh-7rem)] overflow-y-auto pr-1">
           <LitePanel>
             <LiteSectionTitle
               eyebrow="输出结构"
               title="公式优化排版"
-              description="生成后会在这里直接显示缩进排版和行内调用注释。"
+              description="生成后会在这里直接显示缩进排版和参数引用标记。"
             />
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -273,23 +276,25 @@ export function Tools() {
               </div>
               <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code><span className="rounded bg-teal-50 px-1 font-black text-teal-700">LET</span>(</code>
+                  <code>LET(</code>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  data,</code>
+                  <code className="whitespace-pre">  <span className="rounded bg-amber-100 px-1 font-black text-amber-800 ring-1 ring-amber-200">data</span>,</code>
+                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">定义 LET 参数 data</span>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
                   <code className="whitespace-pre">  A2:A100,</code>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">  <span className="rounded bg-teal-50 px-1 font-black text-teal-700">FILTER</span>(</code>
-                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">LET 参数 3 调用 FILTER</span>
+                  <code className="whitespace-pre">  FILTER(</code>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">    data,</code>
+                  <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>,</code>
+                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
-                  <code className="whitespace-pre">    data&lt;&gt;&quot;&quot;</code>
+                  <code className="whitespace-pre">    <span className="rounded bg-teal-50 px-1 font-black text-teal-700 ring-1 ring-teal-100">data</span>&lt;&gt;&quot;&quot;</code>
+                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">引用 LET 参数 data</span>
                 </div>
                 <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
                   <code className="whitespace-pre">  )</code>
@@ -300,6 +305,7 @@ export function Tools() {
               </div>
             </div>
           </LitePanel>
+          </div>
         )}
       </section>
     </LitePageFrame>

@@ -66,25 +66,27 @@ describe("formula explainer helpers", () => {
     expect(copyText).toContain("模型信息：gpt-test / 缓存命中 / 消耗 1 积分 / 当前 99 积分");
   });
 
-  it("builds a readable formula layout with nested function call edges", () => {
+  it("builds a readable formula layout with custom parameter references", () => {
     const layout = buildFormulaLayout("=LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100=\"已成交\"),MAP(filtered,LAMBDA(row,INDEX(row,1))))");
 
     expect(layout.formattedLines).toContain("LET(");
     expect(layout.blocks.map((item) => item.name)).toEqual(["LET", "FILTER", "MAP", "LAMBDA", "INDEX"]);
     expect(layout.blocks.find((item) => item.name === "LET")?.children).toEqual(["FILTER", "MAP"]);
     expect(layout.blocks.find((item) => item.name === "MAP")?.children).toEqual(["LAMBDA"]);
-    expect(layout.callEdges).toEqual([
-      { from: "LET", to: "FILTER", argumentIndex: 4 },
-      { from: "LET", to: "MAP", argumentIndex: 5 },
-      { from: "MAP", to: "LAMBDA", argumentIndex: 2 },
-      { from: "LAMBDA", to: "INDEX", argumentIndex: 2 },
-    ]);
+    expect(layout.parameterHighlights).toEqual(expect.arrayContaining([
+      { name: "src", role: "definition", sourceFunction: "LET", lineIndex: 1 },
+      { name: "filtered", role: "definition", sourceFunction: "LET", lineIndex: 3 },
+      { name: "src", role: "reference", sourceFunction: "LET", lineIndex: 5 },
+      { name: "filtered", role: "reference", sourceFunction: "LET", lineIndex: 9 },
+      { name: "row", role: "definition", sourceFunction: "LAMBDA", lineIndex: 11 },
+      { name: "row", role: "reference", sourceFunction: "LAMBDA", lineIndex: 13 },
+    ]));
     expect(layout.signals).toContain("跨表引用");
     expect(layout.signals).toContain("动态数组");
     expect(layout.signals).toContain("自定义函数结构");
   });
 
-  it("adds formula layout and call relationship details to copied text", () => {
+  it("adds formula layout and custom parameter references to copied text", () => {
     const response: FormulaExplainResponse = {
       formula: "=LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
       normalizedFormula: "LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
@@ -99,8 +101,11 @@ describe("formula explainer helpers", () => {
 
     expect(copyText).toContain("公式优化排版：");
     expect(copyText).toContain("LET(");
-    expect(copyText).toContain("调用注释：");
-    expect(copyText).toContain("LET 参数 3 调用 FILTER");
+    expect(copyText).toContain("自定义参数：");
+    expect(copyText).toContain("- 定义 LET 参数 src");
+    expect(copyText).toContain("- 引用 LET 参数 src");
+    expect(copyText).not.toContain("调用注释：");
+    expect(copyText).not.toContain("LET 参数 3 调用 FILTER");
     expect(copyText).not.toContain("函数调用关系：");
   });
 });
