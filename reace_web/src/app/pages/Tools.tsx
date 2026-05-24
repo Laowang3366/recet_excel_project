@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Braces, Clock3, FileUp, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { Clock3, Code2, FileUp, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { FormulaExplainResult } from "../components/tools/FormulaExplainResult";
@@ -257,34 +257,51 @@ export function Tools() {
           ) : null}
         </LitePanel>
 
-        <LitePanel>
-          <LiteSectionTitle
-            eyebrow="输出结构"
-            title="公式优化排版"
-            description="结果会按公式结构、函数模块、调用关系和审计信号展示。"
-          />
-          <div className="mt-6 space-y-3">
-            {[
-              ["公式排版", "按缩进层级展示函数和参数。"],
-              ["调用关系", "突出函数之间的参数调用链。"],
-              ["函数模块", "列出每个函数块的层级和子调用。"],
-              ["审计信号", "标记跨表、动态数组和 LET/LAMBDA。"],
-            ].map(([title, text]) => (
-              <div key={title} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-teal-600">
-                  <Braces size={18} />
+        {result ? (
+          <FormulaExplainResult result={result} />
+        ) : (
+          <LitePanel>
+            <LiteSectionTitle
+              eyebrow="输出结构"
+              title="公式优化排版"
+              description="生成后会在这里直接显示缩进排版和行内调用注释。"
+            />
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <span className="text-teal-600"><Code2 size={18} /></span>
+                公式优化排版
+              </div>
+              <div className="mt-3 overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code><span className="rounded bg-teal-50 px-1 font-black text-teal-700">LET</span>(</code>
                 </div>
-                <div>
-                  <div className="text-sm font-black text-slate-900">{title}</div>
-                  <div className="mt-1 text-sm leading-6 text-slate-500">{text}</div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">  data,</code>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">  A2:A100,</code>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">  <span className="rounded bg-teal-50 px-1 font-black text-teal-700">FILTER</span>(</code>
+                  <span className="rounded-full border border-teal-100 bg-teal-50 px-2 py-0.5 text-[11px] font-black text-teal-700">LET 参数 3 调用 FILTER</span>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">    data,</code>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">    data&lt;&gt;&quot;&quot;</code>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code className="whitespace-pre">  )</code>
+                </div>
+                <div className="grid min-w-max grid-cols-[minmax(18rem,1fr)_auto] gap-4">
+                  <code>)</code>
                 </div>
               </div>
-            ))}
-          </div>
-        </LitePanel>
+            </div>
+          </LitePanel>
+        )}
       </section>
-
-      {result ? <FormulaExplainResult result={result} /> : null}
     </LitePageFrame>
   );
 }

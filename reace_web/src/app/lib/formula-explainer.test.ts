@@ -99,7 +99,8 @@ describe("formula explainer helpers", () => {
 
     expect(copyText).toContain("公式优化排版：");
     expect(copyText).toContain("LET(");
-    expect(copyText).toContain("函数调用关系：");
-    expect(copyText).toContain("LET 参数 3 -> FILTER");
+    expect(copyText).toContain("调用注释：");
+    expect(copyText).toContain("LET 参数 3 调用 FILTER");
+    expect(copyText).not.toContain("函数调用关系：");
   });
 });

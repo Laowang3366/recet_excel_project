@@ -135,18 +135,13 @@ export function buildFormulaLayout(formula: string): FormulaLayout {
 export function formatFormulaExplanationForCopy(response: FormulaExplainResponse) {
   const analysisText = formatFormulaAnalysis(response.analysis);
   const layout = buildFormulaLayout(response.formula || response.normalizedFormula);
-  const callRelationshipLines =
-    layout.callEdges.length > 0
-      ? layout.callEdges.map((edge) => `- ${edge.from} 参数 ${edge.argumentIndex} -> ${edge.to}`)
-      : ["- 未检测到嵌套函数调用"];
+  const callAnnotationLines = layout.callEdges.map((edge) => `- ${edge.from} 参数 ${edge.argumentIndex} 调用 ${edge.to}`);
   const lines = [
     `公式：${response.formula}`,
     "",
     "公式优化排版：",
     layout.formattedLines,
-    "",
-    "函数调用关系：",
-    ...callRelationshipLines,
+    ...(callAnnotationLines.length > 0 ? ["", "调用注释：", ...callAnnotationLines] : []),
     ...(layout.signals.length > 0 ? ["", `审计标记：${layout.signals.join(" / ")}`] : []),
     "",
     `整体解释：${response.summary}`,
