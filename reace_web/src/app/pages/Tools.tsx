@@ -87,11 +87,12 @@ export function Tools() {
   };
 
   return (
-    <LitePageFrame className="pt-0 sm:pt-0">
+    <LitePageFrame>
       <LiteHero
         eyebrow="实用工具"
         title="函数公式解释器"
         description="粘贴 Excel 公式后生成中文解释、分段说明、函数含义、注意事项和优化建议。"
+        contentClassName="lg:self-start"
         actions={
           <>
             <button

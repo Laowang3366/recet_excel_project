@@ -14,6 +14,7 @@ type LiteHeroProps = {
   actions?: ReactNode;
   aside?: ReactNode;
   className?: string;
+  contentClassName?: string;
   accentClassName?: string;
 };
 
@@ -41,6 +42,7 @@ export function LiteHero({
   actions,
   aside,
   className,
+  contentClassName,
   accentClassName,
 }: LiteHeroProps) {
   return (
@@ -58,7 +60,7 @@ export function LiteHero({
       <div className="pointer-events-none absolute -right-16 top-0 h-64 w-64 rounded-full bg-[#00b050]/25 blur-3xl" />
       <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-[#7cffb2]/12 blur-3xl" />
       <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)] lg:items-end">
-        <div className="max-w-3xl">
+        <div className={cn("max-w-3xl", contentClassName)}>
           <div
             className={cn(
               "inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/8 px-4 py-2 text-[12px] font-bold tracking-[0.14em] text-white/86 backdrop-blur-sm",
