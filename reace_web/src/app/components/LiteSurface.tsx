@@ -59,7 +59,12 @@ export function LiteHero({
       <div className="pointer-events-none absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.18)_1px,transparent_1px)] [background-size:100%_8px]" />
       <div className="pointer-events-none absolute -right-16 top-0 h-64 w-64 rounded-full bg-[#00b050]/25 blur-3xl" />
       <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-[#7cffb2]/12 blur-3xl" />
-      <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)] lg:items-end">
+      <div
+        className={cn(
+          "relative grid gap-8",
+          aside ? "lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)] lg:items-end" : undefined
+        )}
+      >
         <div className={cn("max-w-3xl", contentClassName)}>
           <div
             className={cn(

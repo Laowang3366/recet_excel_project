@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Clock3, LoaderCircle, Sparkles, Trash2, WandSparkles } from "lucide-react";
+import { Clock3, LoaderCircle, Trash2, WandSparkles } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { FormulaExplainResult } from "../components/tools/FormulaExplainResult";
@@ -128,31 +128,6 @@ export function Tools() {
               清空
             </button>
           </>
-        }
-        aside={
-          <div className="rounded-[30px] border border-white/12 bg-white/10 p-5 backdrop-blur-md">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-[12px] font-black tracking-[0.18em] text-white/70">FORMULA</div>
-                <div className="mt-2 text-2xl font-black text-white">结构化解释</div>
-              </div>
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-                <Sparkles size={22} />
-              </div>
-            </div>
-            <div className="mt-5 space-y-3">
-              {[
-                "支持任意合法 Excel 公式",
-                "单条公式最多 2000 个字符",
-                "可附带表格上下文、期望结果和报错信息",
-                isAuthenticated ? "AI 解释消耗 1 积分，缓存命中不扣积分" : "登录后可使用解释器",
-              ].map((item) => (
-                <div key={item} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white/82">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
         }
       />
 

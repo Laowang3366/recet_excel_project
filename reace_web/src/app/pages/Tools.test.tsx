@@ -16,6 +16,10 @@ describe("Tools", () => {
 
     expect(markup).not.toContain("px-4 py-5 sm:px-6 sm:py-8 pt-0 sm:pt-0");
     expect(markup).toContain('class="max-w-3xl lg:self-start"');
+    expect(markup).toContain('class="relative grid gap-8"');
+    expect(markup).not.toContain("结构化解释");
+    expect(markup).not.toContain("FORMULA");
+    expect(markup).not.toContain("lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]");
     expect(markup).toContain("函数公式解释器");
     expect(markup).toContain("解释公式");
     expect(markup).toContain("公式历史");
