@@ -10,7 +10,13 @@ describe("FormulaExplainResult", () => {
       normalizedFormula: 'LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100="已成交"),MAP(filtered,LAMBDA(row,INDEX(row,1))))',
       summary: "筛选已成交销售记录。",
       segments: [],
-      functions: [],
+      functions: [
+        { name: "LET", purpose: "定义可复用的中间变量。" },
+        { name: "FILTER", purpose: "筛选符合条件的销售记录。" },
+        { name: "MAP", purpose: "逐行处理筛选后的结果。" },
+        { name: "LAMBDA", purpose: "定义每一行的处理逻辑。" },
+        { name: "INDEX", purpose: "取出当前行的第 1 列。" },
+      ],
       warnings: [],
       suggestions: [],
     };
@@ -22,6 +28,9 @@ describe("FormulaExplainResult", () => {
     expect(markup).toContain("定义 LET 参数 src");
     expect(markup).toContain("引用 LET 参数 src");
     expect(markup).toContain("引用 LAMBDA 参数 row");
+    expect(markup).toContain("// LET：定义可复用的中间变量。");
+    expect(markup).toContain("// FILTER：筛选符合条件的销售记录。");
+    expect(markup).toContain("// INDEX：取出当前行的第 1 列。");
     expect(markup).toContain("优化建议");
     expect(markup).toContain("src");
     expect(markup).toContain("filtered");

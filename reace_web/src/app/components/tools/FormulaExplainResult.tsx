@@ -3,11 +3,13 @@ import { AlertTriangle, Code2, Copy, Cpu, FunctionSquare, Lightbulb, ListTree, W
 import { toast } from "sonner";
 import { LitePanel, LiteSectionTitle } from "../LiteSurface";
 import {
+  buildFormulaFunctionAnnotations,
   buildFormulaLayout,
   buildFormulaOptimizationSuggestions,
   formatFormulaAnalysis,
   formatFormulaExplanationForCopy,
   type FormulaExplainResponse,
+  type FormulaFunctionAnnotation,
   type FormulaParameterHighlight,
 } from "../../lib/formula-explainer";
 
@@ -18,7 +20,8 @@ type FormulaExplainResultProps = {
 export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const analysisText = formatFormulaAnalysis(result.analysis);
   const formulaLayout = buildFormulaLayout(result.formula || result.normalizedFormula);
-  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights);
+  const functionAnnotations = buildFormulaFunctionAnnotations(formulaLayout, result.functions);
+  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights, functionAnnotations);
   const parameterSummary = buildParameterSummary(formulaLayout.parameterHighlights);
   const optimizationSuggestions = buildFormulaOptimizationSuggestions(result, formulaLayout);
   const copyResult = async () => {
@@ -103,7 +106,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
                   )
                 ))}
               </code>
-              {line.annotations.length > 0 ? (
+              {line.annotations.length > 0 || line.functionAnnotations.length > 0 ? (
                 <span className="mt-0.5 flex flex-wrap justify-end gap-1.5">
                   {line.annotations.map((annotation) => (
                     <span
@@ -111,6 +114,14 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
                       className={`rounded-full border px-2 py-0.5 text-[11px] font-black leading-5 ${getParameterBadgeClass(annotation)}`}
                     >
                       {formatParameterAnnotation(annotation)}
+                    </span>
+                  ))}
+                  {line.functionAnnotations.map((annotation) => (
+                    <span
+                      key={`function-${annotation.name}-${annotation.comment}`}
+                      className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black leading-5 text-slate-600"
+                    >
+                      {`// ${annotation.name}：${annotation.comment}`}
                     </span>
                   ))}
                 </span>
@@ -195,6 +206,7 @@ type AnnotatedFormulaLine = {
     highlight?: FormulaParameterHighlight;
   }>;
   annotations: FormulaParameterHighlight[];
+  functionAnnotations: FormulaFunctionAnnotation[];
 };
 
 type FormulaParameterSummary = {
@@ -205,12 +217,22 @@ type FormulaParameterSummary = {
   references: number;
 };
 
-function buildAnnotatedFormulaLines(formattedLines: string, highlights: FormulaParameterHighlight[]): AnnotatedFormulaLine[] {
+function buildAnnotatedFormulaLines(
+  formattedLines: string,
+  highlights: FormulaParameterHighlight[],
+  functionAnnotations: FormulaFunctionAnnotation[],
+): AnnotatedFormulaLine[] {
   const highlightsByLine = new Map<number, FormulaParameterHighlight[]>();
   highlights.forEach((highlight) => {
     const lineHighlights = highlightsByLine.get(highlight.lineIndex) || [];
     lineHighlights.push(highlight);
     highlightsByLine.set(highlight.lineIndex, lineHighlights);
+  });
+  const functionAnnotationsByLine = new Map<number, FormulaFunctionAnnotation[]>();
+  functionAnnotations.forEach((annotation) => {
+    const lineAnnotations = functionAnnotationsByLine.get(annotation.lineIndex) || [];
+    lineAnnotations.push(annotation);
+    functionAnnotationsByLine.set(annotation.lineIndex, lineAnnotations);
   });
 
   return formattedLines.split("\n").map((raw, lineIndex) => {
@@ -219,6 +241,7 @@ function buildAnnotatedFormulaLines(formattedLines: string, highlights: FormulaP
       raw,
       segments: splitFormulaLineByParameters(raw, lineHighlights),
       annotations: lineHighlights,
+      functionAnnotations: functionAnnotationsByLine.get(lineIndex) || [],
     };
   });
 }

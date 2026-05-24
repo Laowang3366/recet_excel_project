@@ -40,6 +40,12 @@ export type FormulaParameterHighlight = {
   lineIndex: number;
 };
 
+export type FormulaFunctionAnnotation = {
+  lineIndex: number;
+  name: string;
+  comment: string;
+};
+
 export type FormulaLayout = {
   source: string;
   normalizedSource: string;
@@ -145,6 +151,7 @@ export function buildFormulaLayout(formula: string): FormulaLayout {
 export function formatFormulaExplanationForCopy(response: FormulaExplainResponse) {
   const analysisText = formatFormulaAnalysis(response.analysis);
   const layout = buildFormulaLayout(response.formula || response.normalizedFormula);
+  const functionAnnotations = buildFormulaFunctionAnnotations(layout, response.functions);
   const parameterAnnotationLines = layout.parameterHighlights.map((item) => (
     `- ${item.role === "definition" ? "定义" : "引用"} ${item.sourceFunction} 参数 ${item.name}`
   ));
@@ -153,7 +160,7 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     `公式：${response.formula}`,
     "",
     "公式优化排版：",
-    layout.formattedLines,
+    ...formatFormulaLayoutLinesForCopy(layout.formattedLines, functionAnnotations),
     ...(parameterAnnotationLines.length > 0 ? ["", "自定义参数：", ...parameterAnnotationLines] : []),
     ...(layout.signals.length > 0 ? ["", `审计标记：${layout.signals.join(" / ")}`] : []),
     "",
@@ -187,6 +194,26 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     lines.push("", `模型信息：${metadata.join(" / ")}`);
   }
   return lines.join("\n").trim();
+}
+
+export function buildFormulaFunctionAnnotations(
+  layout: FormulaLayout,
+  functions: FormulaExplainFunction[] = [],
+): FormulaFunctionAnnotation[] {
+  const purposeByName = buildFunctionPurposeMap(functions);
+  const lines = layout.formattedLines.split("\n");
+  const annotations: FormulaFunctionAnnotation[] = [];
+
+  lines.forEach((line, lineIndex) => {
+    const functionNames = extractFormulaFunctionNamesFromLine(line);
+    functionNames.forEach((name) => {
+      const comment = purposeByName.get(name) || FORMULA_FUNCTION_COMMENT_FALLBACK[name] || "";
+      if (!comment) return;
+      annotations.push({ lineIndex, name, comment });
+    });
+  });
+
+  return dedupeFormulaFunctionAnnotations(annotations);
 }
 
 export function buildFormulaOptimizationSuggestions(
@@ -269,6 +296,42 @@ const REPEATED_CALCULATION_FUNCTIONS = new Set([
   "XLOOKUP",
   "XMATCH",
 ]);
+
+const FORMULA_FUNCTION_COMMENT_FALLBACK: Record<string, string> = {
+  AVERAGE: "计算一组数值的平均值。",
+  AVERAGEIFS: "按多个条件计算匹配数据的平均值。",
+  BYCOL: "按列把数组传入 LAMBDA 逐列计算。",
+  BYROW: "按行把数组传入 LAMBDA 逐行计算。",
+  CHOOSECOLS: "从数组中选取指定列。",
+  CHOOSEROWS: "从数组中选取指定行。",
+  COUNTIF: "统计满足单个条件的单元格数量。",
+  COUNTIFS: "统计同时满足多个条件的单元格数量。",
+  DROP: "从数组开头或结尾移除指定行列。",
+  FILTER: "按条件筛选并返回匹配数据。",
+  HSTACK: "把多个数组按列方向拼接。",
+  IF: "按条件在两个结果之间选择。",
+  IFERROR: "在公式出错时返回指定兜底结果。",
+  INDEX: "按行列位置返回区域中的值。",
+  LAMBDA: "定义可复用的自定义计算逻辑。",
+  LET: "定义中间变量并在后续计算中复用。",
+  MAP: "对数组中的每个值套用 LAMBDA 计算。",
+  MATCH: "返回查找值在区域中的相对位置。",
+  REDUCE: "按累计器逻辑把数组折叠成一个结果。",
+  SCAN: "按累计器逻辑返回每一步的中间结果。",
+  SEQUENCE: "生成连续数字数组。",
+  SORT: "对数组结果排序。",
+  SORTBY: "按指定数组或列对结果排序。",
+  SUM: "汇总区域中的数值。",
+  SUMIF: "按单个条件汇总匹配数值。",
+  SUMIFS: "按多个条件汇总匹配数值。",
+  SWITCH: "按匹配项返回对应结果。",
+  TAKE: "从数组开头或结尾取指定行列。",
+  UNIQUE: "返回去重后的唯一值列表。",
+  VLOOKUP: "按首列查找并返回指定列结果。",
+  VSTACK: "把多个数组按行方向拼接。",
+  XLOOKUP: "在查找区域中匹配值并返回对应结果。",
+  XMATCH: "返回查找值在数组中的相对位置。",
+};
 
 function collectFormulaBlocks(
   expression: string,
@@ -366,6 +429,87 @@ function buildFormulaPerformanceSuggestions(layout: FormulaLayout) {
   }
 
   return dedupeSuggestions(suggestions);
+}
+
+function formatFormulaLayoutLinesForCopy(
+  formattedLines: string,
+  annotations: FormulaFunctionAnnotation[],
+) {
+  const annotationsByLine = groupFunctionAnnotationsByLine(annotations);
+  return formattedLines.split("\n").map((line, lineIndex) => {
+    const lineAnnotations = annotationsByLine.get(lineIndex) || [];
+    if (lineAnnotations.length === 0) return line;
+    return `${line} // ${lineAnnotations.map((item) => `${item.name}：${item.comment}`).join("；")}`;
+  });
+}
+
+function buildFunctionPurposeMap(functions: FormulaExplainFunction[]) {
+  const purposes = new Map<string, string>();
+  functions.forEach((item) => {
+    const name = normalizeFormulaFunctionName(item.name);
+    const purpose = item.purpose.trim();
+    if (!name || !purpose || purposes.has(name)) return;
+    purposes.set(name, purpose);
+  });
+  return purposes;
+}
+
+function extractFormulaFunctionNamesFromLine(line: string) {
+  const names: string[] = [];
+  let inString = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const current = line[index];
+    if (current === "\"") {
+      if (inString && line[index + 1] === "\"") {
+        index += 1;
+        continue;
+      }
+      inString = !inString;
+      continue;
+    }
+    if (inString || !isIdentifierStart(current)) continue;
+
+    let cursor = index + 1;
+    while (cursor < line.length && isIdentifierPart(line[cursor])) {
+      cursor += 1;
+    }
+    let parenCursor = cursor;
+    while (parenCursor < line.length && /\s/.test(line[parenCursor])) {
+      parenCursor += 1;
+    }
+    if (line[parenCursor] === "(") {
+      const name = normalizeFormulaFunctionName(line.slice(index, cursor));
+      if (name) names.push(name);
+    }
+    index = cursor - 1;
+  }
+
+  return dedupeFormulaEvidence(names);
+}
+
+function dedupeFormulaFunctionAnnotations(annotations: FormulaFunctionAnnotation[]) {
+  const seen = new Set<string>();
+  return annotations.filter((annotation) => {
+    const key = `${annotation.lineIndex}:${annotation.name}:${annotation.comment}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function groupFunctionAnnotationsByLine(annotations: FormulaFunctionAnnotation[]) {
+  const grouped = new Map<number, FormulaFunctionAnnotation[]>();
+  annotations.forEach((annotation) => {
+    const lineAnnotations = grouped.get(annotation.lineIndex) || [];
+    lineAnnotations.push(annotation);
+    grouped.set(annotation.lineIndex, lineAnnotations);
+  });
+  return grouped;
+}
+
+function normalizeFormulaFunctionName(value: string) {
+  return value.trim().replace(/^_XLFN\./i, "").toUpperCase();
 }
 
 function normalizeSuggestionKey(value: string) {

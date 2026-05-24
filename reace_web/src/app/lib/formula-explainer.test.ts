@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatFormulaExplanationForCopy,
+  buildFormulaFunctionAnnotations,
   buildFormulaLayout,
   buildFormulaOptimizationSuggestions,
   validateFormulaInput,
@@ -108,6 +109,39 @@ describe("formula explainer helpers", () => {
     expect(copyText).not.toContain("调用注释：");
     expect(copyText).not.toContain("LET 参数 3 调用 FILTER");
     expect(copyText).not.toContain("函数调用关系：");
+  });
+
+  it("adds code-comment style function annotations to formatted formulas", () => {
+    const response: FormulaExplainResponse = {
+      formula: '=LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100="已成交"),MAP(filtered,LAMBDA(row,INDEX(row,1))))',
+      normalizedFormula: 'LET(src,Sales!A2:D100,filtered,FILTER(src,Sales!D2:D100="已成交"),MAP(filtered,LAMBDA(row,INDEX(row,1))))',
+      summary: "筛选已成交销售记录。",
+      segments: [],
+      functions: [
+        { name: "LET", purpose: "定义可复用的中间变量。" },
+        { name: "FILTER", purpose: "筛选符合条件的销售记录。" },
+        { name: "MAP", purpose: "逐行处理筛选后的结果。" },
+        { name: "LAMBDA", purpose: "定义每一行的处理逻辑。" },
+        { name: "INDEX", purpose: "取出当前行的第 1 列。" },
+      ],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const layout = buildFormulaLayout(response.formula);
+    const annotations = buildFormulaFunctionAnnotations(layout, response.functions);
+    const copyText = formatFormulaExplanationForCopy(response);
+
+    expect(annotations).toEqual(expect.arrayContaining([
+      { lineIndex: 0, name: "LET", comment: "定义可复用的中间变量。" },
+      { lineIndex: 4, name: "FILTER", comment: "筛选符合条件的销售记录。" },
+      { lineIndex: 8, name: "MAP", comment: "逐行处理筛选后的结果。" },
+      { lineIndex: 10, name: "LAMBDA", comment: "定义每一行的处理逻辑。" },
+      { lineIndex: 12, name: "INDEX", comment: "取出当前行的第 1 列。" },
+    ]));
+    expect(copyText).toContain("LET( // LET：定义可复用的中间变量。");
+    expect(copyText).toContain("FILTER( // FILTER：筛选符合条件的销售记录。");
+    expect(copyText).toContain("INDEX( // INDEX：取出当前行的第 1 列。");
   });
 
   it("adds formula-specific performance suggestions for dynamic array LET formulas", () => {
