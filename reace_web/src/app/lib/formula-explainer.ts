@@ -148,6 +148,7 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
   const parameterAnnotationLines = layout.parameterHighlights.map((item) => (
     `- ${item.role === "definition" ? "定义" : "引用"} ${item.sourceFunction} 参数 ${item.name}`
   ));
+  const optimizationSuggestions = buildFormulaOptimizationSuggestions(response, layout);
   const lines = [
     `公式：${response.formula}`,
     "",
@@ -167,8 +168,8 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
   if (response.warnings.length > 0) {
     lines.push("", "注意事项：", ...response.warnings.map((item) => `- ${item}`));
   }
-  if (response.suggestions.length > 0) {
-    lines.push("", "优化建议：", ...response.suggestions.map((item) => `- ${item}`));
+  if (optimizationSuggestions.length > 0) {
+    lines.push("", "优化建议：", ...optimizationSuggestions.map((item) => `- ${item}`));
   }
   if (analysisText) {
     lines.push("", "公式分析：", analysisText);
@@ -186,6 +187,18 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     lines.push("", `模型信息：${metadata.join(" / ")}`);
   }
   return lines.join("\n").trim();
+}
+
+export function buildFormulaOptimizationSuggestions(
+  response: Pick<FormulaExplainResponse, "formula" | "normalizedFormula" | "suggestions">,
+  layout = buildFormulaLayout(response.formula || response.normalizedFormula),
+) {
+  const suggestions = [...(response.suggestions || [])];
+  const performanceSuggestion = buildFormulaPerformanceSuggestion(layout);
+  if (performanceSuggestion && !suggestions.some((item) => item.includes("性能优化"))) {
+    suggestions.push(performanceSuggestion);
+  }
+  return suggestions;
 }
 
 export function formatFormulaAnalysis(analysis?: FormulaAnalysis | null) {
@@ -209,6 +222,8 @@ type ParsedFormulaFunction = {
 };
 
 type FormulaParameterDefinition = Pick<FormulaParameterHighlight, "name" | "sourceFunction">;
+
+const COMPLEX_FORMULA_PERFORMANCE_SUGGESTION = "性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。";
 
 const DYNAMIC_ARRAY_FUNCTIONS = new Set([
   "BYCOL",
@@ -273,6 +288,14 @@ function collectFormulaBlocks(
   findDirectFunctionCalls(expression).forEach((child) => {
     collectFormulaBlocks(child.raw, depth, parent, argumentIndex, blocks, callEdges);
   });
+}
+
+function buildFormulaPerformanceSuggestion(layout: FormulaLayout) {
+  const performanceSignals = new Set(["跨表引用", "动态数组", "自定义函数结构", "嵌套较深", "嵌套调用"]);
+  const hasPerformanceSignal = layout.signals.some((signal) => performanceSignals.has(signal));
+  const hasFullColumnReference = /(^|[^A-Z0-9_.])\$?[A-Z]{1,3}:\$?[A-Z]{1,3}($|[^A-Z0-9_.])/i.test(layout.normalizedSource);
+  if (!hasPerformanceSignal && !hasFullColumnReference && layout.blocks.length < 2) return "";
+  return COMPLEX_FORMULA_PERFORMANCE_SUGGESTION;
 }
 
 function collectFormulaParameterHighlights(expression: string, formattedLines: string): FormulaParameterHighlight[] {

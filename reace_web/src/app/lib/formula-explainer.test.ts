@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatFormulaExplanationForCopy,
   buildFormulaLayout,
+  buildFormulaOptimizationSuggestions,
   validateFormulaInput,
   type FormulaExplainResponse,
 } from "./formula-explainer";
@@ -107,5 +108,24 @@ describe("formula explainer helpers", () => {
     expect(copyText).not.toContain("调用注释：");
     expect(copyText).not.toContain("LET 参数 3 调用 FILTER");
     expect(copyText).not.toContain("函数调用关系：");
+  });
+
+  it("adds a deterministic performance optimization suggestion for complex formulas", () => {
+    const response: FormulaExplainResponse = {
+      formula: "=LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
+      normalizedFormula: "LET(src,Sales!A2:D100,FILTER(src,Sales!D2:D100=\"已成交\"))",
+      summary: "筛选已成交销售记录。",
+      segments: [],
+      functions: [],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const suggestions = buildFormulaOptimizationSuggestions(response);
+    const copyText = formatFormulaExplanationForCopy(response);
+
+    expect(suggestions).toContain("性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。");
+    expect(copyText).toContain("优化建议：");
+    expect(copyText).toContain("- 性能优化：复杂公式建议用 LET 缓存重复计算结果，并先缩小 FILTER、MAP 等动态数组的输入范围，减少重复重算。");
   });
 });

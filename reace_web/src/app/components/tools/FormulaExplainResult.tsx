@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { LitePanel, LiteSectionTitle } from "../LiteSurface";
 import {
   buildFormulaLayout,
+  buildFormulaOptimizationSuggestions,
   formatFormulaAnalysis,
   formatFormulaExplanationForCopy,
   type FormulaExplainResponse,
@@ -19,6 +20,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const formulaLayout = buildFormulaLayout(result.formula || result.normalizedFormula);
   const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights);
   const parameterSummary = buildParameterSummary(formulaLayout.parameterHighlights);
+  const optimizationSuggestions = buildFormulaOptimizationSuggestions(result, formulaLayout);
   const copyResult = async () => {
     await navigator.clipboard.writeText(formatFormulaExplanationForCopy(result));
     toast.success("解释结果已复制");
@@ -165,11 +167,11 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
         </div>
       </div>
 
-      {result.suggestions.length > 0 ? (
+      {optimizationSuggestions.length > 0 ? (
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
           <SectionTitle icon={<Lightbulb size={18} />} title="优化建议" />
           <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
-            {result.suggestions.map((item) => <li key={item}>- {item}</li>)}
+            {optimizationSuggestions.map((item) => <li key={item}>- {item}</li>)}
           </ul>
         </div>
       ) : null}
