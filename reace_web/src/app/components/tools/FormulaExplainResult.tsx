@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Copy, Cpu, FunctionSquare, Lightbulb, ListTree, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowRight, Braces, Code2, Copy, Cpu, FunctionSquare, GitBranch, Lightbulb, ListTree, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { LitePanel, LiteSectionTitle } from "../LiteSurface";
-import { formatFormulaAnalysis, formatFormulaExplanationForCopy, type FormulaExplainResponse } from "../../lib/formula-explainer";
+import { buildFormulaLayout, formatFormulaAnalysis, formatFormulaExplanationForCopy, type FormulaExplainResponse } from "../../lib/formula-explainer";
 
 type FormulaExplainResultProps = {
   result: FormulaExplainResponse;
@@ -10,6 +10,7 @@ type FormulaExplainResultProps = {
 
 export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const analysisText = formatFormulaAnalysis(result.analysis);
+  const formulaLayout = buildFormulaLayout(result.formula || result.normalizedFormula);
   const copyResult = async () => {
     await navigator.clipboard.writeText(formatFormulaExplanationForCopy(result));
     toast.success("解释结果已复制");
@@ -19,8 +20,8 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
     <LitePanel>
       <LiteSectionTitle
         eyebrow="解释结果"
-        title="中文解释"
-        description="按公式用途、结构片段、函数含义和风险点拆开说明。"
+        title="公式优化排版"
+        description="函数模块、参数层级、调用关系和风险信号。"
         action={
           <button
             type="button"
@@ -60,6 +61,67 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
           <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-sky-950">{analysisText}</p>
         </div>
       ) : null}
+
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SectionTitle icon={<Code2 size={18} />} title="公式优化排版" />
+          {formulaLayout.signals.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {formulaLayout.signals.map((signal) => (
+                <span key={signal} className="rounded-full border border-teal-100 bg-white px-2.5 py-1 text-xs font-bold text-teal-700">
+                  {signal}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <pre className="mt-3 max-h-[26rem] overflow-auto rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-xs leading-6 text-slate-800 sm:text-sm">
+          <code>{formulaLayout.formattedLines}</code>
+        </pre>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-4">
+          <SectionTitle icon={<GitBranch size={18} />} title="函数调用关系" />
+          {formulaLayout.callEdges.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {formulaLayout.callEdges.map((edge, index) => (
+                <div
+                  key={`${edge.from}-${edge.to}-${edge.argumentIndex}-${index}`}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border border-teal-100 bg-white px-3 py-2 text-sm text-slate-700"
+                >
+                  <span className="font-black text-slate-950">{edge.from}</span>
+                  <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-black text-teal-700">参数 {edge.argumentIndex}</span>
+                  <ArrowRight size={15} className="text-teal-600" />
+                  <span className="font-black text-slate-950">{edge.to}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-teal-200 bg-white px-3 py-3 text-sm text-teal-800">未识别到嵌套函数调用。</div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 px-4 py-4">
+          <SectionTitle icon={<Braces size={18} />} title="函数模块" />
+          {formulaLayout.blocks.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {formulaLayout.blocks.map((block) => (
+                <div key={block.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm" style={{ marginLeft: `${Math.min(block.depth, 4) * 0.75}rem` }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-slate-900">{block.name}</span>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-500">深度 {block.depth}</span>
+                  </div>
+                  {block.arguments.length > 0 ? <div className="mt-1 truncate text-xs font-semibold text-slate-500">参数：{block.arguments.join("、")}</div> : null}
+                  {block.children.length > 0 ? <div className="mt-1 text-xs font-semibold text-teal-700">调用：{block.children.join("、")}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">暂无可拆分的函数模块。</div>
+          )}
+        </div>
+      </div>
 
       <div className="mt-6 space-y-4">
         <SectionTitle icon={<ListTree size={18} />} title="分段说明" />

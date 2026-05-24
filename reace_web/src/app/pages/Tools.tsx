@@ -261,14 +261,14 @@ export function Tools() {
           <LiteSectionTitle
             eyebrow="输出结构"
             title="公式优化排版"
-            description="结果会按整体用途、公式片段、函数含义、风险点和优化建议展示。"
+            description="结果会按公式结构、函数模块、调用关系和审计信号展示。"
           />
           <div className="mt-6 space-y-3">
             {[
-              ["整体解释", "先说明公式解决的问题。"],
-              ["分段说明", "按嵌套函数和关键参数拆开。"],
-              ["函数说明", "列出识别到的函数和用途。"],
-              ["注意事项", "指出匹配失败、区域不一致等风险。"],
+              ["公式排版", "按缩进层级展示函数和参数。"],
+              ["调用关系", "突出函数之间的参数调用链。"],
+              ["函数模块", "列出每个函数块的层级和子调用。"],
+              ["审计信号", "标记跨表、动态数组和 LET/LAMBDA。"],
             ].map(([title, text]) => (
               <div key={title} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-teal-600">
