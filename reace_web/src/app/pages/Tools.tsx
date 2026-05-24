@@ -40,10 +40,7 @@ export function Tools() {
   const navigate = useNavigate();
   const { isAuthenticated } = useSession();
   const initialTask = getFormulaExplainTaskSnapshot();
-  const [formula, setFormula] = useState(initialTask.request?.formula || exampleFormulas[0].formula);
-  const [workbookContext, setWorkbookContext] = useState(initialTask.request?.workbookContext || "");
-  const [expectedResult, setExpectedResult] = useState(initialTask.request?.expectedResult || "");
-  const [errorMessageInput, setErrorMessageInput] = useState(initialTask.request?.errorMessageInput || "");
+  const [formula, setFormula] = useState(initialTask.request?.formula || "");
   const formulaTask = useFormulaExplainTask();
   const result = formulaTask.result || null;
   const isExplainPending = formulaTask.status === "pending";
@@ -51,9 +48,6 @@ export function Tools() {
   useEffect(() => {
     if (!formulaTask.taskId || !formulaTask.request) return;
     setFormula(formulaTask.request.formula || "");
-    setWorkbookContext(formulaTask.request.workbookContext || "");
-    setExpectedResult(formulaTask.request.expectedResult || "");
-    setErrorMessageInput(formulaTask.request.errorMessageInput || "");
   }, [formulaTask.taskId, formulaTask.request]);
 
   const handleExplain = () => {
@@ -61,11 +55,7 @@ export function Tools() {
       navigate(buildCurrentAuthRedirectPath());
       return;
     }
-    const validation = validateFormulaInput(formula, {
-      workbookContext,
-      expectedResult,
-      errorMessageInput,
-    });
+    const validation = validateFormulaInput(formula);
     if (!validation.ok) {
       toast.info(validation.message);
       return;
@@ -74,9 +64,6 @@ export function Tools() {
       formula,
       locale: "zh-CN",
       detailLevel: "standard",
-      workbookContext: workbookContext.trim() || undefined,
-      expectedResult: expectedResult.trim() || undefined,
-      errorMessageInput: errorMessageInput.trim() || undefined,
     };
     void startFormulaExplainTask(payload).catch(() => undefined);
   };
@@ -116,9 +103,6 @@ export function Tools() {
               type="button"
               onClick={() => {
                 setFormula("");
-                setWorkbookContext("");
-                setExpectedResult("");
-                setErrorMessageInput("");
                 resetFormulaExplainTask();
               }}
               disabled={isExplainPending}
@@ -143,52 +127,8 @@ export function Tools() {
             disabled={isExplainPending}
             spellCheck={false}
             className="min-h-[220px] w-full resize-y rounded-[26px] border border-slate-200 bg-slate-50 px-5 py-4 font-mono text-sm leading-7 text-slate-900 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
-            placeholder="=IFERROR(XLOOKUP(A2,客户表[手机号],客户表[姓名]),&quot;未找到&quot;)"
+            placeholder="输入或粘贴需要解释的 Excel 公式"
           />
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            <label className="block">
-              <span className="text-sm font-black text-slate-700">表格上下文</span>
-              <textarea
-                value={workbookContext}
-                onChange={(event) => {
-                  setWorkbookContext(event.target.value);
-                  resetFormulaExplainTask();
-                }}
-                disabled={isExplainPending}
-                spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
-                placeholder="例如：A列为客户手机号，B列为客户姓名，F2 是待查询手机号"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-black text-slate-700">期望结果</span>
-              <textarea
-                value={expectedResult}
-                onChange={(event) => {
-                  setExpectedResult(event.target.value);
-                  resetFormulaExplainTask();
-                }}
-                disabled={isExplainPending}
-                spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
-                placeholder="例如：查询到手机号对应的客户姓名，找不到时显示未找到"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-black text-slate-700">错误信息</span>
-              <textarea
-                value={errorMessageInput}
-                onChange={(event) => {
-                  setErrorMessageInput(event.target.value);
-                  resetFormulaExplainTask();
-                }}
-                disabled={isExplainPending}
-                spellCheck={false}
-                className="mt-2 min-h-[120px] w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-teal-400 focus:bg-white focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:opacity-70"
-                placeholder="例如：#N/A、#VALUE! 或公式当前返回的异常结果"
-              />
-            </label>
-          </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {exampleFormulas.map((item) => (
               <button
