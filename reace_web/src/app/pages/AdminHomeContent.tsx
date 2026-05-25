@@ -145,6 +145,7 @@ export function AdminHomeContent() {
   const [editingArticle, setEditingArticle] = useState<TutorialArticleRecord | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [expandedCategoryId, setExpandedCategoryId] = useState("");
+  const [selectedArticleIds, setSelectedArticleIds] = useState<number[]>([]);
   const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
   const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
 
@@ -198,6 +199,7 @@ export function AdminHomeContent() {
   const selectedCategory = categories.find((item) => String(item.id) === categoryFilter) || categories[0] || null;
   const linkedQuestions = questionOptions.filter((item) => articleForm.relatedQuestionIds.includes(item.id));
   const linkedChapters = chapterOptions.filter((item) => articleForm.relatedChapterIds.includes(item.id));
+  const selectedArticleCount = selectedArticleIds.length;
 
   useEffect(() => {
     if (!isAdmin || categoryFilter || !categories[0]?.id) return;
@@ -213,6 +215,11 @@ export function AdminHomeContent() {
       setArticleForm(defaultArticleForm);
     }
   }, [articles, articleOpen, editingArticle?.id, isAdmin]);
+
+  useEffect(() => {
+    const articleIdSet = new Set(articles.map((item) => item.id));
+    setSelectedArticleIds((current) => current.filter((id) => articleIdSet.has(id)));
+  }, [articles]);
 
   if (!isAdmin) {
     return (
@@ -294,6 +301,7 @@ export function AdminHomeContent() {
     if (switchingCategory) {
       setEditingArticle(null);
       setArticleForm({ ...defaultArticleForm, categoryId: nextCategoryId });
+      setSelectedArticleIds([]);
     }
     setExpandedCategoryId((current) => (current === nextCategoryId ? "" : nextCategoryId));
   };
@@ -326,6 +334,30 @@ export function AdminHomeContent() {
       setArticleOpen(false);
       await refreshAll();
       toast.success(editingArticle ? "条目已更新" : "条目已创建");
+    } catch (error) {
+      handleAdminError(error, navigate);
+    }
+  };
+
+  const deleteSelectedArticles = async () => {
+    if (!selectedArticleIds.length) return;
+    const selectedSet = new Set(selectedArticleIds);
+    const selectedItems = articles.filter((item) => selectedSet.has(item.id));
+    const deleteCount = selectedItems.length || selectedArticleIds.length;
+    if (!window.confirm(`确认删除选中的 ${deleteCount} 个教程？`)) {
+      return;
+    }
+    try {
+      for (const id of selectedArticleIds) {
+        await api.delete(`/api/admin/tutorials/articles/${id}`);
+      }
+      if (editingArticle && selectedSet.has(editingArticle.id)) {
+        setEditingArticle(null);
+        setArticleForm({ ...defaultArticleForm, categoryId: categoryFilter });
+      }
+      setSelectedArticleIds([]);
+      await refreshAll();
+      toast.success("已删除所选教程");
     } catch (error) {
       handleAdminError(error, navigate);
     }
@@ -372,9 +404,19 @@ export function AdminHomeContent() {
         <aside className="flex min-h-[620px] flex-col rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-[18px] font-semibold text-[#101828]">教程分类</h2>
-            <button type="button" onClick={openCreateCategory} className="text-sm font-semibold text-[#1677ff] hover:text-[#0958d9]">
-              新增
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={openCreateCategory} className="text-sm font-semibold text-[#1677ff] hover:text-[#0958d9]">
+                新增
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteSelectedArticles()}
+                disabled={!selectedArticleCount}
+                className="text-sm font-semibold text-[#d92d20] transition hover:text-[#b42318] disabled:cursor-not-allowed disabled:text-[#cbd5e1]"
+              >
+                删除所选
+              </button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {categories.map((item) => {
@@ -417,26 +459,42 @@ export function AdminHomeContent() {
                         <div className="rounded-[6px] bg-[#f8fbff] px-3 py-3 text-sm text-[#667085]">教程加载中...</div>
                       ) : visibleArticles.length > 0 ? (
                         visibleArticles.map((article) => {
-                          const selected = editingArticle?.id === article.id;
+                          const activeArticle = editingArticle?.id === article.id;
+                          const checked = selectedArticleIds.includes(article.id);
                           return (
-                            <button
+                            <div
                               key={article.id}
-                              type="button"
-                              onClick={() => openEditArticle(article)}
-                              className={`flex w-full items-start gap-2 rounded-[6px] px-3 py-2 text-left transition ${
-                                selected
+                              className={`flex w-full items-center gap-2 rounded-[6px] px-3 py-2 text-left transition ${
+                                activeArticle
                                   ? "bg-[#1677ff] text-white shadow-sm"
                                   : "text-[#344054] hover:bg-[#f2f6ff] hover:text-[#1677ff]"
                               }`}
                             >
-                              <FileText size={15} className="mt-0.5 shrink-0" />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold">{article.title || `教程 ${article.id}`}</span>
-                                <span className={`mt-0.5 block truncate text-xs ${selected ? "text-white/75" : "text-[#98a2b3]"}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  setSelectedArticleIds((current) => toggleId(current, article.id, event.target.checked));
+                                }}
+                                aria-label={`选择 ${article.title || `教程 ${article.id}`}`}
+                                className="h-4 w-4 shrink-0 rounded border-[#cbd5e1] accent-[#1677ff]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => openEditArticle(article)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                              >
+                                <FileText size={15} className="shrink-0" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{article.title || `教程 ${article.id}`}</span>
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    activeArticle ? "bg-white/15 text-white" : "bg-[#eef2f6] text-[#667085]"
+                                  }`}
+                                >
                                   {difficultyLabel[article.difficulty] || "基础"} · Lv.{article.recommendLevel ?? 1}
                                 </span>
-                              </span>
-                            </button>
+                              </button>
+                            </div>
                           );
                         })
                       ) : (
@@ -449,14 +507,6 @@ export function AdminHomeContent() {
             })}
             {categories.length === 0 ? <AdminEmptyState message="暂无首页教程分类。" /> : null}
           </div>
-          <button
-            type="button"
-            onClick={openCreateCategory}
-            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] border border-[#1677ff] bg-white text-sm font-semibold text-[#1677ff] transition hover:bg-[#f0f7ff]"
-          >
-            <Upload size={16} />
-            新增分类
-          </button>
         </aside>
 
         <main className="space-y-5">
@@ -892,7 +942,7 @@ function TutorialContentEditor({
           suppressContentEditableWarning
           onInput={syncEditorContent}
           onBlur={syncEditorContent}
-          className={`overflow-auto px-6 py-5 outline-none ${tutorialHtmlContentClass} ${compact ? "min-h-[320px]" : "min-h-[360px]"}`}
+          className={`overflow-y-auto px-6 py-5 outline-none ${tutorialHtmlContentClass} ${compact ? "h-[320px]" : "h-[520px]"}`}
         />
       </div>
     </div>
@@ -937,7 +987,7 @@ function TutorialContentEditor({
 function TutorialHtmlPreview({ value, compact = false }: { value: string; compact?: boolean }) {
   if (!value.trim()) {
     return (
-      <div className={`flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400 ${compact ? "min-h-[320px]" : "min-h-[360px]"}`}>
+      <div className={`flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400 ${compact ? "h-[320px]" : "h-[520px]"}`}>
         暂无正文内容
       </div>
     );
@@ -945,7 +995,7 @@ function TutorialHtmlPreview({ value, compact = false }: { value: string; compac
 
   return (
     <div
-      className={`overflow-auto rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-inner ${tutorialHtmlContentClass} ${compact ? "min-h-[320px]" : "min-h-[360px]"}`}
+      className={`overflow-auto rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-inner ${tutorialHtmlContentClass} ${compact ? "h-[320px]" : "h-[520px]"}`}
       dangerouslySetInnerHTML={{ __html: value }}
     />
   );
