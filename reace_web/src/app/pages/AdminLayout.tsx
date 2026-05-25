@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { ArrowLeft, Bell, ChevronDown, CircleHelp, Globe2, Menu, Search, X } from "lucide-react";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { Bell, ChevronDown, CircleHelp, Globe2, Menu, Search, X } from "lucide-react";
 import { useSession } from "../lib/session";
 import { canAccessAdminPath, getAdminModuleByPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
 import { getAdminAvatarSrc, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
-import { secondaryButtonClassName } from "../admin/shared";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { AdminDialogHost } from "./AdminConsoleShared";
 
@@ -70,7 +69,7 @@ export function AdminLayout() {
 
         <div className="flex-1 overflow-y-auto px-2 pb-5 pt-1">
           <div className="space-y-1">
-              {modules.map((module, index) => {
+              {modules.map((module) => {
                 const isActive = location.pathname === module.path;
                 const Icon = module.icon;
                 return (
@@ -88,7 +87,7 @@ export function AdminLayout() {
                     }`}
                   >
                     <Icon size={21} className={isActive ? "text-white" : "text-white/86 group-hover:text-white"} />
-                    <div className="min-w-0 truncate">{index + 1}. {module.label}</div>
+                    <div className="min-w-0 truncate">{module.label}</div>
                   </button>
                 );
               })}
@@ -98,7 +97,7 @@ export function AdminLayout() {
 
       <div className="min-w-0">
         <header className="sticky top-0 z-20 border-b border-[#e5e7eb] bg-white shadow-[0_1px_4px_rgba(0,21,41,0.06)]">
-          <div className="flex min-h-[72px] items-center justify-between gap-4 px-4 md:px-6">
+          <div className="grid min-h-[72px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 md:px-8 xl:grid-cols-[270px_minmax(360px,520px)_minmax(270px,1fr)]">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -114,15 +113,15 @@ export function AdminLayout() {
                 <span className="truncate font-semibold text-[#101828]">{currentModule?.label || "后台管理"}</span>
               </div>
             </div>
-            <label className="hidden min-w-[260px] max-w-[520px] flex-1 items-center gap-2 rounded-[6px] border border-[#d0d5dd] bg-white px-4 text-[#98a2b3] shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:flex">
+            <label className="hidden h-12 w-full items-center gap-3 rounded-[6px] border border-[#d0d5dd] bg-white px-4 text-[#98a2b3] shadow-[0_1px_2px_rgba(16,24,40,0.04)] xl:flex">
               <Search size={18} />
               <input
                 type="search"
-                placeholder={`搜索${currentModule?.label || "用户、手机号、邮箱"}`}
+                placeholder="搜索用户、手机号、邮箱"
                 className="h-11 min-w-0 flex-1 bg-transparent text-sm text-[#344054] outline-none placeholder:text-[#98a2b3]"
               />
             </label>
-            <div className="flex shrink-0 items-center gap-2 md:gap-4">
+            <div className="flex shrink-0 items-center justify-end gap-2 md:gap-4">
               <button type="button" aria-label="通知" className="relative hidden h-10 w-10 items-center justify-center rounded-full text-[#101828] hover:bg-[#f2f4f7] md:inline-flex">
                 <Bell size={22} />
                 <span className="absolute right-1.5 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff2d2d] px-1 text-[10px] font-semibold leading-none text-white">8</span>
@@ -147,10 +146,6 @@ export function AdminLayout() {
                 </div>
                 <ChevronDown size={16} className="hidden text-[#667085] sm:block" />
               </div>
-              <Link to="/" className={secondaryButtonClassName()}>
-                <ArrowLeft size={16} />
-                返回站点
-              </Link>
             </div>
           </div>
         </header>
