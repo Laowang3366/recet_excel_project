@@ -1,4 +1,5 @@
 import { normalizeAvatarUrl } from "../lib/mappers";
+import type { AdminModuleKey } from "./config";
 
 export type AdminAvatarUser = {
   id?: number | string | null;
@@ -10,6 +11,20 @@ export type AdminAvatarUser = {
 export function getAdminAvatarSrc(user?: AdminAvatarUser | null) {
   const seed = user?.username || user?.email || (user?.id == null ? "admin" : String(user.id));
   return normalizeAvatarUrl(user?.avatar, seed);
+}
+
+export function getAdminSearchPlaceholder(moduleKey?: AdminModuleKey | null) {
+  const placeholders: Partial<Record<AdminModuleKey, string>> = {
+    notifications: "搜索通知标题、目标人群、关键词",
+    users: "搜索用户、手机号、邮箱",
+    "home-content": "搜索教程标题、分类、标签",
+    questions: "搜索题目标题、分类、难度",
+    templates: "搜索模板标题、行业、标签",
+    qa: "搜索求助标题、答疑内容、用户",
+    assistant: "搜索模型、配置、单位",
+  };
+
+  return placeholders[moduleKey || "users"] || "搜索用户、手机号、邮箱";
 }
 
 export function getAdminSidebarClassName(isMobileNavOpen: boolean) {

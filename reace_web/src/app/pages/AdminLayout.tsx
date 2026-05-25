@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router";
 import { Bell, ChevronDown, CircleHelp, Globe2, Menu, Search, X } from "lucide-react";
 import { useSession } from "../lib/session";
 import { canAccessAdminPath, getAdminModuleByPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
-import { getAdminAvatarSrc, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
+import { getAdminAvatarSrc, getAdminSearchPlaceholder, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { AdminDialogHost } from "./AdminConsoleShared";
 
@@ -117,7 +117,7 @@ export function AdminLayout() {
               <Search size={18} />
               <input
                 type="search"
-                placeholder="搜索用户、手机号、邮箱"
+                placeholder={getAdminSearchPlaceholder(currentModule?.key)}
                 className="h-11 min-w-0 flex-1 bg-transparent text-sm text-[#344054] outline-none placeholder:text-[#98a2b3]"
               />
             </label>
@@ -134,7 +134,13 @@ export function AdminLayout() {
                 简体中文
                 <ChevronDown size={16} />
               </button>
-              <div className="flex items-center gap-2 border-l border-[#e5e7eb] pl-2 md:pl-4">
+              <button
+                type="button"
+                title="返回前台"
+                aria-label="返回前台"
+                onClick={() => navigate("/")}
+                className="group relative flex items-center gap-2 border-l border-[#e5e7eb] pl-2 text-left transition md:pl-4"
+              >
                 <img
                   src={getAdminAvatarSrc(user)}
                   alt={user?.username || "admin"}
@@ -145,7 +151,10 @@ export function AdminLayout() {
                   <div className="text-xs text-[#667085]">{role === "admin" ? "管理员" : "运营"}</div>
                 </div>
                 <ChevronDown size={16} className="hidden text-[#667085] sm:block" />
-              </div>
+                <span className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 hidden rounded-[4px] bg-[#101828] px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block">
+                  返回前台
+                </span>
+              </button>
             </div>
           </div>
         </header>

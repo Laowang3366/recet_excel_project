@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeAvatarUrl } from "../lib/mappers";
 import {
   getAdminAvatarSrc,
+  getAdminSearchPlaceholder,
   getAdminSidebarClassName,
   getAdminSidebarOverlayClassName,
 } from "./display";
@@ -35,5 +36,10 @@ describe("admin display helpers", () => {
     expect(className).toContain("w-[232px]");
     expect(className).toContain("bg-[#001529]");
     expect(className).toContain("shadow-[2px_0_8px_rgba(0,21,41,0.18)]");
+  });
+
+  it("uses module-specific admin search placeholders", () => {
+    expect(getAdminSearchPlaceholder("notifications")).toBe("搜索通知标题、目标人群、关键词");
+    expect(getAdminSearchPlaceholder("users")).toBe("搜索用户、手机号、邮箱");
   });
 });
