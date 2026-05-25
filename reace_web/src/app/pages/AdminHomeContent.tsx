@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpenText,
   Bold,
+  ChevronDown,
+  ChevronRight,
   Code2,
   Edit3,
   Eraser,
@@ -142,6 +144,7 @@ export function AdminHomeContent() {
   const [editingCategory, setEditingCategory] = useState<TutorialCategoryRecord | null>(null);
   const [editingArticle, setEditingArticle] = useState<TutorialArticleRecord | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [expandedCategoryId, setExpandedCategoryId] = useState("");
   const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
   const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
 
@@ -193,28 +196,21 @@ export function AdminHomeContent() {
     [categories]
   );
   const selectedCategory = categories.find((item) => String(item.id) === categoryFilter) || categories[0] || null;
-  const selectedArticleOptions = articles.map((item) => ({ value: String(item.id), label: item.title || `教程 ${item.id}` }));
   const linkedQuestions = questionOptions.filter((item) => articleForm.relatedQuestionIds.includes(item.id));
   const linkedChapters = chapterOptions.filter((item) => articleForm.relatedChapterIds.includes(item.id));
 
   useEffect(() => {
     if (!isAdmin || categoryFilter || !categories[0]?.id) return;
-    setCategoryFilter(String(categories[0].id));
+    const firstCategoryId = String(categories[0].id);
+    setCategoryFilter(firstCategoryId);
+    setExpandedCategoryId(firstCategoryId);
   }, [categories, categoryFilter, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin || articleOpen) return;
-    const current = articles.find((item) => item.id === editingArticle?.id) || articles[0] || null;
-    if (!current) {
-      if (editingArticle) {
-        setEditingArticle(null);
-        setArticleForm(defaultArticleForm);
-      }
-      return;
-    }
-    if (current.id !== editingArticle?.id) {
-      setEditingArticle(current);
-      setArticleForm(toArticleForm(current));
+    if (editingArticle && !articles.some((item) => item.id === editingArticle.id)) {
+      setEditingArticle(null);
+      setArticleForm(defaultArticleForm);
     }
   }, [articles, articleOpen, editingArticle?.id, isAdmin]);
 
@@ -289,6 +285,17 @@ export function AdminHomeContent() {
       categoryId: categoryFilter || categoryOptions[0]?.value || "",
     });
     setArticleOpen(true);
+  };
+
+  const toggleCategoryArticleList = (item: TutorialCategoryRecord) => {
+    const nextCategoryId = String(item.id);
+    const switchingCategory = categoryFilter !== nextCategoryId;
+    setCategoryFilter(nextCategoryId);
+    if (switchingCategory) {
+      setEditingArticle(null);
+      setArticleForm({ ...defaultArticleForm, categoryId: nextCategoryId });
+    }
+    setExpandedCategoryId((current) => (current === nextCategoryId ? "" : nextCategoryId));
   };
 
   const openEditArticle = (item: TutorialArticleRecord) => {
@@ -371,36 +378,72 @@ export function AdminHomeContent() {
           </div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {categories.map((item) => {
-              const active = String(item.id) === String(selectedCategory?.id);
+              const categoryId = String(item.id);
+              const active = categoryId === String(selectedCategory?.id);
+              const expanded = expandedCategoryId === categoryId;
+              const visibleArticles = active ? articles : [];
               return (
-                <div
-                  key={item.id}
-                  className={`group relative flex min-h-[54px] items-center gap-3 rounded-[6px] border-l-4 px-3 transition ${
-                    active
-                      ? "border-[#1677ff] bg-[#eef5ff] text-[#1677ff]"
-                      : "border-transparent bg-white text-[#344054] hover:bg-[#f8fbff]"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategoryFilter(String(item.id));
-                      setEditingArticle(null);
-                    }}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                <div key={item.id} className="space-y-1">
+                  <div
+                    className={`group/category relative flex min-h-[54px] items-center gap-2 rounded-[6px] border-l-4 px-3 transition ${
+                      active
+                        ? "border-[#1677ff] bg-[#eef5ff] text-[#1677ff]"
+                        : "border-transparent bg-white text-[#344054] hover:bg-[#f8fbff]"
+                    }`}
                   >
-                    <Folder size={20} className={active ? "text-[#1677ff]" : "text-[#98a2b3]"} />
-                    <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{item.name}</span>
-                    <span className="text-[15px] text-[#667085]">{item.articleCount ?? 0}</span>
-                  </button>
-                  <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
-                    <button type="button" onClick={() => openEditCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#1677ff]" aria-label="编辑分类">
-                      <Edit3 size={14} />
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => toggleCategoryArticleList(item)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <Folder size={20} className={active ? "text-[#1677ff]" : "text-[#98a2b3]"} />
+                      <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{item.name}</span>
+                      <span className="text-[15px] text-[#667085]">{item.articleCount ?? 0}</span>
                     </button>
-                    <button type="button" onClick={() => void deleteCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#d92d20]" aria-label="删除分类">
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="hidden shrink-0 items-center gap-1 group-hover/category:flex">
+                      <button type="button" onClick={() => openEditCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#1677ff]" aria-label="编辑分类">
+                        <Edit3 size={14} />
+                      </button>
+                      <button type="button" onClick={() => void deleteCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#d92d20]" aria-label="删除分类">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
+                  {expanded ? (
+                    <div className="ml-5 space-y-1 border-l border-[#d8e6ff] pl-3">
+                      {articlesQuery.isLoading ? (
+                        <div className="rounded-[6px] bg-[#f8fbff] px-3 py-3 text-sm text-[#667085]">教程加载中...</div>
+                      ) : visibleArticles.length > 0 ? (
+                        visibleArticles.map((article) => {
+                          const selected = editingArticle?.id === article.id;
+                          return (
+                            <button
+                              key={article.id}
+                              type="button"
+                              onClick={() => openEditArticle(article)}
+                              className={`flex w-full items-start gap-2 rounded-[6px] px-3 py-2 text-left transition ${
+                                selected
+                                  ? "bg-[#1677ff] text-white shadow-sm"
+                                  : "text-[#344054] hover:bg-[#f2f6ff] hover:text-[#1677ff]"
+                              }`}
+                            >
+                              <FileText size={15} className="mt-0.5 shrink-0" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold">{article.title || `教程 ${article.id}`}</span>
+                                <span className={`mt-0.5 block truncate text-xs ${selected ? "text-white/75" : "text-[#98a2b3]"}`}>
+                                  {difficultyLabel[article.difficulty] || "基础"} · Lv.{article.recommendLevel ?? 1}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-[6px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-3 py-3 text-sm text-[#667085]">该分类暂无教程</div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -421,24 +464,14 @@ export function AdminHomeContent() {
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
                 <h2 className="truncate text-[20px] font-semibold text-[#101828]">
-                  编辑教程：{editingArticle?.title || selectedCategory?.name || "请选择教程"}
+                  编辑教程：{editingArticle?.title || "请选择左侧教程"}
                 </h2>
-                {selectedArticleOptions.length > 0 ? (
-                  <select
-                    value={editingArticle?.id ? String(editingArticle.id) : ""}
-                    onChange={(event) => {
-                      const item = articles.find((article) => String(article.id) === event.target.value);
-                      if (item) openEditArticle(item);
-                    }}
-                    className="mt-2 h-9 max-w-full rounded-[4px] border border-[#d0d5dd] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#1677ff]"
-                  >
-                    {selectedArticleOptions.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                ) : null}
+                <p className="mt-1 text-sm text-[#667085]">
+                  {selectedCategory?.name ? `当前分类：${selectedCategory.name}` : "先展开左侧分类，再选择教程进行编辑。"}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
+              {editingArticle ? (
+                <div className="flex items-center gap-2">
                 <span className={`rounded-[4px] px-3 py-1 text-xs font-semibold ${articleForm.enabled ? "bg-[#dff7ea] text-[#039855]" : "bg-[#eef2f6] text-[#667085]"}`}>
                   {articleForm.enabled ? "已启用" : "未启用"}
                 </span>
@@ -446,11 +479,22 @@ export function AdminHomeContent() {
                   <Save size={16} />
                   保存教程
                 </button>
-              </div>
+                </div>
+              ) : null}
             </div>
 
-            {articles.length === 0 ? (
+            {!editingArticle && articles.length === 0 ? (
               <AdminEmptyState message="当前分类暂无教程，请点击右上角新增教程。" />
+            ) : !editingArticle ? (
+              <div className="flex min-h-[420px] items-center justify-center rounded-[6px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-6 text-center">
+                <div>
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e8f1ff] text-[#1677ff]">
+                    <BookOpenText size={26} />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-[#101828]">从左侧教程列表选择内容</h3>
+                  <p className="mt-2 text-sm text-[#667085]">展开分类后点击具体教程，编辑框会在这里打开。</p>
+                </div>
+              </div>
             ) : (
               <div className="space-y-4">
                 <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr]">
@@ -498,6 +542,7 @@ export function AdminHomeContent() {
             )}
           </section>
 
+          {editingArticle ? (
           <div className="grid gap-5 xl:grid-cols-2">
             <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
               <div className="mb-4 flex items-center justify-between">
@@ -567,6 +612,7 @@ export function AdminHomeContent() {
               </div>
             </section>
           </div>
+          ) : null}
         </main>
       </div>
 
