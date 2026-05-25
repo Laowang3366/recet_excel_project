@@ -1,13 +1,10 @@
 package com.excel.forum.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.excel.forum.entity.DailyChallenge;
 import com.excel.forum.entity.PracticeChapter;
 import com.excel.forum.entity.PracticeLevel;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.dto.AdminPracticeCampaignLevelRequest;
-import com.excel.forum.entity.dto.AdminPracticeDailyChallengeRequest;
-import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
 import com.excel.forum.mapper.PracticeLevelMapper;
 import com.excel.forum.service.PracticeCampaignService;
@@ -21,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +25,7 @@ import java.util.Map;
 import static com.excel.forum.controller.AdminControllerSupport.defaultText;
 import static com.excel.forum.controller.AdminControllerSupport.parseBoolean;
 import static com.excel.forum.controller.AdminControllerSupport.parseInteger;
-import static com.excel.forum.controller.AdminControllerSupport.parseLocalDate;
-import static com.excel.forum.controller.AdminControllerSupport.parseLong;
 import static com.excel.forum.controller.AdminControllerSupport.safeInt;
-import static com.excel.forum.util.QueryPageUtils.first;
 
 @RestController
 @RequestMapping("/api/admin/practice-campaign")
@@ -40,7 +33,6 @@ import static com.excel.forum.util.QueryPageUtils.first;
 public class AdminPracticeCampaignController {
     private final PracticeLevelMapper practiceLevelMapper;
     private final PracticeChapterMapper practiceChapterMapper;
-    private final DailyChallengeMapper dailyChallengeMapper;
     private final QuestionService questionService;
     private final PracticeCampaignService practiceCampaignService;
 
@@ -96,58 +88,4 @@ public class AdminPracticeCampaignController {
         return ResponseEntity.ok(Map.of("message", "关卡配置已更新"));
     }
 
-    @GetMapping("/daily-challenge")
-    public ResponseEntity<?> getPracticeCampaignDailyChallengeConfig() {
-        QueryWrapper<DailyChallenge> queryWrapper = new QueryWrapper<>();
-        queryWrapper.orderByDesc("challenge_date").orderByDesc("id");
-        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
-        if (challenge == null) {
-            return ResponseEntity.ok(Map.of("record", Map.of()));
-        }
-        PracticeLevel level = practiceLevelMapper.selectById(challenge.getLevelId());
-        PracticeChapter chapter = level == null ? null : practiceChapterMapper.selectById(level.getChapterId());
-        return ResponseEntity.ok(Map.of("record", Map.of(
-                "id", challenge.getId(),
-                "challengeDate", challenge.getChallengeDate(),
-                "levelId", challenge.getLevelId(),
-                "levelTitle", level == null ? "-" : defaultText(level.getTitle(), "未命名关卡"),
-                "chapterName", chapter == null ? "-" : chapter.getName(),
-                "rewardExp", safeInt(challenge.getRewardExp()),
-                "rewardPoints", safeInt(challenge.getRewardPoints()),
-                "enabled", challenge.getEnabled() == null || challenge.getEnabled()
-        )));
-    }
-
-    @PutMapping("/daily-challenge")
-    public ResponseEntity<?> savePracticeCampaignDailyChallenge(@RequestBody AdminPracticeDailyChallengeRequest body) {
-        Long levelId = parseLong(body == null ? null : body.getLevelId());
-        LocalDate challengeDate = parseLocalDate(body == null ? null : body.getChallengeDate());
-        if (levelId == null) {
-            return ResponseEntity.badRequest().body(Map.of("message", "请选择每日挑战关卡"));
-        }
-        if (challengeDate == null) {
-            challengeDate = LocalDate.now();
-        }
-        PracticeLevel level = practiceLevelMapper.selectById(levelId);
-        if (level == null || !Boolean.TRUE.equals(level.getEnabled())) {
-            return ResponseEntity.badRequest().body(Map.of("message", "所选关卡不存在或未启用"));
-        }
-        QueryWrapper<DailyChallenge> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("challenge_date", challengeDate).orderByDesc("id");
-        DailyChallenge challenge = first(dailyChallengeMapper, queryWrapper);
-        if (challenge == null) {
-            challenge = new DailyChallenge();
-            challenge.setChallengeDate(challengeDate);
-        }
-        challenge.setLevelId(levelId);
-        challenge.setRewardExp(parseInteger(body == null ? null : body.getRewardExp(), safeInt(level.getRewardExp())));
-        challenge.setRewardPoints(parseInteger(body == null ? null : body.getRewardPoints(), safeInt(level.getRewardPoints())));
-        challenge.setEnabled(parseBoolean(body == null ? null : body.getEnabled(), true));
-        if (challenge.getId() == null) {
-            dailyChallengeMapper.insert(challenge);
-        } else {
-            dailyChallengeMapper.updateById(challenge);
-        }
-        return ResponseEntity.ok(Map.of("message", "每日挑战已更新"));
-    }
 }

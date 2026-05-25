@@ -37,12 +37,6 @@ type CampaignChapterState = {
   name?: string | null;
 };
 
-type DailyChallengeState = {
-  rewardGranted?: boolean;
-  rewardPoints?: number;
-  rewardExp?: number;
-};
-
 type CampaignResultLocationState = {
   campaignLevel?: CampaignLevelState;
   campaignChapter?: CampaignChapterState;
@@ -52,7 +46,6 @@ type CampaignResultLocationState = {
   firstPassBonusAwarded?: number;
   totalRewardPoints?: number;
   totalExpGained?: number;
-  dailyChallenge?: DailyChallengeState;
 };
 
 type CampaignLevelDetailResponse = {
@@ -79,7 +72,6 @@ export function PracticeCampaignResult() {
   const firstPassBonusAwarded = Number(routeState.firstPassBonusAwarded || 0);
   const totalRewardPoints = Number(routeState.totalRewardPoints || 0);
   const totalExpGained = Number(routeState.totalExpGained || 0);
-  const dailyChallenge = routeState.dailyChallenge || {};
 
   const recordQuery = useQuery({
     queryKey: practiceKeys.recordDetail(id || "unknown"),
@@ -174,17 +166,11 @@ export function PracticeCampaignResult() {
             </div>
           </div>
 
-          {(firstPassBonusAwarded > 0 || Number(dailyChallenge?.rewardPoints || 0) > 0 || totalExpGained > 0) ? (
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {(firstPassBonusAwarded > 0 || totalExpGained > 0) ? (
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left">
                 <div className="text-[11px] font-bold text-amber-700">首通额外奖励</div>
                 <div className="mt-2 text-xl font-black text-slate-900">{firstPassBonusAwarded > 0 ? `+${firstPassBonusAwarded} 积分` : "无"}</div>
-              </div>
-              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-left">
-                <div className="text-[11px] font-bold text-sky-700">每日挑战奖励</div>
-                <div className="mt-2 text-xl font-black text-slate-900">
-                  {dailyChallenge?.rewardGranted ? `+${dailyChallenge.rewardPoints || 0} 积分 / +${dailyChallenge.rewardExp || 0} 经验` : "无"}
-                </div>
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-left">
                 <div className="text-[11px] font-bold text-emerald-700">总经验</div>

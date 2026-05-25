@@ -104,7 +104,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         response.put("world", buildWorldPayload());
         response.put("currentChapter", currentChapter);
         response.put("currentLevel", currentLevel);
-        response.put("dailyChallenge", buildDailyChallengePayload(userId));
         response.put("summary", summary);
         return response;
     }
@@ -185,44 +184,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         response.put("level", levelNode);
         response.put("question", questionPayload);
         return response;
-    }
-
-    @Override
-    public Map<String, Object> getDailyChallenge(Long userId) {
-        Map<String, Object> payload = buildDailyChallengePayload(userId);
-        if (payload == null) {
-            Map<Long, UserLevelProgress> progressMap = findUserLevelProgressMap(userId);
-            List<PracticeChapter> chapters = listEnabledChapters();
-            Map<Long, List<PracticeLevel>> levelsByChapterId = listEnabledLevelsByChapterId();
-            List<Map<String, Object>> summaries = buildChapterSummaries(chapters, levelsByChapterId, progressMap);
-            Map<String, Object> currentChapter = summaries.stream()
-                    .filter(item -> Boolean.TRUE.equals(item.get("unlocked")))
-                    .findFirst()
-                    .orElse(null);
-            if (currentChapter != null) {
-                List<Map<String, Object>> levels = buildLevelNodes(
-                        levelsByChapterId.getOrDefault(toLong(currentChapter.get("id")), List.of()),
-                        progressMap,
-                        true
-                );
-                Map<String, Object> available = levels.stream()
-                        .filter(item -> "available".equals(item.get("status")) || "cleared".equals(item.get("status")) || "perfect".equals(item.get("status")))
-                        .findFirst()
-                        .orElse(null);
-                if (available != null) {
-                    payload = new LinkedHashMap<>();
-                    payload.put("configured", false);
-                    payload.put("levelId", available.get("id"));
-                    payload.put("title", available.get("title"));
-                    payload.put("rewardExp", available.get("rewardExp"));
-                    payload.put("rewardPoints", available.get("rewardPoints"));
-                }
-            }
-        }
-        if (payload == null) {
-            payload = Map.of();
-        }
-        return Map.of("challenge", payload);
     }
 
     @Override
@@ -467,13 +428,8 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         syncUserChapterProgress(userId);
         syncUserWrongQuestion(userId, level, passed);
         int firstPassBonusAwarded = rewardService.awardLevelFirstPassBonus(userId, level, passed, existingProgress);
-        Map<String, Object> dailyChallengeReward = passed
-                ? rewardService.awardDailyChallengeIfNeeded(userId, level)
-                : Map.of("applied", false, "completed", false, "rewardGranted", false);
-        int dailyChallengePoints = toInt(dailyChallengeReward.get("rewardPoints"));
-        int dailyChallengeExp = toInt(dailyChallengeReward.get("rewardExp"));
-        int totalRewardPoints = toInt(submitResult.get("rewardPoints")) + firstPassBonusAwarded + dailyChallengePoints;
-        int totalExpGained = toInt(submitResult.get("expGained")) + dailyChallengeExp;
+        int totalRewardPoints = toInt(submitResult.get("rewardPoints")) + firstPassBonusAwarded;
+        int totalExpGained = toInt(submitResult.get("expGained"));
 
         Long nextLevelId = findNextLevelId(level, userId);
         Map<String, Object> response = new LinkedHashMap<>(submitResult);
@@ -485,7 +441,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
         response.put("firstPassBonusAwarded", firstPassBonusAwarded);
         response.put("totalRewardPoints", totalRewardPoints);
         response.put("totalExpGained", totalExpGained);
-        response.put("dailyChallenge", dailyChallengeReward);
         return response;
     }
 
@@ -640,10 +595,6 @@ public class PracticeCampaignServiceImpl implements PracticeCampaignService {
             ));
         }
         return result;
-    }
-
-    private Map<String, Object> buildDailyChallengePayload(Long userId) {
-        return rewardService.buildDailyChallengePayload(userId);
     }
 
     private int calculateCurrentStreak(

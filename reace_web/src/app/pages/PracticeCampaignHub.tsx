@@ -162,14 +162,8 @@ export function PracticeCampaignHub() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-              <PracticeActionButton onClick={() => navigate("/practice")}>
-                查看所有章节列表
-              </PracticeActionButton>
               <PracticeActionButton onClick={() => navigate("/practice/ranking")} icon={<Trophy size={15} />}>
                 闯关排行
-              </PracticeActionButton>
-              <PracticeActionButton onClick={() => navigate("/practice/daily")} icon={<Target size={15} />}>
-                每日挑战
               </PracticeActionButton>
               <PracticeActionButton onClick={() => navigate("/practice/wrongs")} icon={<ClipboardList size={15} />}>
                 错题重练

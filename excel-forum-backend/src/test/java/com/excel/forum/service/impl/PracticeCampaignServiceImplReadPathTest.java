@@ -3,7 +3,6 @@ package com.excel.forum.service.impl;
 import com.excel.forum.entity.PracticeChapter;
 import com.excel.forum.entity.PracticeLevel;
 import com.excel.forum.entity.PracticeWorld;
-import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeAttemptMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
@@ -28,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,8 +42,6 @@ class PracticeCampaignServiceImplReadPathTest {
     private PracticeChapterMapper practiceChapterMapper;
     @Mock
     private PracticeLevelMapper practiceLevelMapper;
-    @Mock
-    private DailyChallengeMapper dailyChallengeMapper;
     @Mock
     private PracticeAttemptMapper practiceAttemptMapper;
     @Mock
@@ -97,5 +95,10 @@ class PracticeCampaignServiceImplReadPathTest {
         verify(practiceChapterMapper, never()).updateById(any(PracticeChapter.class));
         verify(practiceLevelMapper, never()).insert(any(PracticeLevel.class));
         verify(practiceLevelMapper, never()).updateById(any(PracticeLevel.class));
+    }
+
+    @Test
+    void campaignOverviewDoesNotExposeDailyChallenge() {
+        assertThat(service.getCampaignOverview(null)).doesNotContainKey("dailyChallenge");
     }
 }

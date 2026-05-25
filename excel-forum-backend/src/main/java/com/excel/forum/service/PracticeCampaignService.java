@@ -16,8 +16,6 @@ public interface PracticeCampaignService {
 
     Map<String, Object> getCampaignLevelDetail(Long levelId, Long userId);
 
-    Map<String, Object> getDailyChallenge(Long userId);
-
     Map<String, Object> getCampaignWrongQuestions(Long userId);
 
     Map<String, Object> resolveWrongQuestion(Long userId, Long wrongQuestionId);

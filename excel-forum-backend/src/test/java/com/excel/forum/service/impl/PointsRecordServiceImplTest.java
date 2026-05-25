@@ -81,19 +81,19 @@ class PointsRecordServiceImplTest {
         boolean granted = service.addTaskPointsRecord(
                 7L,
                 null,
-                "每日挑战",
-                "daily_campaign",
+                "限时任务",
+                "weekly_campaign",
                 3L,
                 LocalDate.of(2026, 5, 21),
                 5,
-                "完成每日挑战"
+                "完成限时任务"
         );
 
         assertThat(granted).isTrue();
         ArgumentCaptor<PointsRecord> recordCaptor = ArgumentCaptor.forClass(PointsRecord.class);
         verify(pointsRecordMapper).insert(recordCaptor.capture());
         assertThat(recordCaptor.getValue().getIdempotencyKey())
-                .isEqualTo("points:7:daily_campaign:3:20260521");
+                .isEqualTo("points:7:weekly_campaign:3:20260521");
     }
 
     @Test

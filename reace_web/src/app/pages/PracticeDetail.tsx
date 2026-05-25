@@ -76,7 +76,6 @@ type PracticeSubmitResponse = {
   totalRewardPoints?: number;
   totalExpGained?: number;
   expGained?: number;
-  dailyChallenge?: unknown;
 };
 
 type PracticeWorkbookOpenLinkResponse = {
@@ -222,7 +221,6 @@ export function PracticeDetail() {
             firstPassBonusAwarded: result.firstPassBonusAwarded,
             totalRewardPoints: result.totalRewardPoints,
             totalExpGained: result.totalExpGained,
-            dailyChallenge: result.dailyChallenge,
           },
         });
         return;

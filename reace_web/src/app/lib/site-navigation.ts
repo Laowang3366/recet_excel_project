@@ -35,7 +35,7 @@ export const publicNavItems: PublicNavItem[] = [
     name: "小试牛刀",
     shortName: "练习",
     path: "/practice",
-    description: "章节闯关、每日挑战与错题复习",
+    description: "章节闯关与错题复习",
   },
   {
     key: "qa",

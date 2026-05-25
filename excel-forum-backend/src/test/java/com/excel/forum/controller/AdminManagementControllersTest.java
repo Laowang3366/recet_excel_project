@@ -7,7 +7,6 @@ import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
 import com.excel.forum.mapper.CheckinRecordMapper;
-import com.excel.forum.mapper.DailyChallengeMapper;
 import com.excel.forum.mapper.PracticeAnswerMapper;
 import com.excel.forum.mapper.PracticeChapterMapper;
 import com.excel.forum.mapper.PracticeRecordMapper;
@@ -143,9 +142,6 @@ class AdminManagementControllersTest {
     private PracticeChapterMapper practiceChapterMapper;
 
     @Mock
-    private DailyChallengeMapper dailyChallengeMapper;
-
-    @Mock
     private CheckinRecordMapper checkinRecordMapper;
 
     @Mock
@@ -217,7 +213,6 @@ class AdminManagementControllersTest {
         AdminPracticeCampaignController practiceCampaignController = new AdminPracticeCampaignController(
                 practiceLevelMapper,
                 practiceChapterMapper,
-                dailyChallengeMapper,
                 questionService,
                 practiceCampaignService
         );
@@ -412,6 +407,26 @@ class AdminManagementControllersTest {
                 .andExpect(jsonPath("$.records[0].bizLabel").value("每日签到"))
                 .andExpect(jsonPath("$.records[0].user.username").value("tester"))
                 .andExpect(jsonPath("$.records[0].expChange").value(6));
+    }
+
+    @Test
+    void dailyChallengeAdminEndpointsAreNotExposed() throws Exception {
+        MockMvc routeOnlyMockMvc = MockMvcBuilders
+                .standaloneSetup(new AdminPracticeCampaignController(
+                        practiceLevelMapper,
+                        practiceChapterMapper,
+                        questionService,
+                        practiceCampaignService
+                ))
+                .build();
+
+        routeOnlyMockMvc.perform(get("/api/admin/practice-campaign/daily-challenge"))
+                .andExpect(status().isNotFound());
+
+        routeOnlyMockMvc.perform(put("/api/admin/practice-campaign/daily-challenge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

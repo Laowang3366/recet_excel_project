@@ -11,7 +11,6 @@ export const adminKeys = {
   questionCategories: () => ["admin", "question-categories"] as const,
   questions: (params: Record<string, unknown>) => ["admin", "questions", params] as const,
   practiceCampaignLevels: () => ["admin", "practice-campaign", "levels"] as const,
-  practiceCampaignDaily: () => ["admin", "practice-campaign", "daily"] as const,
   pointsStats: () => ["admin", "points", "stats"] as const,
   pointsGrantUsers: (params: Record<string, unknown>) => ["admin", "points", "grant-users", params] as const,
   pointsOptions: () => ["admin", "points", "options"] as const,
@@ -70,7 +69,6 @@ export const practiceKeys = {
   campaignOverview: () => ["practice", "campaign", "overview"] as const,
   campaignChapters: () => ["practice", "campaign", "chapters"] as const,
   campaignChapter: (id: number | string) => ["practice", "campaign", "chapter", id] as const,
-  campaignDaily: () => ["practice", "campaign", "daily"] as const,
   campaignWrongs: () => ["practice", "campaign", "wrongs"] as const,
   campaignRankings: (scope: string) => ["practice", "campaign", "rankings", scope] as const,
 };

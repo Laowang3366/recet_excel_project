@@ -62,7 +62,6 @@ export const router = createBrowserRouter([
       pageRoute("practice/classic", () => import("./pages/Practice"), "Practice"),
       { path: "practice/chapter/:id", Component: PracticeChapterRedirect },
       pageRoute("practice/result/:id", () => import("./pages/PracticeCampaignResult"), "PracticeCampaignResult"),
-      pageRoute("practice/daily", () => import("./pages/PracticeCampaignDaily"), "PracticeCampaignDaily"),
       pageRoute("practice/wrongs", () => import("./pages/PracticeCampaignWrongs"), "PracticeCampaignWrongs"),
       pageRoute("practice/ranking", () => import("./pages/PracticeCampaignRanking"), "PracticeCampaignRanking"),
       pageRoute("practice/random", () => import("./pages/PracticeDetail"), "PracticeDetail"),

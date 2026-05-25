@@ -82,14 +82,6 @@ export type QuestionCategoryRecord = QuestionCategoryForm & {
   questionCount?: number;
 };
 
-export type DailyChallengeForm = {
-  challengeDate: string;
-  levelId: string;
-  rewardExp: string | number;
-  rewardPoints: string | number;
-  enabled: boolean;
-};
-
 export type PracticeCampaignLevelRecord = {
   id: number;
   title?: string | null;

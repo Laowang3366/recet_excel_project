@@ -67,4 +67,14 @@ class PracticeCampaignControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("未登录"));
     }
+
+    @Test
+    void dailyChallengeEndpointIsNotExposed() throws Exception {
+        MockMvc routeOnlyMockMvc = MockMvcBuilders
+                .standaloneSetup(new PracticeCampaignController(practiceCampaignService))
+                .build();
+
+        routeOnlyMockMvc.perform(get("/api/practice/campaign/daily-challenge"))
+                .andExpect(status().isNotFound());
+    }
 }

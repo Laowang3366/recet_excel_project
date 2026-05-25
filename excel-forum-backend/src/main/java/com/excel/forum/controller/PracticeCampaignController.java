@@ -62,15 +62,6 @@ public class PracticeCampaignController {
         }
     }
 
-    @GetMapping("/daily-challenge")
-    public ResponseEntity<?> getDailyChallenge(@RequestAttribute(value = "userId", required = false) Long userId) {
-        try {
-            return ResponseEntity.ok(practiceCampaignService.getDailyChallenge(userId));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
-    }
-
     @GetMapping("/wrongs")
     public ResponseEntity<?> getWrongQuestions(@RequestAttribute(value = "userId", required = false) Long userId) {
         try {
