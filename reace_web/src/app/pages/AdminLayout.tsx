@@ -134,27 +134,31 @@ export function AdminLayout() {
                 简体中文
                 <ChevronDown size={16} />
               </button>
-              <button
-                type="button"
-                title="返回前台"
-                aria-label="返回前台"
-                onClick={() => navigate("/")}
-                className="group relative flex items-center gap-2 border-l border-[#e5e7eb] pl-2 text-left transition md:pl-4"
-              >
-                <img
-                  src={getAdminAvatarSrc(user)}
-                  alt={user?.username || "admin"}
-                  className="h-10 w-10 rounded-full border border-[#eef2f6] object-cover"
-                />
-                <div className="hidden leading-tight sm:block">
-                  <div className="text-sm font-semibold text-[#101828]">{user?.username}</div>
-                  <div className="text-xs text-[#667085]">{role === "admin" ? "管理员" : "运营"}</div>
+              <div className="group relative flex items-center gap-2 border-l border-[#e5e7eb] pl-2 text-left transition md:pl-4">
+                <button type="button" className="flex items-center gap-2 rounded-[4px] px-1 py-1 hover:bg-[#f2f4f7]" aria-haspopup="menu">
+                  <img
+                    src={getAdminAvatarSrc(user)}
+                    alt={user?.username || "admin"}
+                    className="h-10 w-10 rounded-full border border-[#eef2f6] object-cover"
+                  />
+                  <div className="hidden leading-tight sm:block">
+                    <div className="text-sm font-semibold text-[#101828]">{user?.username}</div>
+                    <div className="text-xs text-[#667085]">{role === "admin" ? "管理员" : "运营"}</div>
+                  </div>
+                  <ChevronDown size={16} className="hidden text-[#667085] sm:block" />
+                </button>
+                <div className="absolute right-0 top-full z-30 hidden w-36 pt-2 group-hover:block">
+                  <div className="rounded-[6px] border border-[#e5e7eb] bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.16)]">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/")}
+                      className="flex h-9 w-full items-center rounded-[4px] px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f4f7] hover:text-[#1677ff]"
+                    >
+                      返回前台
+                    </button>
+                  </div>
                 </div>
-                <ChevronDown size={16} className="hidden text-[#667085] sm:block" />
-                <span className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 hidden rounded-[4px] bg-[#101828] px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block">
-                  返回前台
-                </span>
-              </button>
+              </div>
             </div>
           </div>
         </header>

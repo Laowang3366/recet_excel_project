@@ -1,25 +1,44 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
+  AlertTriangle,
+  AlignLeft,
   BarChart3,
   Bell,
   Bot,
+  Bold,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
   Edit3,
   Eye,
   FileText,
+  ImageIcon,
   Inbox,
+  Italic,
+  Link,
+  List,
   Megaphone,
   RefreshCw,
   Search,
+  Smile,
   UsersRound,
   X,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Switch } from "../components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
+import {
+  buildNotificationPayload,
+  DEFAULT_NOTIFICATION_META,
+  getNotificationReachEstimate,
+  getNotificationTargetLabel,
+  parseNotificationMeta,
+  type NotificationMeta,
+} from "../admin/notification-form";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import {
@@ -39,7 +58,6 @@ import {
   ROLE_OPTIONS,
   secondaryButtonClassName,
   statusBadgeClassName,
-  textareaClassName,
 } from "../admin/shared";
 import {
   AdminNotificationForm,
@@ -48,8 +66,6 @@ import {
   adminRequest,
   DeleteConfirmDialog,
   defaultNotificationForm,
-  Field,
-  FormDialog,
   formatAdminEntityMessage,
   openAdminConfirm,
   PagedAdminResponse,
@@ -67,6 +83,11 @@ type NotificationDeliveryFields = {
   sendTime?: string | null;
 };
 
+type SendConfirmTarget =
+  | { kind: "record"; item: AdminNotificationRecord }
+  | { kind: "form" }
+  | null;
+
 const NOTIFICATION_TABS: Array<{ key: NotificationTab; label: string }> = [
   { key: "all", label: "全部" },
   { key: "draft", label: "草稿" },
@@ -82,8 +103,10 @@ export function AdminNotifications() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminNotificationRecord | null>(null);
   const [pendingRemove, setPendingRemove] = useState<AdminNotificationRecord | null>(null);
+  const [pendingSend, setPendingSend] = useState<SendConfirmTarget>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [form, setForm] = useState<AdminNotificationForm>(defaultNotificationForm());
+  const [formMeta, setFormMeta] = useState<Required<NotificationMeta>>({ ...DEFAULT_NOTIFICATION_META });
   const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [targetFilter, setTargetFilter] = useState("all");
@@ -141,6 +164,7 @@ export function AdminNotifications() {
   const openCreate = () => {
     setEditing(null);
     setForm(defaultNotificationForm());
+    setFormMeta({ ...DEFAULT_NOTIFICATION_META });
     setOpen(true);
   };
 
@@ -154,6 +178,7 @@ export function AdminNotifications() {
       status: "draft",
       targetType: "all",
     });
+    setFormMeta({ ...DEFAULT_NOTIFICATION_META, actionText: "立即查看", actionUrl: "/tools" });
     setOpen(true);
   };
 
@@ -168,6 +193,7 @@ export function AdminNotifications() {
       targetRoles: item.targetRoles || "",
       attachments: item.attachments || "",
     });
+    setFormMeta(parseNotificationMeta(item.attachments));
     setOpen(true);
   };
 
@@ -182,6 +208,7 @@ export function AdminNotifications() {
       targetRoles: item.targetRoles || "",
       attachments: item.attachments || "",
     });
+    setFormMeta(parseNotificationMeta(item.attachments));
     setOpen(true);
   };
 
@@ -191,26 +218,45 @@ export function AdminNotifications() {
     setKeyword("");
   };
 
-  const submit = async () => {
-    const payload = { ...form };
+  const saveNotification = async (statusOverride?: string) => {
+    const payload = buildNotificationPayload(form, formMeta, statusOverride);
     if (editing) {
       const result = await adminRequest<AdminNotificationRecord>(api.put(`/api/admin/notifications/${editing.id}`, payload), navigate, role, "更新通知");
-      if (!result) return;
+      if (!result) return false;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("通知", editing.title || result?.title || form.title, "已更新"));
     } else {
       const result = await adminRequest<AdminNotificationRecord>(api.post("/api/admin/notifications", payload), navigate, role, "创建通知");
-      if (!result) return;
+      if (!result) return false;
       setOpen(false);
       showAdminSuccess(formatAdminEntityMessage("通知", result?.title || form.title, "已创建"));
     }
     await refreshNotifications();
+    return true;
+  };
+
+  const submit = async () => {
+    await saveNotification(editing ? undefined : "draft");
   };
 
   const sendNow = async (item: AdminNotificationRecord) => {
+    setPendingSend({ kind: "record", item });
+  };
+
+  const confirmSend = async () => {
+    if (!pendingSend) return;
+    if (pendingSend.kind === "form") {
+      const saved = await saveNotification("sent");
+      if (saved) {
+        setPendingSend(null);
+      }
+      return;
+    }
+    const item = pendingSend.item;
     const result = await adminRequest(api.put(`/api/admin/notifications/${item.id}/send`, {}), navigate, role, "发送通知");
     if (!result) return;
     showAdminSuccess(formatAdminEntityMessage("通知", item.title, "已发送"));
+    setPendingSend(null);
     await refreshNotifications();
   };
 
@@ -423,66 +469,28 @@ export function AdminNotifications() {
         </aside>
       </div>
 
-      <FormDialog
+      <NotificationFormDialog
         open={open}
         onOpenChange={setOpen}
-        title={editing ? "编辑通知" : "新建通知"}
-        description="填写通知内容与发送对象。"
-        submitLabel={editing ? "保存通知" : "创建通知"}
-        onSubmit={submit}
-      >
-        <Field label="标题"><input value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} className={inputClassName()} /></Field>
-        <Field label="内容"><textarea value={form.content} onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))} className={textareaClassName()} /></Field>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Field label="类型">
-            <select value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className={inputClassName()}>
-              {NOTIFICATION_TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </Field>
-          <Field label="状态">
-            <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))} className={inputClassName()}>
-              <option value="draft">草稿</option>
-              <option value="sent">已发送</option>
-            </select>
-          </Field>
-          <Field label="发送目标">
-            <select value={form.targetType} onChange={(e) => setForm((prev) => ({ ...prev, targetType: e.target.value }))} className={inputClassName()}>
-              {NOTIFICATION_TARGET_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </Field>
-        </div>
-        {form.targetType === "role" && (
-          <Field label="目标角色">
-            <div className="grid gap-3 md:grid-cols-3">
-              {ROLE_OPTIONS.map((item) => {
-                const selected = String(form.targetRoles || "").split(",").map((value) => value.trim()).filter(Boolean);
-                const checked = selected.includes(item.value);
-                return (
-                  <label key={item.value} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        const next = new Set(selected);
-                        if (e.target.checked) {
-                          next.add(item.value);
-                        } else {
-                          next.delete(item.value);
-                        }
-                        setForm((prev) => ({ ...prev, targetRoles: Array.from(next).join(",") }));
-                      }}
-                    />
-                    {item.label}
-                  </label>
-                );
-              })}
-            </div>
-          </Field>
-        )}
-        <Field label="附件 JSON / 链接">
-          <textarea value={form.attachments} onChange={(e) => setForm((prev) => ({ ...prev, attachments: e.target.value }))} className={textareaClassName()} />
-        </Field>
-      </FormDialog>
+        editing={editing}
+        form={form}
+        meta={formMeta}
+        stats={stats}
+        onFormChange={setForm}
+        onMetaChange={setFormMeta}
+        onSave={() => void submit()}
+        onPreview={() => showAdminSuccess("右侧为当前通知预览")}
+        onSend={() => setPendingSend({ kind: "form" })}
+      />
+      <ConfirmSendNotificationDialog
+        open={Boolean(pendingSend)}
+        target={pendingSend}
+        draftForm={form}
+        draftMeta={formMeta}
+        stats={stats}
+        onCancel={() => setPendingSend(null)}
+        onConfirm={() => void confirmSend()}
+      />
       <DeleteConfirmDialog
         open={Boolean(pendingRemove)}
         title="删除通知"
@@ -492,6 +500,327 @@ export function AdminNotifications() {
         onConfirm={() => void confirmRemove()}
       />
     </AdminPageShell>
+  );
+}
+
+function NotificationFormDialog({
+  open,
+  onOpenChange,
+  editing,
+  form,
+  meta,
+  stats,
+  onFormChange,
+  onMetaChange,
+  onSave,
+  onPreview,
+  onSend,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  editing: AdminNotificationRecord | null;
+  form: AdminNotificationForm;
+  meta: Required<NotificationMeta>;
+  stats: AdminNotificationStats | null | undefined;
+  onFormChange: Dispatch<SetStateAction<AdminNotificationForm>>;
+  onMetaChange: Dispatch<SetStateAction<Required<NotificationMeta>>>;
+  onSave: () => void;
+  onPreview: () => void;
+  onSend: () => void;
+}) {
+  const reach = getNotificationReachEstimate(stats, form.targetType);
+  const actionText = meta.actionText || DEFAULT_NOTIFICATION_META.actionText;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!flex max-h-[92vh] w-[min(1180px,calc(100vw-2rem))] !max-w-none !grid-cols-1 !gap-0 overflow-hidden rounded-[8px] border border-[#e5e7eb] bg-white p-0 shadow-[0_28px_80px_rgba(15,23,42,0.26)]">
+        <DialogHeader className="shrink-0 border-b border-[#edf0f5] px-6 py-5">
+          <DialogTitle className="text-[20px] font-semibold text-[#101828]">{editing ? "编辑通知" : "新建通知"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid min-h-0 grow gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_440px]">
+          <div className="space-y-4 px-6 py-5">
+            <NotificationFormField label="通知标题" required>
+              <div className="relative">
+                <input
+                  value={form.title}
+                  maxLength={30}
+                  onChange={(event) => onFormChange((prev) => ({ ...prev, title: event.target.value }))}
+                  placeholder="请输入通知标题，建议在 30 个字以内"
+                  className={`${inputClassName()} pr-14`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#667085]">{form.title.length}/30</span>
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="通知类型" required>
+              <div className="flex flex-wrap gap-5">
+                {NOTIFICATION_TYPE_OPTIONS.map((item) => (
+                  <NotificationRadio
+                    key={item.value}
+                    checked={form.type === item.value}
+                    onChange={() => onFormChange((prev) => ({ ...prev, type: item.value }))}
+                    label={item.label}
+                  />
+                ))}
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="发送目标" required>
+              <div className="flex flex-wrap gap-5">
+                {NOTIFICATION_TARGET_OPTIONS.map((item) => (
+                  <NotificationRadio
+                    key={item.value}
+                    checked={form.targetType === item.value}
+                    onChange={() => onFormChange((prev) => ({ ...prev, targetType: item.value, targetRoles: item.value === "role" ? prev.targetRoles : "" }))}
+                    label={item.label}
+                  />
+                ))}
+                <NotificationRadio checked={false} disabled label="指定用户" />
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="目标角色选择" required>
+              <select
+                value={String(form.targetRoles || "").split(",").filter(Boolean)[0] || ""}
+                disabled={form.targetType !== "role"}
+                onChange={(event) => onFormChange((prev) => ({ ...prev, targetRoles: event.target.value }))}
+                className={inputClassName()}
+              >
+                <option value="">请选择目标角色</option>
+                {ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </NotificationFormField>
+
+            <NotificationFormField label="正文内容" required>
+              <div className="overflow-hidden rounded-[4px] border border-[#d0d5dd] bg-white focus-within:border-[#1677ff] focus-within:ring-2 focus-within:ring-[#1677ff]/10">
+                <div className="flex h-10 items-center gap-1 border-b border-[#edf0f5] px-3 text-[#667085]">
+                  {[Bold, Italic, AlignLeft, List, Smile, Link, ImageIcon].map((Icon, index) => (
+                    <button key={index} type="button" className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-[#f2f4f7]" tabIndex={-1}>
+                      <Icon size={16} />
+                    </button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <textarea
+                    value={form.content}
+                    maxLength={200}
+                    onChange={(event) => onFormChange((prev) => ({ ...prev, content: event.target.value }))}
+                    placeholder="请输入通知正文，支持换行，建议在 200 字以内"
+                    className="min-h-[132px] w-full resize-none bg-white px-3 py-3 text-sm text-[#1f2937] outline-none placeholder:text-[#98a2b3]"
+                  />
+                  <span className="absolute bottom-3 right-3 text-xs text-[#667085]">{form.content.length}/200</span>
+                </div>
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="按钮文案" required>
+              <div className="relative">
+                <input
+                  value={meta.actionText}
+                  maxLength={10}
+                  onChange={(event) => onMetaChange((prev) => ({ ...prev, actionText: event.target.value }))}
+                  placeholder="立即查看"
+                  className={`${inputClassName()} pr-14`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#667085]">{meta.actionText.length}/10</span>
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="跳转链接">
+              <input
+                value={meta.actionUrl}
+                onChange={(event) => onMetaChange((prev) => ({ ...prev, actionUrl: event.target.value }))}
+                placeholder="请输入链接地址（以 http:// 或 https:// 开头）"
+                className={inputClassName()}
+              />
+            </NotificationFormField>
+
+            <NotificationFormField label="定时发送">
+              <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+                <div className="flex h-10 items-center">
+                  <Switch checked={meta.scheduled} onCheckedChange={(checked) => onMetaChange((prev) => ({ ...prev, scheduled: checked }))} />
+                </div>
+                <label className="relative">
+                  <input
+                    type="datetime-local"
+                    value={meta.sendAt}
+                    disabled={!meta.scheduled}
+                    onChange={(event) => onMetaChange((prev) => ({ ...prev, sendAt: event.target.value }))}
+                    className={`${inputClassName()} pr-10 disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]`}
+                  />
+                  <CalendarDays size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#667085]" />
+                </label>
+              </div>
+            </NotificationFormField>
+
+            <NotificationFormField label="是否置顶">
+              <div className="flex items-center gap-4">
+                <Switch checked={meta.pinned} onCheckedChange={(checked) => onMetaChange((prev) => ({ ...prev, pinned: checked }))} />
+                <span className="text-sm text-[#98a2b3]">置顶后，通知将在站内消息列表顶部展示 7 天</span>
+              </div>
+            </NotificationFormField>
+          </div>
+
+          <div className="border-t border-[#edf0f5] bg-[#f8fafc] p-5 lg:border-l lg:border-t-0">
+            <div className="space-y-5">
+              <NotificationDraftPreview title="站内通知预览卡片" form={form} actionText={actionText} compact={false} />
+              <NotificationDraftPreview title="弹窗预览卡片" form={form} actionText={actionText} compact />
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-[#101828]">预计触达人群数量</h3>
+                <div className="rounded-[8px] border border-[#d0d5dd] bg-white p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-[10px] bg-blue-50 text-[#1677ff]">
+                      <UsersRound size={28} />
+                    </div>
+                    <div>
+                      <div className="text-[28px] font-semibold leading-none text-[#101828]">{formatCompactNumber(reach)} 人</div>
+                      <div className="mt-2 text-sm text-[#667085]">预计将触达的目标用户总数</div>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-[#667085]">实际触达人数可能因用户状态、设备等因素存在差异。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0 border-t border-[#edf0f5] bg-white px-5 py-4">
+          <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>取消</button>
+          <button type="button" onClick={onSave} className={secondaryButtonClassName()}>{editing ? "保存通知" : "保存草稿"}</button>
+          <button type="button" onClick={onPreview} className={secondaryButtonClassName()}>预览</button>
+          <button type="button" onClick={onSend} className={primaryButtonClassName()}>立即发送</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NotificationFormField({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)] md:items-start">
+      <div className="pt-2 text-sm font-semibold text-[#344054]">
+        {label} {required ? <span className="text-[#f04438]">*</span> : null}
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function NotificationRadio({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange?: () => void;
+}) {
+  return (
+    <label className={`inline-flex items-center gap-2 text-sm font-medium ${disabled ? "cursor-not-allowed text-[#98a2b3]" : "cursor-pointer text-[#344054]"}`}>
+      <input type="radio" checked={checked} disabled={disabled} onChange={onChange} className="h-4 w-4 accent-[#1677ff]" />
+      {label}
+    </label>
+  );
+}
+
+function NotificationDraftPreview({
+  title,
+  form,
+  actionText,
+  compact,
+}: {
+  title: string;
+  form: AdminNotificationForm;
+  actionText: string;
+  compact?: boolean;
+}) {
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold text-[#101828]">{title}</h3>
+      <div className={`rounded-[8px] border border-[#e5e7eb] bg-white ${compact ? "p-4 shadow-[0_8px_24px_rgba(15,23,42,0.08)]" : "p-5"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <span className="rounded-[6px] bg-blue-50 px-3 py-1 text-sm font-semibold text-[#1677ff]">{formatNotificationType(form.type)}</span>
+          {compact ? <X size={16} className="text-[#667085]" /> : null}
+        </div>
+        <div className="mt-4 flex gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[14px] bg-blue-50 text-[#1677ff]">
+            <Bot size={38} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="line-clamp-1 text-lg font-semibold text-[#101828]">{form.title || "AI 助手升级通知"}</div>
+            <div className="mt-1 line-clamp-2 text-sm leading-6 text-[#667085]">{form.content || "新的模型配置已上线，回答更稳定，推荐您前往体验。"}</div>
+          </div>
+        </div>
+        <button type="button" className={`${primaryButtonClassName()} mt-4 w-full`}>
+          {actionText || "立即查看"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmSendNotificationDialog({
+  open,
+  target,
+  draftForm,
+  draftMeta,
+  stats,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  target: SendConfirmTarget;
+  draftForm: AdminNotificationForm;
+  draftMeta: Required<NotificationMeta>;
+  stats: AdminNotificationStats | null | undefined;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const record = target?.kind === "record" ? target.item : null;
+  const form = record || draftForm;
+  const meta = record ? parseNotificationMeta(record.attachments) : draftMeta;
+  const reach = getNotificationReachEstimate(stats, form.targetType);
+  const sendTime = meta.scheduled && meta.sendAt ? meta.sendAt.replace("T", " ") : "立即发送";
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent className="w-[min(560px,calc(100vw-2rem))] !max-w-none rounded-[8px] border border-[#e5e7eb] bg-white p-0 shadow-[0_28px_80px_rgba(15,23,42,0.28)]">
+        <DialogHeader className="border-b border-[#edf0f5] px-5 py-4">
+          <DialogTitle className="text-[18px] font-semibold text-[#101828]">确认发送通知</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 px-5 py-4">
+          <div className="rounded-[6px] border border-[#d0d5dd] bg-white p-4">
+            <ConfirmSummaryRow label="通知标题：" value={form.title || "-"} />
+            <ConfirmSummaryRow label="通知类型：" value={formatNotificationType(form.type)} />
+            <ConfirmSummaryRow label="发送目标：" value={getNotificationTargetLabel(form.targetType, form.targetRoles)} />
+            <ConfirmSummaryRow label="预计触达：" value={`${formatCompactNumber(reach)} 人`} />
+            <ConfirmSummaryRow label="是否弹窗：" value={form.type === "popup" ? "是" : "否"} />
+            <ConfirmSummaryRow label="发送时间：" value={sendTime} />
+          </div>
+          <div className="flex items-center gap-3 rounded-[6px] border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-sm font-semibold text-[#f97316]">
+            <AlertTriangle size={18} className="shrink-0" />
+            <span>发送后用户将立即收到通知，无法撤回，只能下架或隐藏。</span>
+          </div>
+        </div>
+        <DialogFooter className="border-t border-[#edf0f5] bg-white px-5 py-4">
+          <button type="button" onClick={onCancel} className={secondaryButtonClassName()}>取消</button>
+          <button type="button" onClick={onCancel} className={secondaryButtonClassName()}>保存草稿</button>
+          <button type="button" onClick={onConfirm} className={primaryButtonClassName()}>确认发送</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmSummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 py-1.5 text-sm">
+      <div className="text-[#667085]">{label}</div>
+      <div className="font-medium text-[#101828]">{value}</div>
+    </div>
   );
 }
 
@@ -631,4 +960,8 @@ function formatShortDate(value?: string | null) {
     return formatMaybeDate(value);
   }
   return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("zh-CN").format(Math.max(0, Math.round(value)));
 }
