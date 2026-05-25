@@ -82,6 +82,7 @@ export const router = createBrowserRouter([
       pageRoute("tools", () => import("./pages/Tools"), "Tools"),
       { path: "tools/convert", element: <Navigate to="/tools" replace /> },
       pageRoute("tools/formula-history", () => import("./pages/FormulaHistory"), "FormulaHistory"),
+      pageRoute("tools/formula-history/:id", () => import("./pages/FormulaHistoryDetail"), "FormulaHistoryDetail"),
       pageRoute("assistant", () => import("./pages/Assistant"), "Assistant"),
       pageRoute("tools/history", () => import("./pages/ToolsHistory"), "ToolsHistory"),
       pageRoute("notifications", () => import("./pages/Notifications"), "Notifications"),
