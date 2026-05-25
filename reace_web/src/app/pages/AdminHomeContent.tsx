@@ -1,38 +1,39 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpenText,
   Bold,
   Code2,
   Edit3,
   Eraser,
+  Eye,
+  FileText,
+  Folder,
   Heading2,
   Image as ImageIcon,
+  Import,
   Italic,
   Link2,
   List,
   Minus,
+  MoreHorizontal,
   Quote,
+  Rows3,
+  Save,
   Strikethrough,
   Table2,
   Trash2,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Switch } from "../components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
-  AddButton,
-  AdminBulkActions,
-  AdminBulkCheckbox,
   AdminEmptyState,
   AdminPageShell,
   AdminPermissionNotice,
-  AdminSection,
-  FilterBar,
-  FilterField,
   inputClassName,
   primaryButtonClassName,
   secondaryButtonClassName,
@@ -43,7 +44,6 @@ import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { adminKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
-import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
 
 type FormDialogProps = {
   open: boolean;
@@ -144,8 +144,6 @@ export function AdminHomeContent() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
   const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
-  const [categoryBulkDeleting, setCategoryBulkDeleting] = useState(false);
-  const [articleBulkDeleting, setArticleBulkDeleting] = useState(false);
 
   const categoriesQuery = useQuery({
     queryKey: adminKeys.tutorialCategories(),
@@ -188,14 +186,37 @@ export function AdminHomeContent() {
 
   const categories = categoriesQuery.data || [];
   const articles = articlesQuery.data || [];
-  const categoryBulkSelection = useAdminBulkSelection(categories, (item) => item.id);
-  const articleBulkSelection = useAdminBulkSelection(articles, (item) => item.id);
   const chapterOptions = articleLinkOptionsQuery.data?.chapters || [];
   const questionOptions = articleLinkOptionsQuery.data?.questions || [];
   const categoryOptions = useMemo(
     () => categories.map((item) => ({ value: String(item.id), label: item.name })),
     [categories]
   );
+  const selectedCategory = categories.find((item) => String(item.id) === categoryFilter) || categories[0] || null;
+  const selectedArticleOptions = articles.map((item) => ({ value: String(item.id), label: item.title || `教程 ${item.id}` }));
+  const linkedQuestions = questionOptions.filter((item) => articleForm.relatedQuestionIds.includes(item.id));
+  const linkedChapters = chapterOptions.filter((item) => articleForm.relatedChapterIds.includes(item.id));
+
+  useEffect(() => {
+    if (!isAdmin || categoryFilter || !categories[0]?.id) return;
+    setCategoryFilter(String(categories[0].id));
+  }, [categories, categoryFilter, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin || articleOpen) return;
+    const current = articles.find((item) => item.id === editingArticle?.id) || articles[0] || null;
+    if (!current) {
+      if (editingArticle) {
+        setEditingArticle(null);
+        setArticleForm(defaultArticleForm);
+      }
+      return;
+    }
+    if (current.id !== editingArticle?.id) {
+      setEditingArticle(current);
+      setArticleForm(toArticleForm(current));
+    }
+  }, [articles, articleOpen, editingArticle?.id, isAdmin]);
 
   if (!isAdmin) {
     return (
@@ -261,30 +282,6 @@ export function AdminHomeContent() {
     }
   };
 
-  const deleteSelectedCategories = async () => {
-    const items = categoryBulkSelection.selectedItems;
-    if (items.length === 0 || categoryBulkDeleting) return;
-    const confirmed = await openAdminConfirm({
-      title: "批量删除教程分类",
-      message: `确认删除选中的 ${items.length} 个教程分类？分类下教程也会按现有接口处理。`,
-      confirmLabel: "删除选中",
-      destructive: true,
-    });
-    if (!confirmed) return;
-    setCategoryBulkDeleting(true);
-    await runAdminBulkDelete({
-      items,
-      request: (item) => api.delete(`/api/admin/tutorials/categories/${item.id}`),
-      entityName: "教程分类",
-      errorLabel: "批量删除教程分类",
-      onRefresh: refreshAll,
-      onFinally: () => {
-        categoryBulkSelection.clear();
-        setCategoryBulkDeleting(false);
-      },
-    });
-  };
-
   const openCreateArticle = () => {
     setEditingArticle(null);
     setArticleForm({
@@ -296,24 +293,7 @@ export function AdminHomeContent() {
 
   const openEditArticle = (item: TutorialArticleRecord) => {
     setEditingArticle(item);
-    setArticleForm({
-      categoryId: String(item.categoryId || ""),
-      title: item.title || "",
-      summary: item.summary || "",
-      oneLineUsage: item.oneLineUsage || "",
-      content: item.content || "",
-      audienceTrack: item.audienceTrack || "beginner",
-      difficulty: item.difficulty || "basic",
-      recommendLevel: item.recommendLevel ?? 1,
-      functionTags: item.functionTags || "",
-      starter: Boolean(item.starter),
-      homeFeatured: Boolean(item.homeFeatured),
-      relatedChapterIds: item.relatedChapterIds || [],
-      relatedQuestionIds: item.relatedQuestionIds || [],
-      sortOrder: item.sortOrder ?? 0,
-      enabled: item.enabled ?? true,
-    });
-    setArticleOpen(true);
+    setArticleForm(toArticleForm(item));
   };
 
   const submitArticle = async () => {
@@ -344,226 +324,251 @@ export function AdminHomeContent() {
     }
   };
 
-  const deleteArticle = async (item: TutorialArticleRecord) => {
-    if (!window.confirm(`确认删除条目“${item.title}”？`)) {
-      return;
-    }
-    try {
-      await api.delete(`/api/admin/tutorials/articles/${item.id}`);
-      await refreshAll();
-      toast.success("条目已删除");
-    } catch (error) {
-      handleAdminError(error, navigate);
-    }
-  };
-
-  const deleteSelectedArticles = async () => {
-    const items = articleBulkSelection.selectedItems;
-    if (items.length === 0 || articleBulkDeleting) return;
-    const confirmed = await openAdminConfirm({
-      title: "批量删除教程条目",
-      message: `确认删除选中的 ${items.length} 个教程条目？`,
-      confirmLabel: "删除选中",
-      destructive: true,
-    });
-    if (!confirmed) return;
-    setArticleBulkDeleting(true);
-    await runAdminBulkDelete({
-      items,
-      request: (item) => api.delete(`/api/admin/tutorials/articles/${item.id}`),
-      entityName: "教程条目",
-      errorLabel: "批量删除教程条目",
-      onRefresh: refreshAll,
-      onFinally: () => {
-        articleBulkSelection.clear();
-        setArticleBulkDeleting(false);
-      },
-    });
-  };
-
   return (
-    <AdminPageShell>
-      <AdminSection title="首页教程分类" actions={<AddButton onClick={openCreateCategory}>新增分类</AddButton>}>
-        <AdminBulkActions
-          selectedCount={categoryBulkSelection.selectedCount}
-          totalCount={categories.length}
-          allVisibleSelected={categoryBulkSelection.allVisibleSelected}
-          deleting={categoryBulkDeleting}
-          onToggleAll={categoryBulkSelection.toggleAllVisible}
-          onClear={categoryBulkSelection.clear}
-          onDeleteSelected={() => void deleteSelectedCategories()}
-        />
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">选择</TableHead>
-              <TableHead>分类名称</TableHead>
-              <TableHead>说明</TableHead>
-              <TableHead>条目数</TableHead>
-              <TableHead>排序</TableHead>
-              <TableHead>启用</TableHead>
-              <TableHead>操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categories.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  <AdminBulkCheckbox
-                    checked={categoryBulkSelection.isSelected(item.id)}
-                    onChange={() => categoryBulkSelection.toggleOne(item.id)}
-                    label={`选择教程分类 ${item.name}`}
-                  />
-                </TableCell>
-                <TableCell className="font-bold text-slate-800">{item.name}</TableCell>
-                <TableCell className="max-w-[420px] truncate">{item.description || "-"}</TableCell>
-                <TableCell>{item.articleCount ?? 0}</TableCell>
-                <TableCell>{item.sortOrder ?? 0}</TableCell>
-                <TableCell>
-                  <AdminTableSwitch
-                    checked={Boolean(item.enabled)}
-                    onCheckedChange={async (next) => {
-                      try {
-                        await api.put(`/api/admin/tutorials/categories/${item.id}`, {
-                          name: item.name,
-                          description: item.description,
-                          sortOrder: item.sortOrder,
-                          enabled: next,
-                        });
-                        await refreshAll();
-                      } catch (error) {
-                        handleAdminError(error, navigate);
-                      }
+    <AdminPageShell
+      title="首页内容"
+      description="统一管理首页教程内容、分类结构与发布编排。"
+      actions={
+        <>
+          <button type="button" onClick={openCreateArticle} disabled={!categoryOptions.length} className={primaryButtonClassName()}>
+            <BookOpenText size={16} />
+            新增教程
+          </button>
+          <button type="button" onClick={() => toast("Markdown 导入将沿用当前教程编辑流程。")} className={secondaryButtonClassName()}>
+            <Import size={16} />
+            导入 Markdown
+          </button>
+          <button type="button" onClick={() => navigate("/tutorials")} className={secondaryButtonClassName()}>
+            <Eye size={16} />
+            预览首页
+          </button>
+          <button type="button" onClick={() => toast("可通过分类排序和教程排序字段完成发布编排。")} className={secondaryButtonClassName()}>
+            <Rows3 size={16} />
+            批量排序
+          </button>
+        </>
+      }
+    >
+      <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center gap-5">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#e8f1ff] text-[#1677ff]">
+            <FileText size={30} />
+          </div>
+          <div>
+            <h2 className="text-[22px] font-semibold text-[#101828]">教程内容编排</h2>
+            <p className="mt-1 text-[15px] text-[#667085]">左侧按分类管理教程，右侧编辑文章内容、关联练习和发布设置。</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[282px_minmax(0,1fr)]">
+        <aside className="flex min-h-[620px] flex-col rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-[18px] font-semibold text-[#101828]">教程分类</h2>
+            <button type="button" onClick={openCreateCategory} className="text-sm font-semibold text-[#1677ff] hover:text-[#0958d9]">
+              新增
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            {categories.map((item) => {
+              const active = String(item.id) === String(selectedCategory?.id);
+              return (
+                <div
+                  key={item.id}
+                  className={`group relative flex min-h-[54px] items-center gap-3 rounded-[6px] border-l-4 px-3 transition ${
+                    active
+                      ? "border-[#1677ff] bg-[#eef5ff] text-[#1677ff]"
+                      : "border-transparent bg-white text-[#344054] hover:bg-[#f8fbff]"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter(String(item.id));
+                      setEditingArticle(null);
                     }}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => openEditCategory(item)} className={secondaryButtonClassName()}>
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  >
+                    <Folder size={20} className={active ? "text-[#1677ff]" : "text-[#98a2b3]"} />
+                    <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{item.name}</span>
+                    <span className="text-[15px] text-[#667085]">{item.articleCount ?? 0}</span>
+                  </button>
+                  <div className="hidden shrink-0 items-center gap-1 group-hover:flex">
+                    <button type="button" onClick={() => openEditCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#1677ff]" aria-label="编辑分类">
                       <Edit3 size={14} />
-                      编辑
                     </button>
-                    <button type="button" onClick={() => deleteCategory(item)} className={secondaryButtonClassName()}>
+                    <button type="button" onClick={() => void deleteCategory(item)} className="rounded-[4px] p-1 text-[#667085] hover:bg-white hover:text-[#d92d20]" aria-label="删除分类">
                       <Trash2 size={14} />
-                      删除
                     </button>
                   </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {categories.length === 0 ? <div className="mt-4"><AdminEmptyState message="暂无首页教程分类。" /></div> : null}
-      </AdminSection>
+                </div>
+              );
+            })}
+            {categories.length === 0 ? <AdminEmptyState message="暂无首页教程分类。" /> : null}
+          </div>
+          <button
+            type="button"
+            onClick={openCreateCategory}
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-[4px] border border-[#1677ff] bg-white text-sm font-semibold text-[#1677ff] transition hover:bg-[#f0f7ff]"
+          >
+            <Upload size={16} />
+            新增分类
+          </button>
+        </aside>
 
-      <AdminSection title="首页教程条目" actions={<AddButton onClick={openCreateArticle} disabled={!categoryOptions.length}>新增条目</AddButton>}>
-        <FilterBar>
-          <FilterField label="分类筛选">
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={inputClassName()}>
-              <option value="">全部分类</option>
-              {categoryOptions.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
-          </FilterField>
-        </FilterBar>
+        <main className="space-y-5">
+          <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <h2 className="truncate text-[20px] font-semibold text-[#101828]">
+                  编辑教程：{editingArticle?.title || selectedCategory?.name || "请选择教程"}
+                </h2>
+                {selectedArticleOptions.length > 0 ? (
+                  <select
+                    value={editingArticle?.id ? String(editingArticle.id) : ""}
+                    onChange={(event) => {
+                      const item = articles.find((article) => String(article.id) === event.target.value);
+                      if (item) openEditArticle(item);
+                    }}
+                    className="mt-2 h-9 max-w-full rounded-[4px] border border-[#d0d5dd] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#1677ff]"
+                  >
+                    {selectedArticleOptions.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`rounded-[4px] px-3 py-1 text-xs font-semibold ${articleForm.enabled ? "bg-[#dff7ea] text-[#039855]" : "bg-[#eef2f6] text-[#667085]"}`}>
+                  {articleForm.enabled ? "已启用" : "未启用"}
+                </span>
+                <button type="button" onClick={() => void submitArticle()} disabled={!articleForm.categoryId || !articleForm.title.trim()} className={primaryButtonClassName()}>
+                  <Save size={16} />
+                  保存教程
+                </button>
+              </div>
+            </div>
 
-        <div className="mt-5">
-          <AdminBulkActions
-            selectedCount={articleBulkSelection.selectedCount}
-            totalCount={articles.length}
-            allVisibleSelected={articleBulkSelection.allVisibleSelected}
-            deleting={articleBulkDeleting}
-            onToggleAll={articleBulkSelection.toggleAllVisible}
-            onClear={articleBulkSelection.clear}
-            onDeleteSelected={() => void deleteSelectedArticles()}
-          />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">选择</TableHead>
-                <TableHead>标题</TableHead>
-              <TableHead>所属分类</TableHead>
-              <TableHead>轨道 / 难度</TableHead>
-              <TableHead>关联练习</TableHead>
-              <TableHead>摘要</TableHead>
-              <TableHead>排序</TableHead>
-              <TableHead>启用</TableHead>
-              <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {articles.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <AdminBulkCheckbox
-                      checked={articleBulkSelection.isSelected(item.id)}
-                      onChange={() => articleBulkSelection.toggleOne(item.id)}
-                      label={`选择教程条目 ${item.title}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-bold text-slate-800">{item.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">ID {item.id}</div>
-                  </TableCell>
-                  <TableCell>{item.categoryName || "-"}</TableCell>
-                  <TableCell>
-                    <div className="text-sm font-semibold text-slate-700">{audienceTrackLabel[item.audienceTrack] || "通用"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{difficultyLabel[item.difficulty] || "基础"}</div>
-                  </TableCell>
-                  <TableCell className="text-sm text-slate-500">
-                    章节 {item.relatedChapterIds?.length || 0} / 题目 {item.relatedQuestionIds?.length || 0}
-                  </TableCell>
-                  <TableCell className="max-w-[420px] truncate">{item.summary || "暂无摘要"}</TableCell>
-                  <TableCell>{item.sortOrder ?? 0}</TableCell>
-                  <TableCell>
-                    <AdminTableSwitch
-                      checked={Boolean(item.enabled)}
-                      onCheckedChange={async (next) => {
-                        try {
-                          await api.put(`/api/admin/tutorials/articles/${item.id}`, {
-                            categoryId: item.categoryId,
-                            title: item.title,
-                            summary: item.summary,
-                            oneLineUsage: item.oneLineUsage,
-                            content: item.content,
-                            audienceTrack: item.audienceTrack,
-                            difficulty: item.difficulty,
-                            recommendLevel: item.recommendLevel,
-                            functionTags: item.functionTags,
-                            starter: item.starter,
-                            homeFeatured: item.homeFeatured,
-                            relatedChapterIds: item.relatedChapterIds || [],
-                            relatedQuestionIds: item.relatedQuestionIds || [],
-                            sortOrder: item.sortOrder,
-                            enabled: next,
-                          });
-                          await refreshAll();
-                        } catch (error) {
-                          handleAdminError(error, navigate);
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => openEditArticle(item)} className={secondaryButtonClassName()}>
-                        <Edit3 size={14} />
-                        编辑
-                      </button>
-                      <button type="button" onClick={() => deleteArticle(item)} className={secondaryButtonClassName()}>
-                        <Trash2 size={14} />
-                        删除
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {articles.length === 0 ? <div className="mt-4"><AdminEmptyState message="暂无首页教程条目。" /></div> : null}
-        </div>
-      </AdminSection>
+            {articles.length === 0 ? (
+              <AdminEmptyState message="当前分类暂无教程，请点击右上角新增教程。" />
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr]">
+                  <Field label="标题">
+                    <input value={articleForm.title} onChange={(e) => setArticleForm((prev) => ({ ...prev, title: e.target.value }))} className={inputClassName()} />
+                  </Field>
+                  <Field label="所属分类">
+                    <select value={articleForm.categoryId} onChange={(e) => setArticleForm((prev) => ({ ...prev, categoryId: e.target.value }))} className={inputClassName()}>
+                      {categoryOptions.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="难度 / 推荐等级">
+                    <select
+                      value={articleForm.difficulty}
+                      onChange={(e) =>
+                        setArticleForm((prev) => ({
+                          ...prev,
+                          difficulty: e.target.value,
+                          recommendLevel: recommendLevelByDifficulty[e.target.value] || prev.recommendLevel,
+                        }))
+                      }
+                      className={inputClassName()}
+                    >
+                      {Object.entries(difficultyLabel).map(([value, label]) => (
+                        <option key={value} value={value}>{label} / Lv.{recommendLevelByDifficulty[value] || 1}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="标签">
+                    <input value={articleForm.functionTags} onChange={(e) => setArticleForm((prev) => ({ ...prev, functionTags: e.target.value }))} placeholder="XLOOKUP, 查找, 匹配" className={inputClassName()} />
+                  </Field>
+                </div>
+                <Field label="一句话说明">
+                  <input value={articleForm.oneLineUsage} onChange={(e) => setArticleForm((prev) => ({ ...prev, oneLineUsage: e.target.value }))} className={inputClassName()} />
+                </Field>
+                <div className="rounded-[6px] border border-[#d0d5dd] bg-white">
+                  <TutorialContentEditor
+                    value={articleForm.content}
+                    onChange={(next) => setArticleForm((prev) => ({ ...prev, content: next }))}
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+
+          <div className="grid gap-5 xl:grid-cols-2">
+            <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-[18px] font-semibold text-[#101828]">关联练习</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editingArticle) {
+                      setArticleOpen(true);
+                    } else {
+                      openCreateArticle();
+                    }
+                  }}
+                  className="text-sm font-semibold text-[#1677ff] hover:text-[#0958d9]"
+                >
+                  管理关联
+                </button>
+              </div>
+              <div className="space-y-2">
+                {[...linkedQuestions, ...linkedChapters].slice(0, 4).map((item) => (
+                  <div key={`${"title" in item ? "q" : "c"}-${item.id}`} className="flex min-h-12 items-center gap-3 rounded-[6px] border border-[#edf0f5] bg-white px-4">
+                    <FileText size={18} className="text-[#1677ff]" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#344054]">{item.title || item.name}</span>
+                    <span className="rounded-[4px] bg-[#dff7ea] px-2.5 py-1 text-xs font-semibold text-[#039855]">已关联</span>
+                    <MoreHorizontal size={18} className="text-[#98a2b3]" />
+                  </div>
+                ))}
+                {linkedQuestions.length + linkedChapters.length === 0 ? (
+                  <div className="rounded-[6px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-4 py-8 text-center text-sm text-[#667085]">暂无关联练习</div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editingArticle) setArticleOpen(true);
+                }}
+                className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[4px] border border-dashed border-[#1677ff] bg-white text-sm font-semibold text-[#1677ff] transition hover:bg-[#f0f7ff]"
+              >
+                <Upload size={16} />
+                关联练习
+              </button>
+            </section>
+
+            <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+              <h2 className="mb-4 text-[18px] font-semibold text-[#101828]">发布设置</h2>
+              <div className="divide-y divide-[#edf0f5]">
+                <SettingRow label="首页精选" hint="精选内容将在首页推荐位展示">
+                  <Switch checked={Boolean(articleForm.homeFeatured)} onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, homeFeatured: next }))} />
+                </SettingRow>
+                <SettingRow label="排序" hint="数值越小越靠前">
+                  <input
+                    type="number"
+                    value={articleForm.sortOrder}
+                    onChange={(e) => setArticleForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))}
+                    className="h-9 w-20 rounded-[4px] border border-[#d0d5dd] bg-white px-2 text-sm text-[#344054] outline-none focus:border-[#1677ff]"
+                  />
+                </SettingRow>
+                <SettingRow label="启用状态" hint="启用后将在首页展示">
+                  <Switch checked={Boolean(articleForm.enabled)} onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, enabled: next }))} />
+                </SettingRow>
+                <SettingRow label="预览按钮" hint="打开前台教程中心">
+                  <button type="button" onClick={() => navigate("/tutorials")} className={secondaryButtonClassName()}>
+                    <Eye size={16} />
+                    预览
+                  </button>
+                </SettingRow>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
 
       <FormDialog
         open={categoryOpen}
@@ -594,9 +599,9 @@ export function AdminHomeContent() {
       <FormDialog
         open={articleOpen}
         onOpenChange={setArticleOpen}
-        title={editingArticle ? "编辑首页条目" : "新增首页条目"}
-        description="条目会作为分类下的子级内容展示到首页。"
-        submitLabel={editingArticle ? "保存条目" : "创建条目"}
+        title={editingArticle ? "编辑教程" : "新增教程"}
+        description="教程会作为分类下的子级内容展示到首页。"
+        submitLabel={editingArticle ? "保存教程" : "创建教程"}
         onSubmit={submitArticle}
       >
         <div className="grid gap-4 md:grid-cols-2">
@@ -908,6 +913,26 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
+function toArticleForm(item: TutorialArticleRecord): TutorialArticleForm {
+  return {
+    categoryId: String(item.categoryId || ""),
+    title: item.title || "",
+    summary: item.summary || "",
+    oneLineUsage: item.oneLineUsage || "",
+    content: item.content || "",
+    audienceTrack: item.audienceTrack || "beginner",
+    difficulty: item.difficulty || "basic",
+    recommendLevel: item.recommendLevel ?? recommendLevelByDifficulty[item.difficulty || "basic"] ?? 1,
+    functionTags: item.functionTags || "",
+    starter: Boolean(item.starter),
+    homeFeatured: Boolean(item.homeFeatured),
+    relatedChapterIds: item.relatedChapterIds || [],
+    relatedQuestionIds: item.relatedQuestionIds || [],
+    sortOrder: item.sortOrder ?? 0,
+    enabled: item.enabled ?? true,
+  };
+}
+
 function FormDialog({
   open,
   onOpenChange,
@@ -949,6 +974,18 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function SettingRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="flex min-h-[58px] items-center justify-between gap-4 py-3">
+      <div>
+        <div className="text-sm font-medium text-[#344054]">{label}</div>
+        {hint ? <div className="mt-1 text-xs text-[#98a2b3]">{hint}</div> : null}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
 function AdminFormSwitch({
   label,
   checked,
@@ -962,23 +999,6 @@ function AdminFormSwitch({
     <div className="flex h-11 items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
       <span>{label}</span>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
-}
-
-function AdminTableSwitch({
-  checked,
-  onCheckedChange,
-}: {
-  checked: boolean;
-  onCheckedChange: (next: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-      <span className={`text-xs font-bold ${checked ? "text-emerald-600" : "text-slate-400"}`}>
-        {checked ? "已启用" : "未启用"}
-      </span>
     </div>
   );
 }
@@ -1009,6 +1029,12 @@ const difficultyLabel: Record<string, string> = {
   basic: "基础",
   medium: "中等",
   advanced: "进阶",
+};
+
+const recommendLevelByDifficulty: Record<string, number> = {
+  basic: 1,
+  medium: 2,
+  advanced: 3,
 };
 
 function toggleId(values: number[], id: number, checked: boolean) {
