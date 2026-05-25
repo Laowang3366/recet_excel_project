@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronRight, LoaderCircle, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router";
 import { FormulaExplainResult } from "../components/tools/FormulaExplainResult";
 import { LitePageFrame, LitePanel, LiteSectionTitle } from "../components/LiteSurface";
@@ -69,6 +69,15 @@ export function FormulaHistory() {
     setSelectedId(id);
   };
 
+  const goBack = () => {
+    const historyState = window.history.state as { idx?: number } | null;
+    if (typeof historyState?.idx === "number" && historyState.idx > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate("/tools");
+  };
+
   return (
     <LitePageFrame>
       <LitePanel>
@@ -77,18 +86,28 @@ export function FormulaHistory() {
           title="公式解释历史"
           description="查看最近的公式解释记录，点击记录可打开完整解释。"
           action={
-            <button
-              type="button"
-              onClick={() => {
-                setPage(1);
-                setDisplayedRecords([]);
-                void historyQuery.refetch();
-              }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
-            >
-              <RefreshCw size={16} />
-              刷新
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+              >
+                <ArrowLeft size={16} />
+                返回
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPage(1);
+                  setDisplayedRecords([]);
+                  void historyQuery.refetch();
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+              >
+                <RefreshCw size={16} />
+                刷新
+              </button>
+            </div>
           }
         />
 
