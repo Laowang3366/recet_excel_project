@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
+  ArrowRight,
+  Bookmark,
   BookOpenText,
   Bold,
   ChevronDown,
   ChevronRight,
+  CheckCircle2,
   Code2,
   Edit3,
   Eraser,
@@ -14,14 +18,18 @@ import {
   Heading2,
   Image as ImageIcon,
   Import,
+  Info,
   Italic,
   Link2,
   List,
   Minus,
+  Monitor,
   MoreHorizontal,
   Quote,
   Rows3,
   Save,
+  Smartphone,
+  Star,
   Strikethrough,
   Table2,
   Trash2,
@@ -109,6 +117,20 @@ type TutorialLinkOptionsResponse = {
   questions?: TutorialLinkOption[];
 };
 
+type PreviewDevice = "desktop" | "mobile";
+
+type SortCategoryRow = {
+  id: number;
+  name: string;
+  sortOrder: number;
+};
+
+type SortArticleRow = {
+  id: number;
+  title: string;
+  sortOrder: number;
+};
+
 const defaultCategoryForm: TutorialCategoryForm = {
   name: "",
   description: "",
@@ -141,11 +163,16 @@ export function AdminHomeContent() {
   const isAdmin = hasAdminConsoleAccess(user?.role) && user?.role === "admin";
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [articleOpen, setArticleOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewDevice>("desktop");
+  const [sortOpen, setSortOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<TutorialCategoryRecord | null>(null);
   const [editingArticle, setEditingArticle] = useState<TutorialArticleRecord | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [expandedCategoryId, setExpandedCategoryId] = useState("");
   const [selectedArticleIds, setSelectedArticleIds] = useState<number[]>([]);
+  const [sortCategoryRows, setSortCategoryRows] = useState<SortCategoryRow[]>([]);
+  const [sortArticleRows, setSortArticleRows] = useState<SortArticleRow[]>([]);
   const [categoryForm, setCategoryForm] = useState<TutorialCategoryForm>(defaultCategoryForm);
   const [articleForm, setArticleForm] = useState<TutorialArticleForm>(defaultArticleForm);
 
@@ -200,6 +227,10 @@ export function AdminHomeContent() {
   const linkedQuestions = questionOptions.filter((item) => articleForm.relatedQuestionIds.includes(item.id));
   const linkedChapters = chapterOptions.filter((item) => articleForm.relatedChapterIds.includes(item.id));
   const selectedArticleCount = selectedArticleIds.length;
+  const missingSummaryCount = articles.filter((item) => !String(item.summary || item.oneLineUsage || "").trim()).length;
+  const unlinkedArticleCount = articles.filter((item) => !(item.relatedQuestionIds?.length || item.relatedChapterIds?.length)).length;
+  const disabledCategoryCount = categories.filter((item) => !item.enabled).length;
+  const sortConflictCount = countSortConflicts(categories) + countSortConflicts(articles);
 
   useEffect(() => {
     if (!isAdmin || categoryFilter || !categories[0]?.id) return;
@@ -311,6 +342,31 @@ export function AdminHomeContent() {
     setArticleForm(toArticleForm(item));
   };
 
+  const openPreview = () => {
+    setPreviewOpen(true);
+  };
+
+  const selectPreviewCategory = (item: TutorialCategoryRecord) => {
+    const nextCategoryId = String(item.id);
+    setCategoryFilter(nextCategoryId);
+    setExpandedCategoryId(nextCategoryId);
+    setSelectedArticleIds([]);
+  };
+
+  const openBatchSort = () => {
+    setSortCategoryRows(
+      categories
+        .map((item) => ({ id: item.id, name: item.name, sortOrder: item.sortOrder ?? 0 }))
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+    );
+    setSortArticleRows(
+      articles
+        .map((item) => ({ id: item.id, title: item.title || `教程 ${item.id}`, sortOrder: item.sortOrder ?? 0 }))
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+    );
+    setSortOpen(true);
+  };
+
   const submitArticle = async () => {
     if (!String(articleForm.categoryId || "").trim()) {
       toast.error("请选择所属分类");
@@ -363,6 +419,35 @@ export function AdminHomeContent() {
     }
   };
 
+  const submitBatchSort = async () => {
+    try {
+      for (const row of sortCategoryRows) {
+        const source = categories.find((item) => item.id === row.id);
+        if (!source || Number(source.sortOrder ?? 0) === Number(row.sortOrder || 0)) continue;
+        await api.put(`/api/admin/tutorials/categories/${row.id}`, {
+          name: source.name || "",
+          description: source.description || "",
+          enabled: source.enabled ?? true,
+          sortOrder: Number(row.sortOrder || 0),
+        });
+      }
+      for (const row of sortArticleRows) {
+        const source = articles.find((item) => item.id === row.id);
+        if (!source || Number(source.sortOrder ?? 0) === Number(row.sortOrder || 0)) continue;
+        await api.put(`/api/admin/tutorials/articles/${row.id}`, {
+          ...toArticleForm(source),
+          categoryId: Number(source.categoryId),
+          sortOrder: Number(row.sortOrder || 0),
+        });
+      }
+      setSortOpen(false);
+      await refreshAll();
+      toast.success("排序已保存");
+    } catch (error) {
+      handleAdminError(error, navigate);
+    }
+  };
+
   return (
     <AdminPageShell
       title="首页内容"
@@ -377,11 +462,11 @@ export function AdminHomeContent() {
             <Import size={16} />
             导入 Markdown
           </button>
-          <button type="button" onClick={() => navigate("/tutorials")} className={secondaryButtonClassName()}>
+          <button type="button" onClick={openPreview} className={secondaryButtonClassName()}>
             <Eye size={16} />
             预览首页
           </button>
-          <button type="button" onClick={() => toast("可通过分类排序和教程排序字段完成发布编排。")} className={secondaryButtonClassName()}>
+          <button type="button" onClick={openBatchSort} className={secondaryButtonClassName()}>
             <Rows3 size={16} />
             批量排序
           </button>
@@ -441,7 +526,7 @@ export function AdminHomeContent() {
                     >
                       {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       <Folder size={20} className={active ? "text-[#1677ff]" : "text-[#98a2b3]"} />
-                      <span className="min-w-0 flex-1 truncate text-[16px] font-medium">{item.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[16px] font-medium" title={item.name}>{item.name}</span>
                       <span className="text-[15px] text-[#667085]">{item.articleCount ?? 0}</span>
                     </button>
                     <div className="hidden shrink-0 items-center gap-1 group-hover/category:flex">
@@ -482,10 +567,11 @@ export function AdminHomeContent() {
                               <button
                                 type="button"
                                 onClick={() => openEditArticle(article)}
+                                title={article.title || `教程 ${article.id}`}
                                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
                               >
                                 <FileText size={15} className="shrink-0" />
-                                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{article.title || `教程 ${article.id}`}</span>
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={article.title || `教程 ${article.id}`}>{article.title || `教程 ${article.id}`}</span>
                                 <span
                                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                                     activeArticle ? "bg-white/15 text-white" : "bg-[#eef2f6] text-[#667085]"
@@ -654,7 +740,7 @@ export function AdminHomeContent() {
                   <Switch checked={Boolean(articleForm.enabled)} onCheckedChange={(next) => setArticleForm((prev) => ({ ...prev, enabled: next }))} />
                 </SettingRow>
                 <SettingRow label="预览按钮" hint="打开前台教程中心">
-                  <button type="button" onClick={() => navigate("/tutorials")} className={secondaryButtonClassName()}>
+                  <button type="button" onClick={openPreview} className={secondaryButtonClassName()}>
                     <Eye size={16} />
                     预览
                   </button>
@@ -666,31 +752,45 @@ export function AdminHomeContent() {
         </main>
       </div>
 
-      <FormDialog
+      <CategoryDialog
         open={categoryOpen}
         onOpenChange={setCategoryOpen}
-        title={editingCategory ? "编辑首页分类" : "新增首页分类"}
-        description="分类用于组织首页教程的父级容器。"
-        submitLabel={editingCategory ? "保存分类" : "创建分类"}
+        editingCategory={editingCategory}
+        form={categoryForm}
+        setForm={setCategoryForm}
         onSubmit={submitCategory}
-      >
-        <Field label="分类名称">
-          <input value={categoryForm.name} onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))} className={inputClassName()} />
-        </Field>
-        <Field label="分类说明">
-          <textarea value={categoryForm.description} onChange={(e) => setCategoryForm((prev) => ({ ...prev, description: e.target.value }))} className={textareaClassName()} />
-        </Field>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="排序">
-            <input type="number" value={categoryForm.sortOrder} onChange={(e) => setCategoryForm((prev) => ({ ...prev, sortOrder: Number(e.target.value || 0) }))} className={inputClassName()} />
-          </Field>
-          <AdminFormSwitch
-            label="启用该分类"
-            checked={Boolean(categoryForm.enabled)}
-            onCheckedChange={(next) => setCategoryForm((prev) => ({ ...prev, enabled: next }))}
-          />
-        </div>
-      </FormDialog>
+      />
+
+      <HomeContentPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        mode={previewMode}
+        onModeChange={setPreviewMode}
+        categories={categories}
+        selectedCategory={selectedCategory}
+        articles={articles}
+        missingSummaryCount={missingSummaryCount}
+        unlinkedArticleCount={unlinkedArticleCount}
+        disabledCategoryCount={disabledCategoryCount}
+        sortConflictCount={sortConflictCount}
+        onSelectCategory={selectPreviewCategory}
+        onReturnEdit={() => setPreviewOpen(false)}
+        onConfirmPublish={() => {
+          setPreviewOpen(false);
+          toast.success("首页内容已确认");
+        }}
+      />
+
+      <BatchSortDialog
+        open={sortOpen}
+        onOpenChange={setSortOpen}
+        categoryRows={sortCategoryRows}
+        articleRows={sortArticleRows}
+        selectedCategoryName={selectedCategory?.name || ""}
+        onCategoryRowsChange={setSortCategoryRows}
+        onArticleRowsChange={setSortArticleRows}
+        onSubmit={submitBatchSort}
+      />
 
       <FormDialog
         open={articleOpen}
@@ -1001,6 +1101,410 @@ function TutorialHtmlPreview({ value, compact = false }: { value: string; compac
   );
 }
 
+function CategoryDialog({
+  open,
+  onOpenChange,
+  editingCategory,
+  form,
+  setForm,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  editingCategory: TutorialCategoryRecord | null;
+  form: TutorialCategoryForm;
+  setForm: Dispatch<SetStateAction<TutorialCategoryForm>>;
+  onSubmit: () => Promise<void> | void;
+}) {
+  const title = editingCategory ? "编辑教程分类" : "新增教程分类";
+  const nameLength = String(form.name || "").length;
+  const descriptionLength = String(form.description || "").length;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[88vh] w-[min(760px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden rounded-[10px] border border-[#d0d5dd] bg-white p-0 sm:max-w-none">
+        <DialogHeader className="border-b border-[#e5e7eb] px-6 py-5">
+          <DialogTitle className="text-[18px] font-semibold text-[#101828]">{title}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[1fr_255px]">
+          <div className="space-y-5 overflow-y-auto px-6 py-6">
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-4">
+              <label className="text-sm font-semibold text-[#344054]">
+                分类名称 <span className="text-[#f04438]">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  value={form.name}
+                  maxLength={30}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="请输入分类名称"
+                  className="h-10 w-full rounded-[4px] border border-[#d0d5dd] bg-white px-3 pr-14 text-sm text-[#101828] outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#e8f1ff]"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#98a2b3]">{nameLength}/30</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-4">
+              <label className="pt-2 text-sm font-semibold text-[#344054]">分类说明</label>
+              <div className="relative">
+                <textarea
+                  value={form.description}
+                  maxLength={120}
+                  onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                  placeholder="请输入分类说明（选填）"
+                  className="min-h-[76px] w-full resize-none rounded-[4px] border border-[#d0d5dd] bg-white px-3 py-2 pr-16 text-sm text-[#101828] outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#e8f1ff]"
+                />
+                <span className="absolute bottom-2 right-3 text-xs font-medium text-[#98a2b3]">{descriptionLength}/120</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-4">
+              <label className="text-sm font-semibold text-[#344054]">
+                排序值 <span className="text-[#f04438]">*</span>
+              </label>
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: Number(event.target.value || 0) }))}
+                className="h-10 w-24 rounded-[4px] border border-[#d0d5dd] bg-white px-3 text-sm text-[#101828] outline-none transition focus:border-[#1677ff] focus:ring-2 focus:ring-[#e8f1ff]"
+              />
+            </div>
+
+            <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-4">
+              <label className="text-sm font-semibold text-[#344054]">是否启用</label>
+              <Switch checked={Boolean(form.enabled)} onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))} />
+            </div>
+
+            <div>
+              <div className="mb-3 text-sm font-semibold text-[#344054]">首页显示样式预览</div>
+              <div className="flex items-center gap-4 rounded-[6px] border border-[#d0d5dd] bg-white p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#e8f1ff] text-[#1677ff]">
+                  <Folder size={26} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[16px] font-semibold text-[#101828]">{form.name || "新分类名称"}</div>
+                  <div className="mt-1 line-clamp-2 text-sm text-[#667085]">
+                    {form.description || "这里是分类说明的摘要展示，用于首页导航或分类卡片展示。"}
+                  </div>
+                </div>
+                <div className="text-sm font-semibold text-[#667085]">{form.sortOrder || 0}</div>
+              </div>
+            </div>
+          </div>
+
+          <aside className="border-l border-[#e5e7eb] bg-[#fbfcfe] px-5 py-6">
+            <div className="rounded-[6px] border border-[#bcd7ff] bg-[#f3f8ff] p-4 text-sm text-[#344054]">
+              <div className="mb-2 flex items-center gap-2 font-semibold text-[#1677ff]">
+                <Info size={16} />
+                分类说明
+              </div>
+              <p className="leading-6">分类会影响首页教程导航，请确认排序和启用状态。</p>
+            </div>
+          </aside>
+        </div>
+
+        <DialogFooter className="border-t border-[#e5e7eb] bg-white px-6 py-4">
+          <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>
+            取消
+          </button>
+          <button type="button" onClick={() => void onSubmit()} className={primaryButtonClassName()}>
+            保存分类
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HomeContentPreviewDialog({
+  open,
+  onOpenChange,
+  mode,
+  onModeChange,
+  categories,
+  selectedCategory,
+  articles,
+  missingSummaryCount,
+  unlinkedArticleCount,
+  disabledCategoryCount,
+  sortConflictCount,
+  onSelectCategory,
+  onReturnEdit,
+  onConfirmPublish,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  mode: PreviewDevice;
+  onModeChange: (mode: PreviewDevice) => void;
+  categories: TutorialCategoryRecord[];
+  selectedCategory: TutorialCategoryRecord | null;
+  articles: TutorialArticleRecord[];
+  missingSummaryCount: number;
+  unlinkedArticleCount: number;
+  disabledCategoryCount: number;
+  sortConflictCount: number;
+  onSelectCategory: (item: TutorialCategoryRecord) => void;
+  onReturnEdit: () => void;
+  onConfirmPublish: () => void;
+}) {
+  const currentCategory = selectedCategory || categories[0] || null;
+  const previewArticles = articles.slice(0, 4);
+  const totalIssueCount = missingSummaryCount + unlinkedArticleCount + disabledCategoryCount + sortConflictCount;
+  const previewWidthClass = mode === "mobile" ? "mx-auto max-w-[390px]" : "w-full";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] w-[min(1180px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden rounded-[8px] border border-[#d0d5dd] bg-white p-0 sm:max-w-none">
+        <DialogHeader className="border-b border-[#e5e7eb] px-6 py-5">
+          <DialogTitle className="text-[18px] font-semibold text-[#101828]">首页内容预览</DialogTitle>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="mb-5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onModeChange("desktop")}
+              className={`inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-[4px] border px-4 text-sm font-semibold ${
+                mode === "desktop" ? "border-[#1677ff] bg-[#f3f8ff] text-[#1677ff]" : "border-[#d0d5dd] bg-white text-[#344054]"
+              }`}
+            >
+              <Monitor size={16} />
+              桌面端
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange("mobile")}
+              className={`inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-[4px] border px-4 text-sm font-semibold ${
+                mode === "mobile" ? "border-[#1677ff] bg-[#f3f8ff] text-[#1677ff]" : "border-[#d0d5dd] bg-white text-[#344054]"
+              }`}
+            >
+              <Smartphone size={16} />
+              移动端
+            </button>
+          </div>
+
+          <div className={`grid gap-5 ${mode === "mobile" ? "grid-cols-1" : "lg:grid-cols-[225px_minmax(0,1fr)_270px]"} ${previewWidthClass}`}>
+            <aside className="rounded-[6px] border border-[#d0d5dd] bg-white p-4">
+              <h3 className="mb-4 text-[16px] font-semibold text-[#101828]">教程分类导航</h3>
+              <div className="space-y-2">
+                {categories.map((item) => {
+                  const active = item.id === currentCategory?.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.name}
+                      onClick={() => onSelectCategory(item)}
+                      className={`flex h-11 w-full items-center gap-2 rounded-[4px] border px-3 text-left text-sm transition ${
+                        active ? "border-[#1677ff] bg-[#f3f8ff] text-[#1677ff]" : "border-transparent text-[#344054] hover:bg-[#f8fbff]"
+                      }`}
+                    >
+                      <Folder size={17} />
+                      <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
+                      <span className="text-xs font-semibold">{item.articleCount ?? 0}</span>
+                    </button>
+                  );
+                })}
+                {categories.length === 0 ? <div className="rounded-[4px] border border-dashed border-[#d0d5dd] px-3 py-6 text-center text-sm text-[#98a2b3]">暂无分类</div> : null}
+              </div>
+            </aside>
+
+            <main className="min-w-0">
+              <div className="mb-4 overflow-hidden rounded-[6px] border border-[#d0d5dd] bg-gradient-to-r from-white to-[#dff8ee] p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[18px] font-semibold text-[#101828]">{currentCategory?.name || "请选择分类"}</h3>
+                    <p className="mt-2 line-clamp-2 text-sm text-[#667085]">{currentCategory?.description || "分类说明会展示在这里，用于确认首页分类摘要。"}</p>
+                  </div>
+                  <div className="hidden h-16 w-36 shrink-0 items-center justify-center rounded-[4px] bg-white/70 text-[#1677ff] sm:flex">
+                    <BookOpenText size={36} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-3 flex items-center justify-between text-sm text-[#667085]">
+                <span>共 {articles.length} 个教程</span>
+                <span>排序：推荐排序</span>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {previewArticles.map((item) => (
+                  <article key={item.id} className="rounded-[6px] border border-[#d0d5dd] bg-white p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#dff7ea] text-[#039855]">
+                        <FileText size={18} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-sm font-semibold text-[#101828]" title={item.title}>{item.title || `教程 ${item.id}`}</h4>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#667085]">{item.summary || item.oneLineUsage || "暂无摘要"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {splitTags(item.functionTags).slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded-[4px] bg-[#eef5ff] px-2.5 py-1 text-xs font-semibold text-[#1677ff]">{tag}</span>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-xs text-[#667085]">
+                      <span className="inline-flex items-center gap-1">
+                        推荐等级：
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <Star key={index} size={13} fill={index < Math.min(5, (item.recommendLevel || 1) + 2) ? "currentColor" : "none"} className={index < Math.min(5, (item.recommendLevel || 1) + 2) ? "text-[#f59e0b]" : "text-[#cbd5e1]"} />
+                        ))}
+                        Lv.{item.recommendLevel ?? 1}
+                      </span>
+                      <Bookmark size={16} className="text-[#667085]" />
+                    </div>
+                  </article>
+                ))}
+                {previewArticles.length === 0 ? <div className="col-span-full rounded-[6px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-4 py-12 text-center text-sm text-[#98a2b3]">当前分类暂无教程</div> : null}
+              </div>
+
+              <button type="button" className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[4px] border border-[#d0d5dd] bg-white text-sm font-semibold text-[#1677ff]">
+                查看全部 {articles.length} 个教程
+                <ArrowRight size={16} />
+              </button>
+            </main>
+
+            <aside className="space-y-4">
+              <section className="rounded-[6px] border border-[#d0d5dd] bg-white p-4">
+                <h3 className="mb-4 border-b border-[#e5e7eb] pb-3 text-[16px] font-semibold text-[#101828]">发布检查</h3>
+                <PreviewCheckRow title="缺失摘要" hint="存在未填写摘要的教程" count={missingSummaryCount} />
+                <PreviewCheckRow title="未关联练习" hint="存在未关联练习的教程" count={unlinkedArticleCount} />
+                <PreviewCheckRow title="未启用分类" hint="所有分类均已启用" count={disabledCategoryCount} successWhenZero />
+                <PreviewCheckRow title="排序冲突" hint="未检测到排序冲突" count={sortConflictCount} successWhenZero />
+              </section>
+              <section className="rounded-[6px] bg-[#edf5ff] p-4">
+                <h3 className="text-[16px] font-semibold text-[#1677ff]">检查总结</h3>
+                <p className="mt-2 text-sm leading-6 text-[#344054]">共检查 {categories.length + articles.length} 条内容，发现 {totalIssueCount} 个问题</p>
+                <button type="button" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#1677ff]">
+                  查看详情报告
+                  <ArrowRight size={14} />
+                </button>
+              </section>
+            </aside>
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-[#e5e7eb] bg-white px-6 py-4">
+          <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>
+            关闭
+          </button>
+          <button type="button" onClick={onReturnEdit} className={secondaryButtonClassName()}>
+            返回编辑
+          </button>
+          <button type="button" onClick={onConfirmPublish} className={primaryButtonClassName()}>
+            确认发布
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PreviewCheckRow({ title, hint, count, successWhenZero = false }: { title: string; hint: string; count: number; successWhenZero?: boolean }) {
+  const ok = successWhenZero ? count === 0 : count === 0;
+  return (
+    <div className="flex items-center gap-3 border-b border-[#edf0f5] py-3 last:border-b-0">
+      {ok ? <CheckCircle2 size={18} className="shrink-0 text-[#12b76a]" /> : <AlertCircle size={18} className="shrink-0 text-[#f79009]" />}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-[#101828]">{title}</div>
+        <div className="mt-1 text-xs text-[#667085]">{hint}</div>
+      </div>
+      <span className={`rounded-[4px] px-2.5 py-1 text-sm font-semibold ${ok ? "bg-[#dff7ea] text-[#039855]" : "bg-[#fff4e5] text-[#f79009]"}`}>{count} 个</span>
+    </div>
+  );
+}
+
+function BatchSortDialog({
+  open,
+  onOpenChange,
+  categoryRows,
+  articleRows,
+  selectedCategoryName,
+  onCategoryRowsChange,
+  onArticleRowsChange,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
+  categoryRows: SortCategoryRow[];
+  articleRows: SortArticleRow[];
+  selectedCategoryName: string;
+  onCategoryRowsChange: Dispatch<SetStateAction<SortCategoryRow[]>>;
+  onArticleRowsChange: Dispatch<SetStateAction<SortArticleRow[]>>;
+  onSubmit: () => Promise<void> | void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[88vh] w-[min(920px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden rounded-[8px] border border-[#d0d5dd] bg-white p-0 sm:max-w-none">
+        <DialogHeader className="border-b border-[#e5e7eb] px-6 py-5">
+          <DialogTitle className="text-[18px] font-semibold text-[#101828]">批量排序</DialogTitle>
+          <DialogDescription>调整分类与当前分类下教程的排序值，数值越小越靠前。</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto bg-[#f8fafc] p-6 lg:grid-cols-2">
+          <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-4">
+            <h3 className="mb-4 text-[16px] font-semibold text-[#101828]">教程分类排序</h3>
+            <div className="space-y-2">
+              {categoryRows.map((row) => (
+                <div key={row.id} className="flex items-center gap-3 rounded-[6px] border border-[#edf0f5] bg-white px-3 py-2">
+                  <Folder size={18} className="text-[#98a2b3]" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#344054]" title={row.name}>{row.name}</span>
+                  <input
+                    type="number"
+                    value={row.sortOrder}
+                    onChange={(event) =>
+                      onCategoryRowsChange((current) =>
+                        current.map((item) => (item.id === row.id ? { ...item, sortOrder: Number(event.target.value || 0) } : item))
+                      )
+                    }
+                    className="h-9 w-20 rounded-[4px] border border-[#d0d5dd] px-2 text-sm outline-none focus:border-[#1677ff]"
+                  />
+                </div>
+              ))}
+              {categoryRows.length === 0 ? <div className="rounded-[6px] border border-dashed border-[#d0d5dd] px-4 py-8 text-center text-sm text-[#98a2b3]">暂无分类</div> : null}
+            </div>
+          </section>
+
+          <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-4">
+            <h3 className="mb-1 text-[16px] font-semibold text-[#101828]">教程排序</h3>
+            <p className="mb-4 text-sm text-[#667085]">{selectedCategoryName ? `当前分类：${selectedCategoryName}` : "请选择分类后排序教程"}</p>
+            <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {articleRows.map((row) => (
+                <div key={row.id} className="flex items-center gap-3 rounded-[6px] border border-[#edf0f5] bg-white px-3 py-2">
+                  <FileText size={18} className="text-[#98a2b3]" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#344054]" title={row.title}>{row.title}</span>
+                  <input
+                    type="number"
+                    value={row.sortOrder}
+                    onChange={(event) =>
+                      onArticleRowsChange((current) =>
+                        current.map((item) => (item.id === row.id ? { ...item, sortOrder: Number(event.target.value || 0) } : item))
+                      )
+                    }
+                    className="h-9 w-20 rounded-[4px] border border-[#d0d5dd] px-2 text-sm outline-none focus:border-[#1677ff]"
+                  />
+                </div>
+              ))}
+              {articleRows.length === 0 ? <div className="rounded-[6px] border border-dashed border-[#d0d5dd] px-4 py-8 text-center text-sm text-[#98a2b3]">当前分类暂无教程</div> : null}
+            </div>
+          </section>
+        </div>
+
+        <DialogFooter className="border-t border-[#e5e7eb] bg-white px-6 py-4">
+          <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>
+            取消
+          </button>
+          <button type="button" onClick={() => void onSubmit()} className={primaryButtonClassName()}>
+            保存排序
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -1141,4 +1645,20 @@ function toggleId(values: number[], id: number, checked: boolean) {
     next.delete(id);
   }
   return Array.from(next);
+}
+
+function splitTags(value?: string | null) {
+  return String(value || "")
+    .split(/[,，、\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function countSortConflicts(items: Array<{ sortOrder?: number }>) {
+  const counts = new Map<number, number>();
+  items.forEach((item) => {
+    const key = Number(item.sortOrder ?? 0);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return Array.from(counts.values()).filter((count) => count > 1).length;
 }
