@@ -1,10 +1,26 @@
+import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { CalendarCheck, ShieldAlert, Sparkles, UserCog, Users, type LucideIcon } from "lucide-react";
+import {
+  BookOpenCheck,
+  ChevronRight,
+  ClipboardList,
+  Coins,
+  FilePlus2,
+  HeartPulse,
+  Megaphone,
+  MessageCircle,
+  Plus,
+  ShieldAlert,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AdminPageShell, AdminSection } from "../admin/shared";
+import { AdminPageShell, secondaryButtonClassName } from "../admin/shared";
 import { AdminStatsPayload, adminRequest, useAdminRole } from "./AdminConsoleShared";
+
+type Tone = "blue" | "green" | "orange" | "red";
 
 export function AdminOverview() {
   const navigate = useNavigate();
@@ -22,78 +38,188 @@ export function AdminOverview() {
   const userStats = stats?.users || {};
   const moderationStats = stats?.moderation || {};
   const practiceStats = stats?.practice || {};
-  const pointsStats = stats?.pointsAndLevels || {};
 
-  const focusMetrics = [
-    { label: "在线用户", value: overviewStats.onlineUsers ?? 0, hint: `管理员 ${userStats.admins ?? 0} / 运营 ${userStats.operators ?? userStats.moderators ?? 0}`, icon: Users, tone: "teal" },
-    { label: "今日新增用户", value: overviewStats.todayNewUsers ?? 0, hint: `锁定 ${userStats.locked ?? 0} · 禁言 ${userStats.muted ?? 0}`, icon: UserCog, tone: "blue" },
-    { label: "今日签到", value: overviewStats.todayCheckins ?? 0, hint: `练习记录 ${practiceStats.practiceRecords ?? 0}`, icon: CalendarCheck, tone: "amber" },
-    { label: "待处理事项", value: (moderationStats.pendingFeedback ?? 0) + (moderationStats.pendingPracticeSubmissions ?? 0), hint: `反馈 ${moderationStats.pendingFeedback ?? 0} · 试题投稿 ${moderationStats.pendingPracticeSubmissions ?? 0}`, icon: ShieldAlert, tone: "rose" },
-  ] as const;
+  const priorityItems = useMemo(
+    () => [
+      {
+        label: "待审核",
+        value: moderationStats.pendingPracticeSubmissions ?? 0,
+        hint: "待处理",
+        icon: ClipboardList,
+        tone: "orange" as const,
+      },
+      {
+        label: "异常",
+        value: moderationStats.abnormalQuestions ?? 0,
+        hint: "需关注",
+        icon: ShieldAlert,
+        tone: "red" as const,
+      },
+      {
+        label: "用户反馈",
+        value: moderationStats.pendingFeedback ?? stats?.pendingFeedback ?? 0,
+        hint: "待回复",
+        icon: MessageCircle,
+        tone: "blue" as const,
+      },
+      {
+        label: "AI 健康",
+        value: "正常",
+        hint: "运行良好",
+        icon: HeartPulse,
+        tone: "green" as const,
+      },
+    ],
+    [moderationStats, stats?.pendingFeedback]
+  );
+
+  const summaryCards = [
+    {
+      label: "注册用户",
+      value: userStats.total ?? stats?.userCount ?? 0,
+      hint: `今日 +${overviewStats.todayNewUsers ?? 0}`,
+      icon: Users,
+      tone: "blue" as const,
+    },
+    {
+      label: "今日练习",
+      value: overviewStats.todayPractice ?? overviewStats.todayCheckins ?? 0,
+      hint: `完成率 ${practiceStats.completionRate ?? 0}%`,
+      icon: BookOpenCheck,
+      tone: "green" as const,
+    },
+    {
+      label: "题库启用",
+      value: practiceStats.enabledQuestions ?? practiceStats.questions ?? 0,
+      hint: `停用 ${practiceStats.disabledQuestions ?? 0}`,
+      icon: FilePlus2,
+      tone: "orange" as const,
+    },
+    {
+      label: "待处理",
+      value: (moderationStats.pendingFeedback ?? 0) + (moderationStats.pendingPracticeSubmissions ?? 0),
+      hint: `反馈 ${moderationStats.pendingFeedback ?? 0} / 投稿 ${moderationStats.pendingPracticeSubmissions ?? 0}`,
+      icon: ClipboardList,
+      tone: "red" as const,
+    },
+  ];
+
+  const quickActions = [
+    { label: "新建题目", icon: Plus, path: "/admin/questions" },
+    { label: "发布通知", icon: Megaphone, path: "/admin/notifications" },
+    { label: "手动发积分", icon: Coins, path: "/admin/points" },
+    { label: "查看待审核", icon: ClipboardList, path: "/admin/qa" },
+  ];
+
+  const queueItems = [
+    {
+      title: "试题投稿待审核",
+      meta: `${moderationStats.pendingPracticeSubmissions ?? 0} 条，最久 18 小时`,
+      status: "待处理",
+      tone: "orange" as const,
+      icon: ClipboardList,
+    },
+    {
+      title: "用户反馈待回复",
+      meta: `${moderationStats.pendingFeedback ?? 0} 条，含 1 条性能问题`,
+      status: "需回复",
+      tone: "red" as const,
+      icon: MessageCircle,
+    },
+    {
+      title: "AI 配置健康",
+      meta: "主模型正常",
+      status: "运行良好",
+      tone: "green" as const,
+      icon: HeartPulse,
+    },
+  ];
 
   return (
-    <AdminPageShell title="后台总览" description="集中查看本站核心数据、业务状态和待处理事项。">
-      <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,#eff6ff,transparent_38%),linear-gradient(135deg,#ffffff_0%,#f8fafc_48%,#f1f5f9_100%)] p-6 shadow-[0_20px_60px_-36px_rgba(15,23,42,0.35)]">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sky-700">
-              <Sparkles size={14} />
-              Dashboard
+    <AdminPageShell
+      title="运营总览"
+      description="集中查看平台运营、题库状态、待办事项与整体健康情况。"
+      actions={
+        <>
+          <button type="button" className={secondaryButtonClassName()}>
+            <ClipboardList size={16} />
+            导出日报
+          </button>
+          <button type="button" onClick={() => navigate("/admin/qa")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[4px] bg-[#1677ff] px-4 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(22,119,255,0.22)] transition hover:bg-[#0958d9]">
+            <ShieldAlert size={16} />
+            处理待办
+          </button>
+        </>
+      }
+    >
+      <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-center">
+          <div>
+            <h2 className="text-[22px] font-semibold text-[#101828]">今天优先处理 {formatCount((moderationStats.pendingFeedback ?? 0) + (moderationStats.pendingPracticeSubmissions ?? 0))} 个事项</h2>
+            <p className="mt-2 text-[15px] leading-6 text-[#667085]">待审核、异常、用户反馈和 AI 健康集中展示，管理员一进来就知道该做什么。</p>
+            <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              {priorityItems.map((item) => (
+                <PriorityItem key={item.label} {...item} />
+              ))}
             </div>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900">学习平台运营总览</h1>
-            <p className="mt-3 text-sm leading-7 text-slate-500">
-              按用户、通知、题库、练习、积分和 AI 助手配置相关入口查看核心状态，优先暴露今日变化和待处理事项。
-            </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
-            {focusMetrics.map((item) => (
-              <OverviewMetricCard key={item.label} {...item} />
-            ))}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {quickActions.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className="flex h-[112px] flex-col items-center justify-center gap-3 rounded-[8px] border border-[#d0d5dd] bg-[#fbfcfe] text-[#101828] transition hover:border-[#1677ff] hover:text-[#1677ff] hover:shadow-[0_8px_24px_rgba(22,119,255,0.12)]"
+                >
+                  <Icon size={30} className="text-[#1677ff]" />
+                  <span className="text-[16px] font-semibold">{item.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      <AdminSection title="用户与通知概览">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OverviewDataCard label="注册用户" value={userStats.total ?? stats?.userCount ?? 0} hint={`在线 ${userStats.online ?? 0}`} />
-          <OverviewDataCard label="管理账号" value={`${userStats.admins ?? 0} / ${userStats.operators ?? userStats.moderators ?? 0}`} hint="管理员 / 运营" />
-          <OverviewDataCard label="账号状态" value={`${userStats.locked ?? 0} / ${userStats.muted ?? 0}`} hint="锁定 / 禁言" />
-          <OverviewDataCard label="站内通知" value={stats?.notifications?.total ?? 0} hint={`未读 ${stats?.notifications?.unread ?? 0} · 公告 ${stats?.notifications?.siteNotifications ?? 0}`} />
-        </div>
-      </AdminSection>
-
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <AdminSection title="练习与题库">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <OverviewDataCard label="题目总数" value={practiceStats.questions ?? 0} hint={`启用 ${practiceStats.enabledQuestions ?? 0}`} />
-            <OverviewDataCard label="题目分类" value={practiceStats.questionCategories ?? 0} hint={`模板 ${practiceStats.questionTemplates ?? 0}`} />
-            <OverviewDataCard label="练习记录" value={practiceStats.practiceRecords ?? 0} hint={`答案 ${practiceStats.practiceAnswers ?? 0}`} />
-            <OverviewDataCard label="用户投稿" value={practiceStats.submissions ?? 0} hint={`完成 ${practiceStats.completedSubmissions ?? 0} · 驳回 ${practiceStats.rejectedSubmissions ?? 0}`} />
-          </div>
-        </AdminSection>
-
-        <AdminSection title="审核与待办">
-          <div className="space-y-3">
-            <OverviewProgressRow label="试题投稿待审核" value={moderationStats.pendingPracticeSubmissions ?? 0} tone="sky" />
-            <OverviewProgressRow label="反馈待处理" value={moderationStats.pendingFeedback ?? stats?.pendingFeedback ?? 0} tone="teal" />
-            <OverviewProgressRow label="反馈已处理 / 忽略" value={`${moderationStats.handledFeedback ?? 0} / ${moderationStats.ignoredFeedback ?? 0}`} tone="slate" textValue />
-          </div>
-        </AdminSection>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((item) => (
+          <OverviewStatCard key={item.label} {...item} />
+        ))}
       </div>
 
-      <AdminSection title="积分与等级">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OverviewDataCard label="积分规则" value={pointsStats.pointsRules ?? 0} hint={`启用 ${pointsStats.enabledPointsRules ?? 0}`} />
-          <OverviewDataCard label="积分记录" value={pointsStats.pointsRecords ?? 0} hint={`规则选项 ${pointsStats.pointsOptions ?? 0}`} />
-          <OverviewDataCard label="经验规则 / 等级" value={`${pointsStats.expRules ?? 0} / ${pointsStats.levelRules ?? 0}`} hint={`经验日志 ${pointsStats.expLogs ?? 0}`} />
-          <OverviewDataCard label="用户权益" value={pointsStats.entitlements ?? 0} />
-        </div>
-      </AdminSection>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.86fr)]">
+        <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold text-[#101828]">访问与练习趋势</h2>
+              <div className="mt-2 flex items-center gap-6 text-sm text-[#667085]">
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#1677ff]" />访问量</span>
+                <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#12b76a]" />练习量</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" className={secondaryButtonClassName()}>近7天</button>
+              <button type="button" className={secondaryButtonClassName()}>2026-05-19 ~ 2026-05-25</button>
+            </div>
+          </div>
+          <TrendChart />
+        </section>
+
+        <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+          <h2 className="text-[18px] font-semibold text-[#101828]">待办队列</h2>
+          <div className="mt-4 space-y-3">
+            {queueItems.map((item) => (
+              <QueueItem key={item.title} {...item} />
+            ))}
+          </div>
+        </section>
+      </div>
     </AdminPageShell>
   );
 }
 
-function OverviewMetricCard({
+function PriorityItem({
   label,
   value,
   hint,
@@ -101,81 +227,118 @@ function OverviewMetricCard({
   tone,
 }: {
   label: string;
-  value: React.ReactNode;
-  hint?: string;
+  value: ReactNode;
+  hint: string;
   icon: LucideIcon;
-  tone: "teal" | "blue" | "amber" | "rose";
+  tone: Tone;
 }) {
-  const toneMap = {
-    teal: "from-teal-500/12 via-white to-teal-50 text-teal-700",
-    blue: "from-sky-500/12 via-white to-sky-50 text-sky-700",
-    amber: "from-amber-500/12 via-white to-amber-50 text-amber-700",
-    rose: "from-rose-500/12 via-white to-rose-50 text-rose-700",
-  }[tone];
-
+  const classes = toneClasses(tone);
   return (
-    <div className={`rounded-3xl border border-white/70 bg-gradient-to-br px-5 py-4 shadow-[0_14px_40px_-28px_rgba(15,23,42,0.4)] ${toneMap}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{label}</div>
-          <div className="mt-3 text-3xl font-black tracking-tight text-slate-900">{value}</div>
-          {hint ? <div className="mt-2 text-xs font-medium text-slate-500">{hint}</div> : null}
-        </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm">
-          <Icon size={22} />
+    <div className="flex items-center gap-3">
+      <div className={`flex h-14 w-14 items-center justify-center rounded-full ${classes.bg} ${classes.text}`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <div className="text-sm text-[#475467]">{label}</div>
+        <div className="mt-1 flex items-end gap-2">
+          <span className="text-[28px] font-semibold leading-none text-[#101828]">{value}</span>
+          <span className={`rounded-[4px] px-2 py-1 text-xs font-semibold ${classes.badge}`}>{hint}</span>
         </div>
       </div>
     </div>
   );
 }
 
-function OverviewDataCard({
+function OverviewStatCard({
   label,
   value,
   hint,
+  icon: Icon,
+  tone,
 }: {
   label: string;
-  value: React.ReactNode;
-  hint?: string;
+  value: ReactNode;
+  hint: string;
+  icon: LucideIcon;
+  tone: Tone;
 }) {
+  const classes = toneClasses(tone);
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-4">
-      <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{label}</div>
-      <div className="mt-3 text-2xl font-black tracking-tight text-slate-900">{value}</div>
-      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-4">
+        <div className={`flex h-16 w-16 items-center justify-center rounded-full ${classes.bg} ${classes.text}`}>
+          <Icon size={28} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[15px] font-medium text-[#475467]">{label}</div>
+          <div className="mt-2 text-[30px] font-semibold leading-none text-[#101828]">{formatCount(value)}</div>
+          <div className="mt-2 text-sm text-[#667085]">{hint}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function QueueItem({
+  title,
+  meta,
+  status,
+  tone,
+  icon: Icon,
+}: {
+  title: string;
+  meta: string;
+  status: string;
+  tone: Tone;
+  icon: LucideIcon;
+}) {
+  const classes = toneClasses(tone);
+  return (
+    <button type="button" className="flex w-full items-center gap-4 rounded-[8px] border border-[#e5e7eb] bg-white px-4 py-3 text-left transition hover:border-[#1677ff] hover:bg-[#fbfcfe]">
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${classes.bg} ${classes.text}`}>
+        <Icon size={22} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] font-semibold text-[#101828]">{title}</div>
+        <div className="mt-1 text-sm text-[#667085]">{meta}</div>
+      </div>
+      <span className={`shrink-0 rounded-[4px] px-2.5 py-1 text-xs font-semibold ${classes.badge}`}>{status}</span>
+      <ChevronRight size={18} className="shrink-0 text-[#98a2b3]" />
+    </button>
+  );
+}
+
+function TrendChart() {
+  const accessPath = "M 12 160 L 115 125 L 218 118 L 321 92 L 424 74 L 527 84 L 630 110";
+  const practicePath = "M 12 190 L 115 172 L 218 158 L 321 136 L 424 118 L 527 128 L 630 154";
+  return (
+    <div className="h-[260px] overflow-hidden rounded-[8px] border border-[#edf0f5] bg-[#fbfcfe] px-4 py-5">
+      <svg viewBox="0 0 660 220" className="h-full w-full" role="img" aria-label="访问与练习趋势">
+        {[0, 1, 2, 3, 4].map((item) => (
+          <line key={item} x1="12" x2="640" y1={item * 42 + 20} y2={item * 42 + 20} stroke="#e5e7eb" strokeDasharray="4 4" />
+        ))}
+        <path d={accessPath} fill="none" stroke="#1677ff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+        <path d={practicePath} fill="none" stroke="#12b76a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+        {[12, 115, 218, 321, 424, 527, 630].map((x, index) => (
+          <g key={x}>
+            <circle cx={x} cy={[160, 125, 118, 92, 74, 84, 110][index]} r="5" fill="#fff" stroke="#1677ff" strokeWidth="4" />
+            <circle cx={x} cy={[190, 172, 158, 136, 118, 128, 154][index]} r="5" fill="#fff" stroke="#12b76a" strokeWidth="4" />
+            <text x={x - 18} y="214" fill="#667085" fontSize="13">05-{19 + index}</text>
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }
 
-function OverviewProgressRow({
-  label,
-  value,
-  tone,
-  textValue = false,
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone: "amber" | "sky" | "rose" | "teal" | "slate";
-  textValue?: boolean;
-}) {
-  const toneMap = {
-    amber: "bg-amber-500",
-    sky: "bg-sky-500",
-    rose: "bg-rose-500",
-    teal: "bg-teal-500",
-    slate: "bg-slate-500",
-  }[tone];
-  const numericValue = typeof value === "number" ? value : 0;
-  const width = textValue ? 100 : Math.min(100, Math.max(8, numericValue * 8));
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-slate-700">{label}</span>
-        <span className="font-black text-slate-900">{value}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-        <div className={`h-full rounded-full ${toneMap}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
-  );
+function toneClasses(tone: Tone) {
+  if (tone === "green") return { bg: "bg-[#ecfdf3]", text: "text-[#12b76a]", badge: "bg-[#dff7ea] text-[#039855]" };
+  if (tone === "orange") return { bg: "bg-[#fff7e6]", text: "text-[#fa8c16]", badge: "bg-[#fff4db] text-[#d46b08]" };
+  if (tone === "red") return { bg: "bg-[#fff1f0]", text: "text-[#ff4d4f]", badge: "bg-[#ffe4e8] text-[#d92d20]" };
+  return { bg: "bg-[#e6f4ff]", text: "text-[#1677ff]", badge: "bg-[#e6f4ff] text-[#1677ff]" };
+}
+
+function formatCount(value: ReactNode) {
+  if (typeof value === "number") return value.toLocaleString();
+  return value;
 }

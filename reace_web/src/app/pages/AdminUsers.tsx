@@ -7,7 +7,7 @@ import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import { getAdminAvatarSrc } from "../admin/display";
-import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatMaybeDate, formatAdminRole, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName } from "../admin/shared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatAdminRole, primaryButtonClassName, secondaryButtonClassName, statusBadgeClassName, inputClassName } from "../admin/shared";
 import { PagedAdminResponse, AdminEditableUserRole, AdminUserForm, AdminUserRecord, AdminUserToggleResponse, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminPrompt, openAdminConfirm, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, isEditableUserRole, defaultUserForm } from "./AdminConsoleShared";
 
 export function AdminUsers() {
@@ -160,6 +160,12 @@ export function AdminUsers() {
       title="用户管理"
       description="管理用户账号、角色与状态。"
     >
+      <AdminStatGrid>
+        <AdminStatCard label="总用户数" value={total || "-"} hint={`当前页 ${records.length}`} />
+        <AdminStatCard label="活跃用户" value={records.filter((item) => Number(item.status ?? 0) === 0).length} hint="当前页正常" />
+        <AdminStatCard label="管理员" value={records.filter((item) => item.role === "admin").length} hint="当前页" />
+        <AdminStatCard label="冻结账号" value={records.filter((item) => Number(item.status ?? 0) === 1 || item.isMuted).length} hint="锁定或禁言" />
+      </AdminStatGrid>
       <AdminSection title="用户列表" actions={<AddButton onClick={openCreate}>新建用户</AddButton>}>
         <FilterBar>
           <FilterField label="关键词">

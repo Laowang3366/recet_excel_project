@@ -11,6 +11,8 @@ import {
   AdminPageShell,
   AdminPagination,
   AdminSection,
+  AdminStatCard,
+  AdminStatGrid,
   FilterBar,
   FilterField,
   inputClassName,
@@ -181,6 +183,12 @@ export function AdminFileRecycleBin() {
 
   return (
     <AdminPageShell>
+      <AdminStatGrid>
+        <AdminStatCard label="回收文件" value={total} hint={`当前页 ${records.length}`} />
+        <AdminStatCard label="可恢复" value={records.filter((item) => !item.expired).length} hint="仍在保留期" />
+        <AdminStatCard label="当前筛选" value={records.length} hint="本页记录" />
+        <AdminStatCard label="过期清理" value={records.filter((item) => item.expired).length} hint="建议确认" />
+      </AdminStatGrid>
       <AdminSection
         title="文件回收站"
         actions={(

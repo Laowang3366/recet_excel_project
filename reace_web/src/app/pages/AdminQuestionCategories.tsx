@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
-import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminSection, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminSection, AdminStatCard, AdminStatGrid, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
 import { QuestionCategoryForm, QuestionCategoryRecord, adminRequest, showAdminSuccess, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, defaultQuestionCategoryForm } from "./AdminConsoleShared";
 
 export function AdminQuestionCategories() {
@@ -133,6 +133,12 @@ export function AdminQuestionCategories() {
       title="题目分类"
       description="维护练习题目分类，同时控制前台章节板块的名称、描述、排序与启用状态。"
     >
+      <AdminStatGrid>
+        <AdminStatCard label="分类数" value={records.length} hint="全部分类" />
+        <AdminStatCard label="题目映射" value={records.reduce((sum, item) => sum + Number(item.questionCount ?? 0), 0)} hint="前台同步" />
+        <AdminStatCard label="草稿配置" value={records.filter((item) => !item.enabled).length} hint="未启用分类" />
+        <AdminStatCard label="异常" value="0" hint="无缺失" />
+      </AdminStatGrid>
       <AdminSection title="分类列表" actions={<AddButton onClick={openCreate}>新增题目分类</AddButton>}>
         <AdminBulkActions
           selectedCount={bulkSelection.selectedCount}

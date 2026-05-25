@@ -28,4 +28,12 @@ describe("admin display helpers", () => {
     expect(getAdminSidebarClassName(true)).toContain("h-dvh");
     expect(getAdminSidebarOverlayClassName(true)).toContain("opacity-100");
   });
+
+  it("uses the compact ExcelCC redesign sidebar frame", () => {
+    const className = getAdminSidebarClassName(true);
+
+    expect(className).toContain("w-[232px]");
+    expect(className).toContain("bg-[#001529]");
+    expect(className).toContain("shadow-[2px_0_8px_rgba(0,21,41,0.18)]");
+  });
 });

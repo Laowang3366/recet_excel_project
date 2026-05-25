@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { answerRangeButtonClassName, formDialogBodyClassName, formDialogContentClassName } from "./shared";
+import {
+  answerRangeButtonClassName,
+  inputClassName,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  formDialogBodyClassName,
+  formDialogContentClassName,
+} from "./shared";
 
 describe("admin shared controls", () => {
   it("uses a stronger visual style for answer range picking", () => {
@@ -29,5 +36,13 @@ describe("admin shared controls", () => {
     expect(className).not.toContain("flex-1");
     expect(className).not.toContain("basis-0");
     expect(className).toContain("px-6 py-5");
+  });
+
+  it("uses the redesigned admin button and form control scale", () => {
+    expect(primaryButtonClassName()).toContain("h-10");
+    expect(primaryButtonClassName()).toContain("rounded-[4px]");
+    expect(secondaryButtonClassName()).toContain("h-10");
+    expect(inputClassName()).toContain("h-10");
+    expect(inputClassName()).toContain("rounded-[4px]");
   });
 });

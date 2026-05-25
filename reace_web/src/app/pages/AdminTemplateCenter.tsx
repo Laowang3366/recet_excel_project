@@ -15,6 +15,8 @@ import {
   AdminPageShell,
   AdminPermissionNotice,
   AdminSection,
+  AdminStatCard,
+  AdminStatGrid,
   FilterBar,
   FilterField,
   inputClassName,
@@ -252,6 +254,12 @@ export function AdminTemplateCenter() {
 
   return (
     <AdminPageShell>
+      <AdminStatGrid>
+        <AdminStatCard label="模板数" value={records.length} hint={`上架 ${records.filter((item) => item.enabled).length}`} />
+        <AdminStatCard label="累计下载" value={records.reduce((sum, item) => sum + Number(item.downloadCount ?? 0), 0)} hint="当前筛选" />
+        <AdminStatCard label="草稿" value={records.filter((item) => !item.enabled).length} hint="待补资料" />
+        <AdminStatCard label="缺失文件" value={records.filter((item) => !item.templateFileUrl).length} hint="需补上传" />
+      </AdminStatGrid>
       <AdminSection title="模板中心" actions={<AddButton onClick={openCreate}>新增模板</AddButton>}>
         <FilterBar>
           <FilterField label="行业分类">

@@ -1,4 +1,6 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, BellRing, BookOpenCheck, ChevronLeft, ChevronRight, Coins, FileText, Plus, ShieldCheck, Trash2, Users, type LucideIcon } from "lucide-react";
+import { useLocation } from "react-router";
+import { getAdminModuleByPath, type AdminModuleKey } from "./config";
 import { formatDateTime } from "../lib/format";
 
 export const POINTS_TASK_KEY_OPTIONS = [
@@ -43,8 +45,25 @@ export const FEEDBACK_TYPE_OPTIONS = [
   { value: "other", label: "其他" },
 ];
 
+const ADMIN_PAGE_DESCRIPTIONS: Record<AdminModuleKey, string> = {
+  overview: "集中查看平台运营、题库状态、待办事项与整体健康情况。",
+  "home-content": "统一管理首页教程内容、分类结构与发布编排。",
+  notifications: "管理站内通知的创建、发布、触达与效果统计。",
+  users: "统一管理平台用户信息、积分等级与账号状态。",
+  questions: "统一管理题目、模板校验、闯关关卡与发布验证流程。",
+  "question-categories": "统一管理分类结构、前台章节映射与题目归类状态。",
+  templates: "管理平台模板资源，配置积分与上下架状态。",
+  points: "统一管理积分规则、手动发放与积分流水。",
+  levels: "查看等级分布、经验规则，并校准用户等级。",
+  assistant: "统一管理模型配置、调用安全、失败分析与用户调用统计。",
+  qa: "统一管理案例求助、答疑审核、精选沉淀与答疑者协作流程。",
+  "file-recycle-bin": "统一管理已删除文件，支持恢复、过期清理与风险控制。",
+};
+
 export function AdminPageShell({
-  description: _description,
+  title,
+  description,
+  actions,
   children,
 }: {
   title?: string;
@@ -52,12 +71,28 @@ export function AdminPageShell({
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return <div className="space-y-4 p-4 md:p-5">{children}</div>;
+  const location = useLocation();
+  const module = getAdminModuleByPath(location.pathname);
+  const resolvedTitle = title || module?.label || "后台管理";
+  const resolvedDescription = description || (module ? ADMIN_PAGE_DESCRIPTIONS[module.key] : "");
+
+  return (
+    <div className="space-y-4 md:space-y-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-[28px] font-semibold leading-tight text-[#1f1f1f] md:text-[30px]">{resolvedTitle}</h1>
+          {resolvedDescription ? <p className="mt-1.5 text-[15px] leading-6 text-[#667085]">{resolvedDescription}</p> : null}
+        </div>
+        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div> : null}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export function AdminSection({
   title,
-  description: _description,
+  description,
   actions,
   children,
 }: {
@@ -67,10 +102,11 @@ export function AdminSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[2px] border border-[#f0f0f0] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-      <div className="mb-4 flex flex-col gap-2 border-b border-[#f0f0f0] pb-3 md:flex-row md:items-end md:justify-between">
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)] md:p-5">
+      <div className="mb-4 flex flex-col gap-2 border-b border-[#edf0f5] pb-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-[16px] font-medium text-[#262626]">{title}</h2>
+          <h2 className="text-[18px] font-semibold text-[#1f1f1f]">{title}</h2>
+          {description ? <p className="mt-1 text-sm text-[#667085]">{description}</p> : null}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -86,22 +122,32 @@ export function AdminStatGrid({ children }: { children: React.ReactNode }) {
 export function AdminStatCard({
   label,
   value,
-  hint: _hint,
+  hint,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
 }) {
+  const Icon = getStatIcon(label);
+  const tone = getStatTone(label);
   return (
-    <div className="rounded-[2px] border border-[#f0f0f0] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-      <div className="text-[14px] font-normal text-[#8c8c8c]">{label}</div>
-      <div className="mt-2 text-[30px] font-normal leading-none text-[#262626]">{value}</div>
+    <div className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-4">
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ${tone.bg} ${tone.text}`}>
+          <Icon size={24} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[14px] font-medium text-[#475467]">{label}</div>
+          <div className="mt-2 text-[30px] font-semibold leading-none text-[#101828]">{value}</div>
+          {hint ? <div className="mt-2 text-sm text-[#667085]">{hint}</div> : null}
+        </div>
+      </div>
     </div>
   );
 }
 
 export function FilterBar({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-wrap items-end gap-3 rounded-[2px] border border-[#f0f0f0] bg-[#fafafa] p-3">{children}</div>;
+  return <div className="flex flex-wrap items-end gap-3 rounded-[8px] border border-[#e5e7eb] bg-[#fbfcfe] p-4">{children}</div>;
 }
 
 export function FilterField({
@@ -113,26 +159,26 @@ export function FilterField({
 }) {
   return (
     <label className="min-w-[140px] flex-1">
-      <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="mb-1.5 text-sm font-medium text-[#344054]">{label}</div>
       {children}
     </label>
   );
 }
 
 export function inputClassName() {
-  return "h-9 w-full rounded-[2px] border border-[#d9d9d9] bg-white px-3 text-sm text-[#262626] outline-none transition placeholder:text-[#bfbfbf] focus:border-[#1677ff] focus:ring-2 focus:ring-[#1677ff]/10";
+  return "h-10 w-full rounded-[4px] border border-[#d0d5dd] bg-white px-3 text-sm text-[#1f2937] outline-none transition placeholder:text-[#98a2b3] focus:border-[#1677ff] focus:ring-2 focus:ring-[#1677ff]/10";
 }
 
 export function textareaClassName() {
-  return "min-h-[112px] w-full rounded-[2px] border border-[#d9d9d9] bg-white px-3 py-2 text-sm text-[#262626] outline-none transition placeholder:text-[#bfbfbf] focus:border-[#1677ff] focus:ring-2 focus:ring-[#1677ff]/10";
+  return "min-h-[112px] w-full rounded-[4px] border border-[#d0d5dd] bg-white px-3 py-2 text-sm text-[#1f2937] outline-none transition placeholder:text-[#98a2b3] focus:border-[#1677ff] focus:ring-2 focus:ring-[#1677ff]/10";
 }
 
 export function primaryButtonClassName() {
-  return "inline-flex h-8 items-center justify-center gap-1.5 rounded-[2px] bg-[#1677ff] px-3 text-sm font-normal text-white transition hover:bg-[#4096ff] disabled:opacity-60";
+  return "inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[4px] bg-[#1677ff] px-4 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(22,119,255,0.22)] transition hover:bg-[#0958d9] disabled:cursor-not-allowed disabled:opacity-60";
 }
 
 export function secondaryButtonClassName() {
-  return "inline-flex h-8 items-center justify-center gap-1.5 rounded-[2px] border border-[#d9d9d9] bg-white px-3 text-sm font-normal text-[#595959] transition hover:border-[#4096ff] hover:text-[#1677ff]";
+  return "inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[4px] border border-[#d0d5dd] bg-white px-4 text-sm font-semibold text-[#344054] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:border-[#4096ff] hover:text-[#1677ff] disabled:cursor-not-allowed disabled:opacity-60";
 }
 
 export function answerRangeButtonClassName() {
@@ -166,7 +212,7 @@ export function AddButton({
 
 export function AdminEmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-[2px] border border-dashed border-[#d9d9d9] bg-white px-6 py-12 text-center text-sm text-[#8c8c8c]">
+    <div className="rounded-[8px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-6 py-12 text-center text-sm text-[#667085]">
       {message}
     </div>
   );
@@ -174,7 +220,7 @@ export function AdminEmptyState({ message }: { message: string }) {
 
 export function AdminPermissionNotice({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-[2px] border border-[#ffe58f] bg-[#fffbe6] px-4 py-3 text-sm text-[#ad6800]">
+    <div className="flex items-start gap-3 rounded-[8px] border border-[#ffd666] bg-[#fffbe6] px-4 py-3 text-sm text-[#ad6800]">
       <AlertTriangle size={18} className="mt-0.5 shrink-0" />
       <span>{message}</span>
     </div>
@@ -195,8 +241,8 @@ export function AdminPagination({
   const pages = Math.max(1, Math.ceil(total / Math.max(size, 1)));
 
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-[#f0f0f0] pt-4">
-      <div className="text-sm text-[#8c8c8c]">第 {current} / {pages} 页，共 {total} 条</div>
+    <div className="flex flex-col items-start justify-between gap-3 border-t border-[#edf0f5] pt-4 sm:flex-row sm:items-center">
+      <div className="text-sm text-[#667085]">第 {current} / {pages} 页，共 {total} 条</div>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -224,15 +270,15 @@ export function AdminPagination({
 export function statusBadgeClassName(value?: string | number | null) {
   const normalized = String(value ?? "").toLowerCase();
   if (["approved", "active", "handled", "sent", "true", "1", "0"].includes(normalized)) {
-    return "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700";
+    return "rounded-[4px] bg-[#dff7ea] px-2.5 py-1 text-xs font-semibold text-[#039855]";
   }
   if (["pending", "draft", "editing"].includes(normalized)) {
-    return "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700";
+    return "rounded-[4px] bg-[#fff4db] px-2.5 py-1 text-xs font-semibold text-[#d46b08]";
   }
   if (["rejected", "deleted", "ignored", "false", "99", "-1"].includes(normalized)) {
-    return "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700";
+    return "rounded-[4px] bg-[#ffe4e8] px-2.5 py-1 text-xs font-semibold text-[#d92d20]";
   }
-  return "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600";
+  return "rounded-[4px] bg-[#eef2f6] px-2.5 py-1 text-xs font-semibold text-[#475467]";
 }
 
 export function formatAdminStatus(value: unknown) {
@@ -292,7 +338,7 @@ export function AdminBulkActions({
   onDeleteSelected: () => void;
 }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[2px] border border-[#e5e7eb] bg-[#fafafa] px-3 py-2 text-sm text-[#595959]">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[#e5e7eb] bg-[#fbfcfe] px-3 py-2 text-sm text-[#475467]">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={onToggleAll} disabled={totalCount === 0} className={secondaryButtonClassName()}>
           {allVisibleSelected ? "取消全选" : "全选本页"}
@@ -330,9 +376,28 @@ export function AdminBulkCheckbox({
       checked={checked}
       onChange={onChange}
       aria-label={label}
-      className="h-4 w-4 rounded border-[#d9d9d9] text-[#1677ff] focus:ring-[#1677ff]/20"
+      className="h-4 w-4 rounded border-[#d0d5dd] text-[#1677ff] focus:ring-[#1677ff]/20"
     />
   );
+}
+
+function getStatIcon(label: string): LucideIcon {
+  if (/用户|账号|会员/.test(label)) return Users;
+  if (/通知|消息/.test(label)) return BellRing;
+  if (/积分|经验/.test(label)) return Coins;
+  if (/等级|状态|安全|异常|锁定/.test(label)) return ShieldCheck;
+  if (/题|练习|教程/.test(label)) return BookOpenCheck;
+  if (/文件|模板|草稿/.test(label)) return FileText;
+  if (/率|趋势|调用/.test(label)) return BarChart3;
+  return Activity;
+}
+
+function getStatTone(label: string) {
+  if (/异常|锁定|失败|待处理|风险/.test(label)) return { bg: "bg-[#fff1f0]", text: "text-[#ff4d4f]" };
+  if (/今日|新增|下载|签到|发放|调用/.test(label)) return { bg: "bg-[#ecfdf3]", text: "text-[#12b76a]" };
+  if (/草稿|审核|需|待/.test(label)) return { bg: "bg-[#fff7e6]", text: "text-[#fa8c16]" };
+  if (/等级|积分|经验/.test(label)) return { bg: "bg-[#f4f3ff]", text: "text-[#7a5af8]" };
+  return { bg: "bg-[#e6f4ff]", text: "text-[#1677ff]" };
 }
 
 export function formatQuestionType(value: unknown) {

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
-import { ArrowLeft, Menu, X } from "lucide-react";
+import { ArrowLeft, Bell, ChevronDown, CircleHelp, Globe2, Menu, Search, X } from "lucide-react";
 import { useSession } from "../lib/session";
-import { canAccessAdminPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
+import { canAccessAdminPath, getAdminModuleByPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
 import { getAdminAvatarSrc, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
 import { secondaryButtonClassName } from "../admin/shared";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
@@ -14,6 +14,7 @@ export function AdminLayout() {
   const { user, isAuthenticated, loading } = useSession();
   const role = hasAdminConsoleAccess(user?.role) ? (user?.role as AdminRole) : null;
   const modules = useMemo(() => getAdminModulesForRole(role), [role]);
+  const currentModule = getAdminModuleByPath(location.pathname);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function AdminLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] lg:grid lg:grid-cols-[208px_minmax(0,1fr)]">
+    <div className="min-h-screen bg-[#f3f6fa] lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
       <button
         type="button"
         aria-label="关闭后台导航"
@@ -48,14 +49,13 @@ export function AdminLayout() {
         className={getAdminSidebarOverlayClassName(isMobileNavOpen)}
       />
       <aside className={getAdminSidebarClassName(isMobileNavOpen)}>
-        <div className="h-16 border-b border-white/10 px-5 py-4">
+        <div className="h-[72px] px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-[#1677ff] text-white">
-              A
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-[4px] bg-white text-[#001529] shadow-sm">
+              <span className="text-[18px] font-black leading-none">E</span>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-semibold text-white">Excel社区</div>
-              <div className="text-xs text-white/45">Admin Console</div>
+              <div className="truncate text-[22px] font-semibold leading-none text-white">ExcelCC</div>
             </div>
             <button
               type="button"
@@ -68,10 +68,9 @@ export function AdminLayout() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-3">
-          <div className="mb-2 px-5 text-[11px] font-black uppercase tracking-[0.22em] text-white/35">模块导航</div>
-          <div className="space-y-0.5">
-              {modules.map((module) => {
+        <div className="flex-1 overflow-y-auto px-2 pb-5 pt-1">
+          <div className="space-y-1">
+              {modules.map((module, index) => {
                 const isActive = location.pathname === module.path;
                 const Icon = module.icon;
                 return (
@@ -82,15 +81,14 @@ export function AdminLayout() {
                       navigate(module.path);
                       setIsMobileNavOpen(false);
                     }}
-                    className={`group relative flex h-10 w-full items-center gap-3 px-5 text-left transition ${
+                    className={`group relative flex h-[52px] w-full items-center gap-3 rounded-[6px] px-4 text-left text-[16px] transition ${
                       isActive
-                        ? "bg-[#1677ff] font-medium text-white"
-                        : "text-white/65 hover:bg-white/8 hover:text-white"
+                        ? "bg-[#1677ff] font-semibold text-white shadow-[0_6px_16px_rgba(22,119,255,0.28)]"
+                        : "font-medium text-white/86 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    {isActive && <span className="absolute left-0 top-0 h-full w-1 bg-[#69c0ff]" />}
-                    <Icon size={16} className={isActive ? "text-white" : "text-white/45 group-hover:text-white/80"} />
-                    <div className="min-w-0 text-sm">{module.label}</div>
+                    <Icon size={21} className={isActive ? "text-white" : "text-white/86 group-hover:text-white"} />
+                    <div className="min-w-0 truncate">{index + 1}. {module.label}</div>
                   </button>
                 );
               })}
@@ -99,30 +97,55 @@ export function AdminLayout() {
       </aside>
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-20 border-b border-[#f0f0f0] bg-white shadow-[0_1px_4px_rgba(0,21,41,0.08)]">
-          <div className="flex min-h-14 items-center justify-between gap-3 px-4 md:px-6">
-            <div className="flex min-w-0 items-center gap-2">
+        <header className="sticky top-0 z-20 border-b border-[#e5e7eb] bg-white shadow-[0_1px_4px_rgba(0,21,41,0.06)]">
+          <div className="flex min-h-[72px] items-center justify-between gap-4 px-4 md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 aria-label="打开后台导航"
                 onClick={() => setIsMobileNavOpen(true)}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[2px] border border-[#d9d9d9] bg-white text-[#595959] transition hover:border-[#4096ff] hover:text-[#1677ff] lg:hidden"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] border border-[#d0d5dd] bg-white text-[#475467] transition hover:border-[#4096ff] hover:text-[#1677ff] lg:hidden"
               >
                 <Menu size={18} />
               </button>
-              <div className="min-w-0 truncate text-[18px] font-medium text-[#262626]">站点管理后台</div>
+              <div className="hidden min-w-0 items-center gap-3 text-[16px] md:flex">
+                <span className="text-[#667085]">系统管理</span>
+                <span className="text-[#98a2b3]">/</span>
+                <span className="truncate font-semibold text-[#101828]">{currentModule?.label || "后台管理"}</span>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <div className="flex items-center gap-2">
+            <label className="hidden min-w-[260px] max-w-[520px] flex-1 items-center gap-2 rounded-[6px] border border-[#d0d5dd] bg-white px-4 text-[#98a2b3] shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:flex">
+              <Search size={18} />
+              <input
+                type="search"
+                placeholder={`搜索${currentModule?.label || "用户、手机号、邮箱"}`}
+                className="h-11 min-w-0 flex-1 bg-transparent text-sm text-[#344054] outline-none placeholder:text-[#98a2b3]"
+              />
+            </label>
+            <div className="flex shrink-0 items-center gap-2 md:gap-4">
+              <button type="button" aria-label="通知" className="relative hidden h-10 w-10 items-center justify-center rounded-full text-[#101828] hover:bg-[#f2f4f7] md:inline-flex">
+                <Bell size={22} />
+                <span className="absolute right-1.5 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff2d2d] px-1 text-[10px] font-semibold leading-none text-white">8</span>
+              </button>
+              <button type="button" aria-label="帮助" className="hidden h-10 w-10 items-center justify-center rounded-full text-[#101828] hover:bg-[#f2f4f7] md:inline-flex">
+                <CircleHelp size={22} />
+              </button>
+              <button type="button" className="hidden h-10 items-center gap-2 rounded-[4px] px-2 text-sm font-semibold text-[#101828] hover:bg-[#f2f4f7] xl:inline-flex">
+                <Globe2 size={22} />
+                简体中文
+                <ChevronDown size={16} />
+              </button>
+              <div className="flex items-center gap-2 border-l border-[#e5e7eb] pl-2 md:pl-4">
                 <img
                   src={getAdminAvatarSrc(user)}
                   alt={user?.username || "admin"}
-                  className="h-8 w-8 rounded-full border border-[#f0f0f0] object-cover"
+                  className="h-10 w-10 rounded-full border border-[#eef2f6] object-cover"
                 />
                 <div className="hidden leading-tight sm:block">
-                  <div className="text-sm font-medium text-[#262626]">{user?.username}</div>
-                  <div className="text-xs text-[#8c8c8c]">{role === "admin" ? "管理员" : "运营"}</div>
+                  <div className="text-sm font-semibold text-[#101828]">{user?.username}</div>
+                  <div className="text-xs text-[#667085]">{role === "admin" ? "管理员" : "运营"}</div>
                 </div>
+                <ChevronDown size={16} className="hidden text-[#667085] sm:block" />
               </div>
               <Link to="/" className={secondaryButtonClassName()}>
                 <ArrowLeft size={16} />
@@ -132,7 +155,7 @@ export function AdminLayout() {
           </div>
         </header>
 
-        <div className="px-4 py-4 md:px-6 md:py-5">
+        <div className="px-4 py-5 md:px-6 md:py-6">
           <div className="min-w-0">
             <Outlet />
           </div>
