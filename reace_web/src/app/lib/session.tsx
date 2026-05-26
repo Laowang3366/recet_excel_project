@@ -15,8 +15,8 @@ type SessionContextValue = {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (username: string, password: string, remember?: boolean) => Promise<void>;
-  register: (payload: { username: string; email: string; password: string }) => Promise<void>;
+  login: (username: string, password: string, remember?: boolean) => Promise<SessionUser>;
+  register: (payload: { username: string; email: string; password: string }) => Promise<SessionUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<SessionUser | null>;
   setUser: (user: SessionUser | null) => void;
@@ -81,12 +81,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     storeSession(response.token, response.user, remember);
     setToken(response.token);
     setUserState(response.user);
-    await refreshUser();
+    const refreshedUser = await refreshUser();
+    return refreshedUser || response.user;
   };
 
   const register = async (payload: { username: string; email: string; password: string }) => {
     await api.post("/api/auth/register", payload, { auth: false });
-    await login(payload.username, payload.password);
+    return login(payload.username, payload.password);
   };
 
   const logout = async () => {

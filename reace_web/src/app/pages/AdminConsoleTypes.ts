@@ -24,11 +24,14 @@ export type AdminEditableUserRole = "admin" | "moderator" | "user";
 export type AdminUserForm = {
   username: string;
   email: string;
+  phone?: string;
   avatar?: string;
   password: string;
   role: AdminEditableUserRole;
   status: number;
   isMuted?: boolean;
+  forceChangePassword?: boolean;
+  notifyUser?: boolean;
 };
 
 export type AdminUserRecord = {
@@ -50,6 +53,7 @@ export type AdminUserRecord = {
   lastActiveTime?: string | null;
   updateTime?: string | null;
   createTime?: string | null;
+  forceChangePassword?: boolean | null;
 };
 
 export type AdminUserToggleResponse = {

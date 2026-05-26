@@ -67,6 +67,8 @@ public class AdminOverviewController {
         Map<String, Object> stats = new HashMap<>();
 
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        LocalDateTime yesterdayStart = todayStart.minusDays(1);
+        LocalDateTime lastWeekStart = todayStart.minusDays(7);
 
         long userCount = userService.count();
         long onlineUserCount = userService.count(new QueryWrapper<User>().eq("is_online", true));
@@ -75,6 +77,8 @@ public class AdminOverviewController {
         long lockedUserCount = userService.count(new QueryWrapper<User>().eq("status", 1));
         long mutedUserCount = userService.count(new QueryWrapper<User>().eq("is_muted", true));
         long todayNewUsers = userService.count(new QueryWrapper<User>().ge("create_time", todayStart));
+        long lastWeekTotalUsers = userService.count(new QueryWrapper<User>().lt("create_time", lastWeekStart));
+        long yesterdayNewUsers = userService.count(new QueryWrapper<User>().ge("create_time", yesterdayStart).lt("create_time", todayStart));
 
         long notificationCount = notificationService.count();
         long siteNotificationCount = siteNotificationService.count();
@@ -114,16 +118,24 @@ public class AdminOverviewController {
         stats.put("overview", Map.of(
                 "onlineUsers", onlineUserCount,
                 "todayNewUsers", todayNewUsers,
+                "yesterdayNewUsers", yesterdayNewUsers,
                 "todayCheckins", todayCheckins
         ));
-        stats.put("users", Map.of(
-                "total", userCount,
-                "online", onlineUserCount,
-                "admins", adminCount,
-                "operators", operatorCount,
-                "locked", lockedUserCount,
-                "muted", mutedUserCount
-        ));
+        Map<String, Object> userStats = new HashMap<>();
+        userStats.put("total", userCount);
+        userStats.put("online", onlineUserCount);
+        userStats.put("admins", adminCount);
+        userStats.put("operators", operatorCount);
+        userStats.put("locked", lockedUserCount);
+        userStats.put("muted", mutedUserCount);
+        userStats.put("lastWeekTotal", lastWeekTotalUsers);
+        userStats.put("yesterdayNew", yesterdayNewUsers);
+        userStats.put("totalGrowthRate", percentChange(userCount, lastWeekTotalUsers));
+        userStats.put("todayGrowthRate", percentChange(todayNewUsers, yesterdayNewUsers));
+        userStats.put("activeRate", percent(onlineUserCount, userCount));
+        userStats.put("lockedRate", percent(lockedUserCount, userCount));
+        userStats.put("mutedRate", percent(mutedUserCount, userCount));
+        stats.put("users", userStats);
         stats.put("notifications", Map.of(
                 "notifications", notificationCount,
                 "total", notificationCount,
@@ -162,5 +174,23 @@ public class AdminOverviewController {
         ));
 
         return ResponseEntity.ok(Map.of("stats", stats));
+    }
+
+    private double percentChange(long current, long previous) {
+        if (previous == 0) {
+            return current == 0 ? 0.0 : 100.0;
+        }
+        return roundOne(((double) current - previous) * 100.0 / previous);
+    }
+
+    private double percent(long part, long total) {
+        if (total <= 0) {
+            return 0.0;
+        }
+        return roundOne((double) part * 100.0 / total);
+    }
+
+    private double roundOne(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 }

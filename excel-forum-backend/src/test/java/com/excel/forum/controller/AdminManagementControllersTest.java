@@ -218,7 +218,7 @@ class AdminManagementControllersTest {
         );
         AdminNotificationController notificationController = new AdminNotificationController(siteNotificationService, htmlSanitizer);
         AdminFeedbackController feedbackController = new AdminFeedbackController(userService, feedbackService, notificationService);
-        AdminUserController userController = new AdminUserController(userService, passwordEncoder);
+        AdminUserController userController = new AdminUserController(userService, passwordEncoder, notificationService);
         mockMvc = MockMvcBuilders.standaloneSetup(
                         overviewController,
                         levelController,
@@ -272,6 +272,83 @@ class AdminManagementControllersTest {
                 .andExpect(jsonPath("$.message").value("用户角色不正确"));
 
         verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void getUsersAppliesLevelAndRegistrationDateFilters() throws Exception {
+        Page<User> page = new Page<>(1, 10, 0);
+        page.setRecords(List.of());
+        when(userService.page(any(Page.class), any(QueryWrapper.class))).thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/users")
+                        .param("minLevel", "4")
+                        .param("startDate", "2026-05-01")
+                        .param("endDate", "2026-05-26"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryWrapper<User>> wrapperCaptor = ArgumentCaptor.forClass(QueryWrapper.class);
+        verify(userService).page(any(Page.class), wrapperCaptor.capture());
+        String sqlSegment = wrapperCaptor.getValue().getCustomSqlSegment();
+        assertThat(sqlSegment).contains("level", "create_time");
+    }
+
+    @Test
+    void getUsersRejectsInvalidRegistrationDateFilter() throws Exception {
+        mockMvc.perform(get("/api/admin/users")
+                        .param("startDate", "2026/05/01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("注册时间格式不正确"));
+
+        verify(userService, never()).page(any(Page.class), any(QueryWrapper.class));
+    }
+
+    @Test
+    void adminStatsReturnsUserMetricIndicators() throws Exception {
+        when(userService.count()).thenReturn(10L);
+        when(userService.count(any(QueryWrapper.class)))
+                .thenReturn(2L, 1L, 1L, 1L, 1L, 2L, 8L, 4L);
+        when(practiceRecordMapper.selectCount(null)).thenReturn(0L);
+        when(practiceAnswerMapper.selectCount(null)).thenReturn(0L);
+        when(checkinRecordMapper.selectCount(any(QueryWrapper.class))).thenReturn(0L);
+
+        mockMvc.perform(get("/api/admin/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stats.users.totalGrowthRate").value(25.0))
+                .andExpect(jsonPath("$.stats.users.todayGrowthRate").value(-50.0))
+                .andExpect(jsonPath("$.stats.users.activeRate").value(20.0))
+                .andExpect(jsonPath("$.stats.users.lockedRate").value(10.0))
+                .andExpect(jsonPath("$.stats.users.lastWeekTotal").value(8))
+                .andExpect(jsonPath("$.stats.users.yesterdayNew").value(4));
+    }
+
+    @Test
+    void createUserPersistsAdminOnlyProfileFieldsAndNotifyOptions() throws Exception {
+        when(userService.count(any(QueryWrapper.class))).thenReturn(0L);
+        when(passwordEncoder.encode("Abc12345!")).thenReturn("encoded-password");
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(31L);
+            return true;
+        }).when(userService).save(any(User.class));
+
+        mockMvc.perform(post("/api/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"new_user","email":"new_user@example.com","password":"Abc12345!","role":"user","status":0,"phone":"13812345678","forceChangePassword":true,"notifyUser":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(31L))
+                .andExpect(jsonPath("$.phone").value("13812345678"))
+                .andExpect(jsonPath("$.forceChangePassword").value(true))
+                .andExpect(jsonPath("$.sourceChannel").value("后台创建"));
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userService).save(userCaptor.capture());
+        User savedUser = userCaptor.getValue();
+        assertThat(savedUser.getPhone()).isEqualTo("13812345678");
+        assertThat(savedUser.getForceChangePassword()).isTrue();
+        assertThat(savedUser.getSourceChannel()).isEqualTo("后台创建");
+        verify(notificationService).createNotification(eq(31L), eq("system"), anyString(), isNull());
     }
 
     @Test
@@ -333,6 +410,32 @@ class AdminManagementControllersTest {
         assertThat(updated.getStatus()).isEqualTo(1);
         assertThat(updated.getIsOnline()).isFalse();
         assertThat(updated.getTokenVersion()).isEqualTo(4);
+    }
+
+    @Test
+    void resetPasswordCanRequireNextLoginPasswordChangeAndNotifyUser() throws Exception {
+        User user = new User();
+        user.setId(21L);
+        user.setUsername("target");
+        user.setTokenVersion(2);
+        when(userService.getById(21L)).thenReturn(user);
+        when(passwordEncoder.encode("NewPass123!")).thenReturn("encoded-new-password");
+
+        mockMvc.perform(put("/api/admin/users/21/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"password":"NewPass123!","forceChangePassword":true,"notifyUser":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("密码重置成功"));
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userService).updateById(userCaptor.capture());
+        User updated = userCaptor.getValue();
+        assertThat(updated.getPassword()).isEqualTo("encoded-new-password");
+        assertThat(updated.getForceChangePassword()).isTrue();
+        assertThat(updated.getTokenVersion()).isEqualTo(3);
+        verify(notificationService).createNotification(eq(21L), eq("system"), anyString(), isNull());
     }
 
     @Test

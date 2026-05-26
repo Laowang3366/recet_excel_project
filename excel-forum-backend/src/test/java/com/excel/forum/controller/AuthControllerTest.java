@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -243,6 +244,48 @@ class AuthControllerTest {
         User updated = userCaptor.getValue();
         assertThat(updated.getPassword()).isEqualTo("encoded-new-password");
         assertThat(updated.getTokenVersion()).isEqualTo(4);
+    }
+
+    @Test
+    void currentUserExposesForcePasswordChangeFlag() throws Exception {
+        User user = new User();
+        user.setId(12L);
+        user.setUsername("need_change");
+        user.setEmail("need_change@example.com");
+        user.setRole("user");
+        user.setForceChangePassword(true);
+        when(userService.getById(12L)).thenReturn(user);
+
+        mockMvc.perform(get("/api/auth/current").requestAttr("userId", 12L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.forceChangePassword").value(true));
+    }
+
+    @Test
+    void changePasswordClearsForcePasswordChangeFlag() throws Exception {
+        User user = new User();
+        user.setId(13L);
+        user.setPassword("encoded-old");
+        user.setTokenVersion(5);
+        user.setForceChangePassword(true);
+        when(userService.getById(13L)).thenReturn(user);
+        when(passwordEncoder.matches("OldPass123!", "encoded-old")).thenReturn(true);
+        when(passwordEncoder.encode("NewPass123!")).thenReturn("encoded-new");
+
+        mockMvc.perform(put("/api/auth/password")
+                        .requestAttr("userId", 13L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"oldPassword":"OldPass123!","newPassword":"NewPass123!"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("密码修改成功"));
+
+        verify(userService).updateById(userCaptor.capture());
+        User updated = userCaptor.getValue();
+        assertThat(updated.getPassword()).isEqualTo("encoded-new");
+        assertThat(updated.getForceChangePassword()).isFalse();
+        assertThat(updated.getTokenVersion()).isEqualTo(6);
     }
 
     @Test

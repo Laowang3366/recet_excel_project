@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Switch } from "../components/ui/switch";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import {
+  buildUserMetricHints,
   buildRegistrationTrend,
   buildUserComposition,
   buildUserSummary,
@@ -109,6 +110,23 @@ const USER_STATUS_OPTIONS = [
   { value: 0, label: "正常" },
   { value: 1, label: "锁定" },
 ];
+
+const USER_COLUMN_OPTIONS = [
+  { key: "phone", label: "手机号" },
+  { key: "createTime", label: "注册时间" },
+  { key: "level", label: "等级" },
+  { key: "points", label: "积分" },
+  { key: "lastLogin", label: "最近登录" },
+  { key: "status", label: "账号状态" },
+  { key: "source", label: "来源渠道" },
+] as const;
+
+type UserColumnKey = typeof USER_COLUMN_OPTIONS[number]["key"];
+
+const DEFAULT_USER_COLUMNS = USER_COLUMN_OPTIONS.reduce<Record<UserColumnKey, boolean>>((acc, item) => {
+  acc[item.key] = true;
+  return acc;
+}, {} as Record<UserColumnKey, boolean>);
 
 function createUserModalForm(source?: AdminUserRecord | null): UserModalForm {
   const base = defaultUserForm();
@@ -195,6 +213,8 @@ export function AdminUsers() {
   const [pendingRemove, setPendingRemove] = useState<AdminUserRecord | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<UserColumnKey, boolean>>(DEFAULT_USER_COLUMNS);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -208,10 +228,14 @@ export function AdminUsers() {
   if (effectiveKeyword) query.set("keyword", effectiveKeyword);
   if (roleFilter) query.set("role", roleFilter);
   if (statusFilter) query.set("status", statusFilter);
+  if (levelFilter && levelFilter !== "4plus") query.set("level", levelFilter);
+  if (levelFilter === "4plus") query.set("minLevel", "4");
+  if (startDate) query.set("startDate", startDate);
+  if (endDate) query.set("endDate", endDate);
   const queryString = query.toString();
 
   const usersQuery = useQuery({
-    queryKey: adminKeys.users({ page, size, keyword: effectiveKeyword, role: roleFilter, status: statusFilter }),
+    queryKey: adminKeys.users({ page, size, keyword: effectiveKeyword, role: roleFilter, status: statusFilter, level: levelFilter, startDate, endDate }),
     enabled: Boolean(role),
     queryFn: async () => {
       const result = await adminRequest<PagedAdminResponse<AdminUserRecord>>(api.get(`/api/admin/users?${queryString}`, { silent: true }), navigate, role);
@@ -262,8 +286,7 @@ export function AdminUsers() {
   const todayNewUsers = Number(overviewStats.todayNewUsers ?? summary.todayNew);
   const onlineUsers = Number(statsUsers.online ?? summary.activeUsers);
   const lockedUsers = Number(statsUsers.locked ?? summary.frozenUsers);
-  const mutedUsers = Number(statsUsers.muted ?? 0);
-  const adminUsers = Number(statsUsers.admins ?? 0);
+  const metricHints = useMemo(() => buildUserMetricHints(statsUsers), [statsUsers]);
   const composition = useMemo(() => buildUserComposition(records, levelRules), [levelRules, records]);
   const trend = useMemo(() => buildRegistrationTrend(records), [records]);
   const donutBackground = composition.length
@@ -274,18 +297,20 @@ export function AdminUsers() {
     : "#e2e8f0";
 
   useEffect(() => {
-    if (openActionMenuId === null) return undefined;
+    if (openActionMenuId === null && !showColumnSettings) return undefined;
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest("[data-admin-users-action-menu]")) return;
+      if (target instanceof Element && target.closest("[data-admin-users-column-panel]")) return;
       setOpenActionMenuId(null);
+      setShowColumnSettings(false);
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [openActionMenuId]);
+  }, [openActionMenuId, showColumnSettings]);
 
   const refreshUsers = () =>
-    queryClient.invalidateQueries({ queryKey: adminKeys.users({ page, size, keyword: effectiveKeyword, role: roleFilter, status: statusFilter }) }).then(() => undefined);
+    queryClient.invalidateQueries({ queryKey: adminKeys.users({ page, size, keyword: effectiveKeyword, role: roleFilter, status: statusFilter, level: levelFilter, startDate, endDate }) }).then(() => undefined);
 
   const openCreate = () => {
     setEditing(null);
@@ -304,6 +329,7 @@ export function AdminUsers() {
   };
 
   const openPassword = (item: AdminUserRecord) => {
+    setOpenActionMenuId(null);
     setPasswordUser(item);
     setPasswordForm(createPasswordForm());
     setShowPassword(false);
@@ -311,6 +337,7 @@ export function AdminUsers() {
   };
 
   const openGrant = (item: AdminUserRecord) => {
+    setOpenActionMenuId(null);
     setGrantUser(item);
     setGrantForm({ points: "", reason: "" });
   };
@@ -322,6 +349,7 @@ export function AdminUsers() {
     }
     const payload: Partial<AdminUserForm> = {
       email: form.email,
+      phone: form.phone,
       avatar: form.avatar || "",
       role: form.role,
       status: Number(form.status),
@@ -335,6 +363,8 @@ export function AdminUsers() {
     } else {
       payload.username = form.username;
       payload.password = form.password;
+      payload.forceChangePassword = form.forceChangePassword;
+      payload.notifyUser = true;
       const result = await adminRequest<AdminUserRecord>(api.post("/api/admin/users", payload), navigate, role, "创建用户");
       if (!result) return;
       showAdminSuccess(formatAdminEntityMessage("用户", result?.username || form.username, "已创建"));
@@ -375,7 +405,11 @@ export function AdminUsers() {
       showAdminError("两次输入的新密码不一致");
       return;
     }
-    const result = await adminRequest(api.put(`/api/admin/users/${passwordUser.id}/password`, { password: passwordForm.password }), navigate, role, "重置用户密码");
+    const result = await adminRequest(api.put(`/api/admin/users/${passwordUser.id}/password`, {
+      password: passwordForm.password,
+      forceChangePassword: passwordForm.forceChangePassword,
+      notifyUser: passwordForm.notifyUser,
+    }), navigate, role, "重置用户密码");
     if (!result) return;
     setPasswordUser(null);
     showAdminSuccess(formatAdminEntityMessage("用户", passwordUser.username, "密码已重置"));
@@ -501,13 +535,17 @@ export function AdminUsers() {
         if (!username || !email || !password) continue;
         const roleValue = cells[indexOf("role")] || "user";
         const statusValue = cells[indexOf("status")] || 0;
+        const phoneIndex = indexOf("phone");
         const result = await adminRequest(
           api.post("/api/admin/users", {
             username,
             email,
             password,
+            phone: phoneIndex >= 0 ? (cells[phoneIndex] || "") : "",
             role: isEditableUserRole(roleValue) ? roleValue : "user",
             status: Number(statusValue) === 1 ? 1 : 0,
+            forceChangePassword: true,
+            notifyUser: false,
           }),
           navigate,
           role,
@@ -556,10 +594,10 @@ export function AdminUsers() {
       )}
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={UsersRound} iconClassName="bg-gradient-to-br from-[#60a5fa] to-[#1677ff]" label="总用户数" value={totalUsers.toLocaleString()} hint={`管理员 ${adminUsers.toLocaleString()}`} />
-        <MetricCard icon={UserPlus} iconClassName="bg-gradient-to-br from-[#86efac] to-[#16a34a]" label="今日新增" value={todayNewUsers.toLocaleString()} hint="按全站注册时间统计" />
-        <MetricCard icon={LineChart} iconClassName="bg-gradient-to-br from-[#a78bfa] to-[#7c3aed]" label="活跃用户" value={onlineUsers.toLocaleString()} hint="当前在线用户" />
-        <MetricCard icon={ShieldCheck} iconClassName="bg-gradient-to-br from-[#fdba74] to-[#f97316]" label="冻结账号" value={lockedUsers.toLocaleString()} hint={`禁言 ${mutedUsers.toLocaleString()}`} />
+        <MetricCard icon={UsersRound} iconClassName="bg-gradient-to-br from-[#60a5fa] to-[#1677ff]" label="总用户数" value={totalUsers.toLocaleString()} hint={metricHints.total} />
+        <MetricCard icon={UserPlus} iconClassName="bg-gradient-to-br from-[#86efac] to-[#16a34a]" label="今日新增" value={todayNewUsers.toLocaleString()} hint={metricHints.today} />
+        <MetricCard icon={LineChart} iconClassName="bg-gradient-to-br from-[#a78bfa] to-[#7c3aed]" label="活跃用户" value={onlineUsers.toLocaleString()} hint={metricHints.active} />
+        <MetricCard icon={ShieldCheck} iconClassName="bg-gradient-to-br from-[#fdba74] to-[#f97316]" label="冻结账号" value={lockedUsers.toLocaleString()} hint={metricHints.locked} />
       </div>
 
       <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -581,9 +619,9 @@ export function AdminUsers() {
           <div>
             <div className="mb-2 text-sm font-semibold text-[#344054]">注册时间</div>
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={inputClassName()} />
+              <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(1); }} className={inputClassName()} />
               <span className="text-[#98a2b3]">-</span>
-              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className={inputClassName()} />
+              <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(1); }} className={inputClassName()} />
             </div>
           </div>
           <div className="flex items-end gap-2">
@@ -611,10 +649,32 @@ export function AdminUsers() {
                 <RefreshCw size={15} />
                 刷新
               </button>
-              <button type="button" className={secondaryButtonClassName()}>
-                <MoreHorizontal size={15} />
-                自定义列
-              </button>
+              <div data-admin-users-column-panel className="relative">
+                <button type="button" onClick={() => setShowColumnSettings((current) => !current)} className={secondaryButtonClassName()}>
+                  <MoreHorizontal size={15} />
+                  自定义列
+                </button>
+                {showColumnSettings ? (
+                  <div className="absolute right-0 top-11 z-30 w-52 rounded-[8px] border border-[#e5e7eb] bg-white p-3 shadow-[0_12px_28px_rgba(15,23,42,0.16)]">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-[#101828]">显示字段</span>
+                      <button type="button" onClick={() => setVisibleColumns(DEFAULT_USER_COLUMNS)} className="text-xs font-semibold text-[#1677ff]">全部显示</button>
+                    </div>
+                    <div className="space-y-2">
+                      {USER_COLUMN_OPTIONS.map((column) => (
+                        <label key={column.key} className="flex cursor-pointer items-center justify-between rounded-[6px] px-2 py-1.5 text-sm text-[#344054] hover:bg-[#f5f7fb]">
+                          <span>{column.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={visibleColumns[column.key]}
+                            onChange={(event) => setVisibleColumns((prev) => ({ ...prev, [column.key]: event.target.checked }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -630,13 +690,13 @@ export function AdminUsers() {
                   </TableHead>
                   <TableHead>用户ID</TableHead>
                   <TableHead>用户昵称</TableHead>
-                  <TableHead>手机号</TableHead>
-                  <TableHead>注册时间</TableHead>
-                  <TableHead>等级</TableHead>
-                  <TableHead>积分</TableHead>
-                  <TableHead>最近登录</TableHead>
-                  <TableHead>账号状态</TableHead>
-                  <TableHead>来源渠道</TableHead>
+                  {visibleColumns.phone ? <TableHead>手机号</TableHead> : null}
+                  {visibleColumns.createTime ? <TableHead>注册时间</TableHead> : null}
+                  {visibleColumns.level ? <TableHead>等级</TableHead> : null}
+                  {visibleColumns.points ? <TableHead>积分</TableHead> : null}
+                  {visibleColumns.lastLogin ? <TableHead>最近登录</TableHead> : null}
+                  {visibleColumns.status ? <TableHead>账号状态</TableHead> : null}
+                  {visibleColumns.source ? <TableHead>来源渠道</TableHead> : null}
                   <TableHead>操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -660,13 +720,13 @@ export function AdminUsers() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{maskAdminPhone(item.phone)}</TableCell>
-                    <TableCell>{formatMaybeDate(item.createTime)}</TableCell>
-                    <TableCell><LevelBadge label={resolveAdminUserLevelLabel(item, levelRules)} level={item.level} /></TableCell>
-                    <TableCell>{Number(item.points || 0).toLocaleString()}</TableCell>
-                    <TableCell>{formatMaybeDate(item.lastLoginTime || item.lastActiveTime || item.updateTime)}</TableCell>
-                    <TableCell><span className={statusBadgeClassName(Number(item.status ?? 0) === 1 ? "locked" : "active")}>{getStatusText(item)}</span></TableCell>
-                    <TableCell>{getUserSource(item)}</TableCell>
+                    {visibleColumns.phone ? <TableCell>{maskAdminPhone(item.phone)}</TableCell> : null}
+                    {visibleColumns.createTime ? <TableCell>{formatMaybeDate(item.createTime)}</TableCell> : null}
+                    {visibleColumns.level ? <TableCell><LevelBadge label={resolveAdminUserLevelLabel(item, levelRules)} level={item.level} /></TableCell> : null}
+                    {visibleColumns.points ? <TableCell>{Number(item.points || 0).toLocaleString()}</TableCell> : null}
+                    {visibleColumns.lastLogin ? <TableCell>{formatMaybeDate(item.lastLoginTime || item.lastActiveTime || item.updateTime)}</TableCell> : null}
+                    {visibleColumns.status ? <TableCell><span className={statusBadgeClassName(Number(item.status ?? 0) === 1 ? "locked" : "active")}>{getStatusText(item)}</span></TableCell> : null}
+                    {visibleColumns.source ? <TableCell>{getUserSource(item)}</TableCell> : null}
                     <TableCell>
                       <div data-admin-users-action-menu className="relative flex items-center gap-3 text-sm font-semibold">
                         <button type="button" onClick={() => { setDetailUser(item); setDetailTab("basic"); }} className="text-[#1677ff] hover:text-[#0958d9]">查看</button>

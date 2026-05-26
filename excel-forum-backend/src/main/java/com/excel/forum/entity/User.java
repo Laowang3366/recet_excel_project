@@ -11,8 +11,10 @@ public class User {
     private Long id;
     private String username;
     private String email;
+    private String phone;
     private String password;
     private Integer tokenVersion;
+    private Boolean forceChangePassword;
     private String avatar;
     private String bio;
     private String gender;
@@ -22,6 +24,7 @@ public class User {
     private Integer status;
     private Boolean isMuted;
     private String role;
+    private String sourceChannel;
     private String excelLevel;
     private String expertise;
     private String jobTitle;
@@ -33,6 +36,7 @@ public class User {
     private String themePreference;
     private Boolean isOnline;
     private LocalDateTime lastActiveTime;
+    private LocalDateTime lastLoginTime;
     private Boolean publicProfile;
     private Boolean showOnlineStatus;
     @TableField(fill = FieldFill.INSERT)

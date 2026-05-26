@@ -4,7 +4,7 @@ import { Bell, ChevronDown, CircleHelp, Globe2, Menu, Search, X } from "lucide-r
 import { useSession } from "../lib/session";
 import { canAccessAdminPath, getAdminModuleByPath, getAdminModulesForRole, getDefaultAdminPath, hasAdminConsoleAccess, type AdminRole } from "../admin/config";
 import { getAdminAvatarSrc, getAdminSearchPlaceholder, getAdminSidebarClassName, getAdminSidebarOverlayClassName } from "../admin/display";
-import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
+import { buildCurrentAuthRedirectPath, buildForcePasswordChangePath } from "../lib/auth-redirect";
 import { AdminDialogHost } from "./AdminConsoleShared";
 
 export function AdminLayout() {
@@ -22,6 +22,10 @@ export function AdminLayout() {
       navigate(buildCurrentAuthRedirectPath(location), { replace: true });
       return;
     }
+    if (user?.forceChangePassword) {
+      navigate(buildForcePasswordChangePath(`${location.pathname}${location.search}${location.hash}`), { replace: true });
+      return;
+    }
     if (!hasAdminConsoleAccess(user?.role)) {
       navigate("/", { replace: true });
       return;
@@ -29,7 +33,7 @@ export function AdminLayout() {
     if (!canAccessAdminPath(user?.role, location.pathname)) {
       navigate(getDefaultAdminPath(user?.role), { replace: true });
     }
-  }, [isAuthenticated, loading, location.pathname, navigate, user?.role]);
+  }, [isAuthenticated, loading, location.hash, location.pathname, location.search, navigate, user?.forceChangePassword, user?.role]);
 
   useEffect(() => {
     setIsMobileNavOpen(false);

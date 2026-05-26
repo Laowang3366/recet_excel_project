@@ -1,4 +1,5 @@
 const AUTH_PATH = "/auth";
+const FORCE_PASSWORD_CHANGE_PATH = "/force-password-change";
 const HOME_PATH = "/";
 const SAME_ORIGIN_BASE = "https://excelcc.local";
 
@@ -25,6 +26,12 @@ export function buildAuthRedirectPath(returnTo?: string | null) {
   const redirect = normalizeAuthRedirectTarget(returnTo);
   const params = new URLSearchParams({ redirect });
   return `${AUTH_PATH}?${params.toString()}`;
+}
+
+export function buildForcePasswordChangePath(returnTo?: string | null) {
+  const redirect = normalizeAuthRedirectTarget(returnTo);
+  const params = new URLSearchParams({ redirect });
+  return `${FORCE_PASSWORD_CHANGE_PATH}?${params.toString()}`;
 }
 
 export function buildCurrentAuthRedirectPath(locationLike?: LocationLike) {

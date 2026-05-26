@@ -32,6 +32,7 @@ function pageRoute(path: string, importer: () => Promise<LazyRouteModule>, expor
 
 export const router = createBrowserRouter([
   { path: "/auth", lazy: lazyPage(() => import("./pages/Auth"), "Auth") },
+  { path: "/force-password-change", lazy: lazyPage(() => import("./pages/ForcePasswordChange"), "ForcePasswordChange") },
   {
     path: "/admin",
     lazy: lazyPage(() => import("./pages/AdminLayout"), "AdminLayout"),

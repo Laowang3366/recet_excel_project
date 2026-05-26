@@ -29,7 +29,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = new User();
         user.setId(userId);
         user.setIsOnline(true);
-        user.setLastActiveTime(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        user.setLastActiveTime(now);
+        user.setLastLoginTime(now);
         updateById(user);
     }
 

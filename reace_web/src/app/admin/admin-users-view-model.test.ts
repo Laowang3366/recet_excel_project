@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildUserMetricHints,
   buildRegistrationTrend,
   buildUserComposition,
   buildUserSummary,
   buildUsersCsv,
+  formatMetricRate,
   maskAdminPhone,
   resolveAdminUserLevelLabel,
   sanitizeCsvCell,
@@ -48,6 +50,23 @@ describe("admin users view model", () => {
       { date: "2026-05-25", label: "05-25", count: 1 },
       { date: "2026-05-26", label: "05-26", count: 1 },
     ]);
+  });
+
+  it("formats real metric indicators for user summary cards", () => {
+    expect(formatMetricRate(12.64)).toBe("+12.6%");
+    expect(formatMetricRate(0)).toBe("0%");
+    expect(formatMetricRate(-3.21)).toBe("-3.2%");
+    expect(buildUserMetricHints({
+      totalGrowthRate: 12.6,
+      todayGrowthRate: -50,
+      activeRate: 33.3,
+      lockedRate: 4.4,
+    })).toEqual({
+      total: "较上周 +12.6%",
+      today: "较昨日 -50.0%",
+      active: "活跃率 33.3%",
+      locked: "冻结率 4.4%",
+    });
   });
 
   it("masks phones and prevents formula injection in csv exports", () => {

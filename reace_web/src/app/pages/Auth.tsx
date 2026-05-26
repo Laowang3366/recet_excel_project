@@ -5,7 +5,7 @@ import { motion, AnimatePresence, type Variants } from "motion/react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { api } from "../lib/api";
-import { resolveAuthRedirect } from "../lib/auth-redirect";
+import { buildForcePasswordChangePath, resolveAuthRedirect } from "../lib/auth-redirect";
 import { getRememberedAuth, storeRememberedAuth } from "../lib/session-store";
 import { useSession } from "../lib/session";
 
@@ -46,17 +46,19 @@ export function Auth() {
     setSubmitting(true);
     try {
       if (isLogin) {
-        await login(email.trim(), password, rememberPassword);
+        const loggedInUser = await login(email.trim(), password, rememberPassword);
         storeRememberedAuth(rememberPassword ? { username: email.trim() } : null);
+        toast.success("登录成功，正在跳转...");
+        navigate(loggedInUser.forceChangePassword ? buildForcePasswordChangePath(redirectTarget) : redirectTarget, { replace: true });
       } else {
-        await register({
+        const registeredUser = await register({
           username: username.trim(),
           email: email.trim(),
           password,
         });
+        toast.success("注册成功，正在跳转...");
+        navigate(registeredUser.forceChangePassword ? buildForcePasswordChangePath(redirectTarget) : redirectTarget, { replace: true });
       }
-      toast.success(`${isLogin ? "登录" : "注册"}成功，正在跳转...`);
-      navigate(redirectTarget, { replace: true });
     } finally {
       setSubmitting(false);
     }

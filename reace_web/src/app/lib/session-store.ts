@@ -7,11 +7,14 @@ export type SessionUser = {
   id: number;
   username: string;
   email?: string | null;
+  phone?: string | null;
   avatar?: string | null;
   role?: string | null;
+  sourceChannel?: string | null;
   level?: number | null;
   points?: number | null;
   exp?: number | null;
+  forceChangePassword?: boolean | null;
   bio?: string | null;
   expertise?: string | null;
   gender?: string | null;
@@ -22,6 +25,7 @@ export type SessionUser = {
   notificationEmailEnabled?: boolean;
   notificationPushEnabled?: boolean;
   themePreference?: string | null;
+  lastLoginTime?: string | null;
 };
 
 function readStorage(key: string) {

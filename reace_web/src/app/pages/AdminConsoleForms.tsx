@@ -141,7 +141,7 @@ export function isEditableUserRole(value: unknown): value is AdminEditableUserRo
 }
 
 export function defaultUserForm(): AdminUserForm {
-  return { username: "", email: "", avatar: "", password: "", role: "user", status: 0, isMuted: false };
+  return { username: "", email: "", phone: "", avatar: "", password: "", role: "user", status: 0, isMuted: false, forceChangePassword: true, notifyUser: true };
 }
 
 export function defaultNotificationForm(): AdminNotificationForm {

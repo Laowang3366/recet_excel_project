@@ -10,7 +10,7 @@ import { motion } from "motion/react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 import { hasAdminConsoleAccess } from "../admin/config";
 import { api } from "../lib/api";
-import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
+import { buildCurrentAuthRedirectPath, buildForcePasswordChangePath } from "../lib/auth-redirect";
 import {
   getAppShellClassName,
   getLitePublicNavigationClassName,
@@ -96,6 +96,12 @@ export function Layout() {
       navigate(path);
     });
   };
+
+  useEffect(() => {
+    if (isAuthenticated && user?.forceChangePassword) {
+      navigate(buildForcePasswordChangePath(`${location.pathname}${location.search}${location.hash}`), { replace: true });
+    }
+  }, [isAuthenticated, location.hash, location.pathname, location.search, navigate, user?.forceChangePassword]);
 
   useEffect(() => {
     if (!ONLINE_LITE_MODE) return;

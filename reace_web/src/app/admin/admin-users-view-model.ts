@@ -39,6 +39,20 @@ export type AdminUserTrendPoint = {
   count: number;
 };
 
+export type AdminUserMetricSource = {
+  totalGrowthRate?: number | null;
+  todayGrowthRate?: number | null;
+  activeRate?: number | null;
+  lockedRate?: number | null;
+};
+
+export type AdminUserMetricHints = {
+  total: string;
+  today: string;
+  active: string;
+  locked: string;
+};
+
 const COMPOSITION_COLORS = ["#22c55e", "#94a3b8", "#f59e0b", "#2563eb", "#8b5cf6"];
 
 function toDate(value: unknown) {
@@ -117,6 +131,22 @@ export function buildRegistrationTrend(records: AdminUserViewRecord[], days = 7,
   });
 
   return keys.map((key) => ({ date: key, label: toShortDateLabel(key), count: counts.get(key) || 0 }));
+}
+
+export function formatMetricRate(value: unknown) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric) || numeric === 0) return "0%";
+  const formatted = `${Math.abs(numeric).toFixed(1)}%`;
+  return numeric > 0 ? `+${formatted}` : `-${formatted}`;
+}
+
+export function buildUserMetricHints(source: AdminUserMetricSource): AdminUserMetricHints {
+  return {
+    total: `较上周 ${formatMetricRate(source.totalGrowthRate)}`,
+    today: `较昨日 ${formatMetricRate(source.todayGrowthRate)}`,
+    active: `活跃率 ${Math.max(0, Number(source.activeRate ?? 0)).toFixed(1)}%`,
+    locked: `冻结率 ${Math.max(0, Number(source.lockedRate ?? 0)).toFixed(1)}%`,
+  };
 }
 
 export function maskAdminPhone(value: unknown) {

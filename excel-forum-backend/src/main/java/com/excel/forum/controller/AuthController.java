@@ -81,26 +81,7 @@ public class AuthController {
         userService.setOnline(user.getId());
 
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole(), user.getTokenVersion());
-        AuthResponse.UserDTO userDTO = new AuthResponse.UserDTO(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getAvatar(),
-                user.getRole(),
-                user.getLevel(),
-                user.getPoints(),
-                user.getExp(),
-                user.getBio(),
-                user.getExpertise(),
-                user.getGender(),
-                user.getJobTitle(),
-                user.getLocation(),
-                user.getWebsite(),
-                user.getCoverImage(),
-                user.getNotificationEmailEnabled() == null || user.getNotificationEmailEnabled(),
-                user.getNotificationPushEnabled() == null || user.getNotificationPushEnabled(),
-                user.getThemePreference()
-        );
+        AuthResponse.UserDTO userDTO = toUserDTO(user);
 
         return ResponseEntity.ok(new AuthResponse(token, userDTO));
     }
@@ -164,6 +145,8 @@ public class AuthController {
         user.setExp(0);
         user.setStatus(0);
         user.setRole("user");
+        user.setSourceChannel("自助注册");
+        user.setForceChangePassword(false);
 
         userService.save(user);
 
@@ -220,6 +203,7 @@ public class AuthController {
                 .map(user -> {
                     user.setPassword(passwordEncoder.encode(newPassword));
                     user.setTokenVersion(nextTokenVersion(user.getTokenVersion()));
+                    user.setForceChangePassword(false);
                     userService.updateById(user);
                     return ResponseEntity.ok(Map.of("message", "密码已重置，请重新登录"));
                 })
@@ -237,26 +221,7 @@ public class AuthController {
             return ResponseEntity.notFound().build();
         }
 
-        AuthResponse.UserDTO userDTO = new AuthResponse.UserDTO(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getAvatar(),
-                user.getRole(),
-                user.getLevel(),
-                user.getPoints(),
-                user.getExp(),
-                user.getBio(),
-                user.getExpertise(),
-                user.getGender(),
-                user.getJobTitle(),
-                user.getLocation(),
-                user.getWebsite(),
-                user.getCoverImage(),
-                user.getNotificationEmailEnabled() == null || user.getNotificationEmailEnabled(),
-                user.getNotificationPushEnabled() == null || user.getNotificationPushEnabled(),
-                user.getThemePreference()
-        );
+        AuthResponse.UserDTO userDTO = toUserDTO(user);
 
         return ResponseEntity.ok(userDTO);
     }
@@ -298,6 +263,7 @@ public class AuthController {
         
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setTokenVersion(nextTokenVersion(user.getTokenVersion()));
+        user.setForceChangePassword(false);
         userService.updateById(user);
         String token = extractBearerToken(request);
         if (token != null) {
@@ -378,6 +344,33 @@ public class AuthController {
 
     private int nextTokenVersion(Integer tokenVersion) {
         return tokenVersion == null ? 1 : tokenVersion + 1;
+    }
+
+    private AuthResponse.UserDTO toUserDTO(User user) {
+        return new AuthResponse.UserDTO(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getAvatar(),
+                user.getRole(),
+                user.getSourceChannel(),
+                user.getLevel(),
+                user.getPoints(),
+                user.getExp(),
+                Boolean.TRUE.equals(user.getForceChangePassword()),
+                user.getBio(),
+                user.getExpertise(),
+                user.getGender(),
+                user.getJobTitle(),
+                user.getLocation(),
+                user.getWebsite(),
+                user.getCoverImage(),
+                user.getNotificationEmailEnabled() == null || user.getNotificationEmailEnabled(),
+                user.getNotificationPushEnabled() == null || user.getNotificationPushEnabled(),
+                user.getThemePreference(),
+                user.getLastLoginTime()
+        );
     }
 
     private String resolveClientIp(HttpServletRequest request) {
