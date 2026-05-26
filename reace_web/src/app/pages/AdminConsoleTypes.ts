@@ -41,6 +41,7 @@ export type AdminUserRecord = {
   status?: number | null;
   isMuted?: boolean;
   level?: number;
+  levelName?: string | null;
   points?: number;
   exp?: number;
   source?: string | null;

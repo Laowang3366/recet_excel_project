@@ -5,6 +5,7 @@ import {
   buildUserSummary,
   buildUsersCsv,
   maskAdminPhone,
+  resolveAdminUserLevelLabel,
   sanitizeCsvCell,
 } from "./admin-users-view-model";
 
@@ -24,8 +25,20 @@ describe("admin users view model", () => {
     });
   });
 
-  it("groups users into membership composition segments", () => {
-    expect(buildUserComposition(records).map((item) => item.label)).toEqual(["管理员", "普通会员", "黄金会员"]);
+  it("groups users by level labels", () => {
+    expect(buildUserComposition(records).map((item) => item.label)).toEqual(["Lv.5", "Lv.1", "Lv.3"]);
+  });
+
+  it("uses the configured level system for user level names", () => {
+    const levelRules = [
+      { level: 1, name: "新手" },
+      { level: 3, name: "熟练" },
+      { level: 5, name: "大师" },
+    ];
+
+    expect(resolveAdminUserLevelLabel(records[0], levelRules)).toBe("大师");
+    expect(resolveAdminUserLevelLabel(records[2], levelRules)).toBe("熟练");
+    expect(buildUserComposition(records, levelRules).map((item) => item.label)).toEqual(["大师", "新手", "熟练"]);
   });
 
   it("creates a seven day registration trend", () => {

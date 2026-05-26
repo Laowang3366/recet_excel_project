@@ -1,4 +1,4 @@
-import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
@@ -38,6 +38,7 @@ import {
   buildUserSummary,
   buildUsersCsv,
   maskAdminPhone,
+  resolveAdminUserLevelLabel,
   type AdminUserTrendPoint,
 } from "../admin/admin-users-view-model";
 import { api } from "../lib/api";
@@ -58,6 +59,7 @@ import {
 } from "../admin/shared";
 import {
   PagedAdminResponse,
+  AdminStatsPayload,
   AdminEditableUserRole,
   AdminUserForm,
   AdminUserRecord,
@@ -74,6 +76,8 @@ import {
   DeleteConfirmDialog,
   isEditableUserRole,
   defaultUserForm,
+  LevelsOverviewResponse,
+  LevelRuleRecord,
 } from "./AdminConsoleShared";
 
 type UserModalForm = AdminUserForm & {
@@ -135,14 +139,6 @@ function getStatusText(item: AdminUserRecord) {
 
 function getUserSource(item: AdminUserRecord) {
   return item.source || item.sourceChannel || "平台";
-}
-
-function getLevelLabel(item: AdminUserRecord) {
-  const level = Number(item.level || 1);
-  if (level >= 4) return "钻石会员";
-  if (level >= 3) return "黄金会员";
-  if (level >= 2) return "白银会员";
-  return "普通会员";
 }
 
 function splitCsvLine(line: string) {
@@ -223,8 +219,27 @@ export function AdminUsers() {
     },
   });
 
+  const statsQuery = useQuery({
+    queryKey: adminKeys.stats(),
+    enabled: Boolean(role),
+    queryFn: async () => {
+      const result = await adminRequest<{ stats: AdminStatsPayload }>(api.get("/api/admin/stats", { silent: true }), navigate, role);
+      return result?.stats || {};
+    },
+  });
+
+  const levelsOverviewQuery = useQuery({
+    queryKey: adminKeys.levelsOverview(),
+    enabled: Boolean(role),
+    queryFn: async () => {
+      const result = await adminRequest<LevelsOverviewResponse>(api.get("/api/admin/levels/overview", { silent: true }), navigate, role);
+      return result || null;
+    },
+  });
+
   const records = usersQuery.data?.records || [];
   const total = usersQuery.data?.total || 0;
+  const levelRules = levelsOverviewQuery.data?.levelRules || [];
   const visibleRecords = useMemo(() => {
     return records.filter((item) => {
       const phoneText = [item.phone, item.email, item.username].filter(Boolean).join(" ").toLowerCase();
@@ -241,7 +256,15 @@ export function AdminUsers() {
   }, [endDate, levelFilter, phoneKeyword, records, startDate]);
   const bulkSelection = useAdminBulkSelection(visibleRecords, (item) => item.id);
   const summary = useMemo(() => buildUserSummary(records, total), [records, total]);
-  const composition = useMemo(() => buildUserComposition(records), [records]);
+  const statsUsers = statsQuery.data?.users || {};
+  const overviewStats = statsQuery.data?.overview || {};
+  const totalUsers = Number(statsUsers.total ?? summary.totalUsers);
+  const todayNewUsers = Number(overviewStats.todayNewUsers ?? summary.todayNew);
+  const onlineUsers = Number(statsUsers.online ?? summary.activeUsers);
+  const lockedUsers = Number(statsUsers.locked ?? summary.frozenUsers);
+  const mutedUsers = Number(statsUsers.muted ?? 0);
+  const adminUsers = Number(statsUsers.admins ?? 0);
+  const composition = useMemo(() => buildUserComposition(records, levelRules), [levelRules, records]);
   const trend = useMemo(() => buildRegistrationTrend(records), [records]);
   const donutBackground = composition.length
     ? `conic-gradient(${composition.map((item, index) => {
@@ -249,6 +272,17 @@ export function AdminUsers() {
       return `${item.color} ${start}% ${start + item.percent}%`;
     }).join(", ")})`
     : "#e2e8f0";
+
+  useEffect(() => {
+    if (openActionMenuId === null) return undefined;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-admin-users-action-menu]")) return;
+      setOpenActionMenuId(null);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [openActionMenuId]);
 
   const refreshUsers = () =>
     queryClient.invalidateQueries({ queryKey: adminKeys.users({ page, size, keyword: effectiveKeyword, role: roleFilter, status: statusFilter }) }).then(() => undefined);
@@ -522,10 +556,10 @@ export function AdminUsers() {
       )}
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={UsersRound} iconClassName="bg-gradient-to-br from-[#60a5fa] to-[#1677ff]" label="总用户数" value={summary.totalUsers.toLocaleString()} hint="当前筛选" trend="+12.6%" />
-        <MetricCard icon={UserPlus} iconClassName="bg-gradient-to-br from-[#86efac] to-[#16a34a]" label="今日新增" value={summary.todayNew.toLocaleString()} hint="当前页" trend="+8.4%" />
-        <MetricCard icon={LineChart} iconClassName="bg-gradient-to-br from-[#a78bfa] to-[#7c3aed]" label="活跃用户" value={summary.activeUsers.toLocaleString()} hint="当前页正常" trend="25.2%" />
-        <MetricCard icon={ShieldCheck} iconClassName="bg-gradient-to-br from-[#fdba74] to-[#f97316]" label="冻结账号" value={summary.frozenUsers.toLocaleString()} hint="锁定或禁言" warning="风险预警" />
+        <MetricCard icon={UsersRound} iconClassName="bg-gradient-to-br from-[#60a5fa] to-[#1677ff]" label="总用户数" value={totalUsers.toLocaleString()} hint={`管理员 ${adminUsers.toLocaleString()}`} />
+        <MetricCard icon={UserPlus} iconClassName="bg-gradient-to-br from-[#86efac] to-[#16a34a]" label="今日新增" value={todayNewUsers.toLocaleString()} hint="按全站注册时间统计" />
+        <MetricCard icon={LineChart} iconClassName="bg-gradient-to-br from-[#a78bfa] to-[#7c3aed]" label="活跃用户" value={onlineUsers.toLocaleString()} hint="当前在线用户" />
+        <MetricCard icon={ShieldCheck} iconClassName="bg-gradient-to-br from-[#fdba74] to-[#f97316]" label="冻结账号" value={lockedUsers.toLocaleString()} hint={`禁言 ${mutedUsers.toLocaleString()}`} />
       </div>
 
       <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -628,13 +662,13 @@ export function AdminUsers() {
                     </TableCell>
                     <TableCell>{maskAdminPhone(item.phone)}</TableCell>
                     <TableCell>{formatMaybeDate(item.createTime)}</TableCell>
-                    <TableCell><LevelBadge label={getLevelLabel(item)} /></TableCell>
+                    <TableCell><LevelBadge label={resolveAdminUserLevelLabel(item, levelRules)} level={item.level} /></TableCell>
                     <TableCell>{Number(item.points || 0).toLocaleString()}</TableCell>
                     <TableCell>{formatMaybeDate(item.lastLoginTime || item.lastActiveTime || item.updateTime)}</TableCell>
                     <TableCell><span className={statusBadgeClassName(Number(item.status ?? 0) === 1 ? "locked" : "active")}>{getStatusText(item)}</span></TableCell>
                     <TableCell>{getUserSource(item)}</TableCell>
                     <TableCell>
-                      <div className="relative flex items-center gap-3 text-sm font-semibold">
+                      <div data-admin-users-action-menu className="relative flex items-center gap-3 text-sm font-semibold">
                         <button type="button" onClick={() => { setDetailUser(item); setDetailTab("basic"); }} className="text-[#1677ff] hover:text-[#0958d9]">查看</button>
                         <button type="button" onClick={() => openEdit(item)} className="text-[#1677ff] hover:text-[#0958d9]">编辑</button>
                         <button type="button" onClick={() => setOpenActionMenuId((current) => current === item.id ? null : item.id)} className="inline-flex items-center gap-1 text-[#1677ff] hover:text-[#0958d9]">
@@ -707,6 +741,7 @@ export function AdminUsers() {
       <UserDetailDrawer
         user={detailUser}
         tab={detailTab}
+        levelRules={levelRules}
         onTabChange={setDetailTab}
         onClose={() => setDetailUser(null)}
         onResetPassword={openPassword}
@@ -799,8 +834,17 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   );
 }
 
-function LevelBadge({ label }: { label: string }) {
-  const tone = label.includes("钻石") ? "bg-[#dbeafe] text-[#175cd3]" : label.includes("黄金") ? "bg-[#fff4d6] text-[#b54708]" : label.includes("白银") ? "bg-[#eef2f7] text-[#475467]" : "bg-[#dcfae6] text-[#067647]";
+function LevelBadge({ label, level }: { label: string; level?: number | null }) {
+  const normalizedLevel = Number(level || 1);
+  const tone = normalizedLevel >= 5
+    ? "bg-[#f4f3ff] text-[#7a5af8]"
+    : normalizedLevel >= 4
+      ? "bg-[#dbeafe] text-[#175cd3]"
+      : normalizedLevel >= 3
+        ? "bg-[#fff4d6] text-[#b54708]"
+        : normalizedLevel >= 2
+          ? "bg-[#eef2f7] text-[#475467]"
+          : "bg-[#dcfae6] text-[#067647]";
   return <span className={`inline-flex rounded-[6px] px-2 py-1 text-xs font-semibold ${tone}`}>{label}</span>;
 }
 
@@ -877,15 +921,15 @@ function UserFormDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[min(980px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden rounded-[8px] border border-[#d0d5dd] bg-white p-0 sm:max-w-none">
-        <DialogHeader className="border-b border-[#edf0f5] px-6 py-5">
+      <DialogContent className="flex max-h-[88vh] w-[920px] max-w-[calc(100vw-32px)] flex-col gap-0 overflow-hidden rounded-[8px] border border-[#d0d5dd] bg-white p-0 sm:max-w-[920px]">
+        <DialogHeader className="border-b border-[#edf0f5] px-6 py-4">
           <DialogTitle>{editing ? "编辑用户" : "新增用户"}</DialogTitle>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-6 p-6">
+        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="space-y-5 p-5">
             <section>
               <h3 className="mb-4 text-sm font-semibold text-[#101828]">基础信息</h3>
-              <div className="grid gap-5 lg:grid-cols-[1fr_150px]">
+              <div className="grid gap-5 lg:grid-cols-[1fr_132px]">
                 <div className="space-y-4">
                   <UserFormField required label="用户名">
                     <input
@@ -894,16 +938,17 @@ function UserFormDialog({
                       onChange={(event) => onFormChange((prev) => ({ ...prev, username: event.target.value }))}
                       className={`${inputClassName()} disabled:bg-[#f8fafc] disabled:text-[#98a2b3]`}
                       placeholder="请输入用户名"
+                      autoComplete="off"
                     />
                   </UserFormField>
                   <UserFormField required label="邮箱">
-                    <input value={form.email} onChange={(event) => onFormChange((prev) => ({ ...prev, email: event.target.value }))} className={inputClassName()} placeholder="请输入邮箱地址" />
+                    <input value={form.email} onChange={(event) => onFormChange((prev) => ({ ...prev, email: event.target.value }))} className={inputClassName()} placeholder="请输入邮箱地址" autoComplete="off" />
                   </UserFormField>
                   <UserFormField label="手机号（可选）">
-                    <input value={form.phone} onChange={(event) => onFormChange((prev) => ({ ...prev, phone: event.target.value }))} className={inputClassName()} placeholder="请输入手机号" />
+                    <input value={form.phone} onChange={(event) => onFormChange((prev) => ({ ...prev, phone: event.target.value }))} className={inputClassName()} placeholder="请输入手机号" autoComplete="off" />
                   </UserFormField>
                 </div>
-                <label className="flex h-[150px] cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#d0d5dd] bg-[#f8fafc] text-center text-sm text-[#667085] transition hover:border-[#1677ff] hover:text-[#1677ff]">
+                <label className="flex h-[132px] cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#d0d5dd] bg-[#f8fafc] text-center text-sm text-[#667085] transition hover:border-[#1677ff] hover:text-[#1677ff]">
                   {form.avatar ? <img src={form.avatar} alt="用户头像" className="h-full w-full rounded-[8px] object-cover" /> : <UploadCloud size={24} />}
                   <span className="mt-2 font-semibold">{uploadingAvatar ? "上传中..." : form.avatar ? "更换头像" : "上传头像"}</span>
                   <span className="mt-1 text-xs text-[#98a2b3]">支持 JPG、PNG，建议 1:1</span>
@@ -970,7 +1015,7 @@ function UserFormDialog({
               </div>
             </section>
           </div>
-          <div className="space-y-4 border-t border-[#edf0f5] bg-[#fbfcff] p-6 lg:border-l lg:border-t-0">
+          <div className="space-y-4 border-t border-[#edf0f5] bg-[#fbfcff] p-5 lg:border-l lg:border-t-0">
             <InfoCard icon={UserCog} title="权限说明">
               {USER_ROLE_OPTIONS.map((item) => <p key={item.value}>• <span className="font-semibold">{item.label}</span>：{item.description}</p>)}
             </InfoCard>
@@ -998,6 +1043,7 @@ function UserFormDialog({
 function UserDetailDrawer({
   user,
   tab,
+  levelRules,
   onTabChange,
   onClose,
   onResetPassword,
@@ -1007,6 +1053,7 @@ function UserDetailDrawer({
 }: {
   user: AdminUserRecord | null;
   tab: string;
+  levelRules: LevelRuleRecord[];
   onTabChange: (tab: string) => void;
   onClose: () => void;
   onResetPassword: (user: AdminUserRecord) => void;
@@ -1023,8 +1070,8 @@ function UserDetailDrawer({
     { key: "ai", label: "AI 调用记录" },
   ];
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/45">
-      <aside className="ml-auto flex h-full w-[min(560px,100vw)] flex-col bg-white shadow-[-20px_0_40px_rgba(15,23,42,0.18)]">
+    <div className="fixed inset-0 z-50 bg-slate-950/45" onMouseDown={onClose}>
+      <aside className="ml-auto flex h-full w-[min(560px,100vw)] flex-col bg-white shadow-[-20px_0_40px_rgba(15,23,42,0.18)]" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[#edf0f5] px-6 py-5">
           <h2 className="text-[20px] font-semibold text-[#101828]">用户详情</h2>
           <button type="button" onClick={onClose} className="rounded-full p-2 text-[#667085] hover:bg-[#f2f4f7]"><X size={20} /></button>
@@ -1069,7 +1116,7 @@ function UserDetailDrawer({
                 <DetailCell label="注册时间" value={formatMaybeDate(user.createTime)} />
                 <DetailCell label="练习次数" value={`${Number(user.exp || 0)} 次`} />
                 <DetailCell label="当前积分" value={Number(user.points || 0).toLocaleString()} />
-                <DetailCell label="当前等级" value={getLevelLabel(user)} />
+                <DetailCell label="当前等级" value={resolveAdminUserLevelLabel(user, levelRules)} />
                 <DetailCell label="来源渠道" value={getUserSource(user)} />
               </div>
               <h4 className="mb-3 mt-6 text-sm font-semibold text-[#101828]">近期动态</h4>
@@ -1173,7 +1220,7 @@ function UserFormField({ label, required, children }: { label: string; required?
 function PasswordInput({ value, visible, onToggle, onChange, placeholder }: { value: string; visible: boolean; onToggle: () => void; onChange: (value: string) => void; placeholder: string }) {
   return (
     <div className="relative">
-      <input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className={`${inputClassName()} pr-10`} placeholder={placeholder} />
+      <input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className={`${inputClassName()} pr-10`} placeholder={placeholder} autoComplete="new-password" />
       <button type="button" onClick={onToggle} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#667085] hover:bg-[#f2f4f7]">
         {visible ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>

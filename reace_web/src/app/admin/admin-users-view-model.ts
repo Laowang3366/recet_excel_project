@@ -7,10 +7,16 @@ export type AdminUserViewRecord = {
   status?: number | null;
   isMuted?: boolean | null;
   level?: number | null;
+  levelName?: string | null;
   points?: number | null;
   createTime?: string | null;
   updateTime?: string | null;
   lastActiveTime?: string | null;
+};
+
+export type AdminUserLevelRuleLike = {
+  level?: number | null;
+  name?: string | null;
 };
 
 export type AdminUserSummary = {
@@ -52,14 +58,13 @@ function toShortDateLabel(dateKey: string) {
   return dateKey.slice(5);
 }
 
-function resolveMembershipLabel(record: AdminUserViewRecord) {
-  if (record.role === "admin") return "管理员";
-  if (record.role === "moderator") return "运营";
+export function resolveAdminUserLevelLabel(record: AdminUserViewRecord, levelRules: AdminUserLevelRuleLike[] = []) {
   const level = Number(record.level || 1);
-  if (level >= 4) return "钻石会员";
-  if (level >= 3) return "黄金会员";
-  if (level >= 2) return "白银会员";
-  return "普通会员";
+  const directName = record.levelName?.trim();
+  if (directName) return directName;
+  const matchedRule = levelRules.find((item) => Number(item.level || 0) === level);
+  const ruleName = matchedRule?.name?.trim();
+  return ruleName || `Lv.${level}`;
 }
 
 export function buildUserSummary(records: AdminUserViewRecord[], totalUsers: number, now = new Date()): AdminUserSummary {
@@ -75,10 +80,10 @@ export function buildUserSummary(records: AdminUserViewRecord[], totalUsers: num
   };
 }
 
-export function buildUserComposition(records: AdminUserViewRecord[]): AdminUserCompositionSegment[] {
+export function buildUserComposition(records: AdminUserViewRecord[], levelRules: AdminUserLevelRuleLike[] = []): AdminUserCompositionSegment[] {
   const total = records.length || 1;
   const grouped = records.reduce<Record<string, number>>((acc, item) => {
-    const label = resolveMembershipLabel(item);
+    const label = resolveAdminUserLevelLabel(item, levelRules);
     acc[label] = (acc[label] || 0) + 1;
     return acc;
   }, {});
