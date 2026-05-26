@@ -19,6 +19,7 @@ export function getAdminSearchPlaceholder(moduleKey?: AdminModuleKey | null) {
     users: "搜索用户、手机号、邮箱",
     "home-content": "搜索教程标题、分类、标签",
     questions: "搜索题目标题、分类、难度",
+    "question-categories": "搜索分类名称、说明、题目标签",
     templates: "搜索模板标题、行业、标签",
     qa: "搜索求助标题、答疑内容、用户",
     assistant: "搜索模型、配置、单位",

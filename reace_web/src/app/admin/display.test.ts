@@ -41,5 +41,6 @@ describe("admin display helpers", () => {
   it("uses module-specific admin search placeholders", () => {
     expect(getAdminSearchPlaceholder("notifications")).toBe("搜索通知标题、目标人群、关键词");
     expect(getAdminSearchPlaceholder("users")).toBe("搜索用户、手机号、邮箱");
+    expect(getAdminSearchPlaceholder("question-categories")).toBe("搜索分类名称、说明、题目标签");
   });
 });
