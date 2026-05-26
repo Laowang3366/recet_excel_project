@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
@@ -39,6 +39,7 @@ import {
   parseNotificationMeta,
   type NotificationMeta,
 } from "../admin/notification-form";
+import { applyNotificationEditorCommand, type NotificationEditorCommand } from "../admin/notification-rich-text";
 import {
   notificationConfirmDialogContentClassName,
   notificationFormDialogBodyClassName,
@@ -69,6 +70,7 @@ import {
   AdminNotificationForm,
   AdminNotificationRecord,
   AdminNotificationStats,
+  AdminUserRecord,
   adminRequest,
   DeleteConfirmDialog,
   defaultNotificationForm,
@@ -81,7 +83,7 @@ import {
   useAdminRole,
 } from "./AdminConsoleShared";
 
-type NotificationTab = "all" | "draft" | "sent" | "popup";
+type NotificationTab = "all" | "draft" | "scheduled" | "sent" | "popup";
 
 type NotificationDeliveryFields = {
   totalCount?: number | null;
@@ -97,8 +99,19 @@ type SendConfirmTarget =
 const NOTIFICATION_TABS: Array<{ key: NotificationTab; label: string }> = [
   { key: "all", label: "全部" },
   { key: "draft", label: "草稿" },
+  { key: "scheduled", label: "定时中" },
   { key: "sent", label: "已发布" },
   { key: "popup", label: "弹窗通知" },
+];
+
+const NOTIFICATION_EDITOR_COMMANDS: Array<{ command: NotificationEditorCommand; icon: typeof Bold; label: string }> = [
+  { command: "bold", icon: Bold, label: "加粗" },
+  { command: "italic", icon: Italic, label: "斜体" },
+  { command: "paragraph", icon: AlignLeft, label: "段落" },
+  { command: "list", icon: List, label: "列表" },
+  { command: "smile", icon: Smile, label: "表情" },
+  { command: "link", icon: Link, label: "链接" },
+  { command: "image", icon: ImageIcon, label: "图片" },
 ];
 
 export function AdminNotifications() {
@@ -197,9 +210,18 @@ export function AdminNotifications() {
       status: item.status || "draft",
       targetType: item.targetType || "all",
       targetRoles: item.targetRoles || "",
+      targetUserIds: item.targetUserIds || "",
       attachments: item.attachments || "",
+      scheduledTime: item.scheduledTime || null,
+      pinned: Boolean(item.pinned),
     });
-    setFormMeta(parseNotificationMeta(item.attachments));
+    const parsedMeta = parseNotificationMeta(item.attachments);
+    setFormMeta({
+      ...parsedMeta,
+      scheduled: item.status === "scheduled" || Boolean(item.scheduledTime) || parsedMeta.scheduled,
+      sendAt: toDateTimeLocal(item.scheduledTime) || parsedMeta.sendAt,
+      pinned: Boolean(item.pinned) || parsedMeta.pinned,
+    });
     setOpen(true);
   };
 
@@ -212,7 +234,10 @@ export function AdminNotifications() {
       status: "draft",
       targetType: item.targetType || "all",
       targetRoles: item.targetRoles || "",
+      targetUserIds: item.targetUserIds || "",
       attachments: item.attachments || "",
+      scheduledTime: null,
+      pinned: Boolean(item.pinned),
     });
     setFormMeta(parseNotificationMeta(item.attachments));
     setOpen(true);
@@ -428,7 +453,7 @@ export function AdminNotifications() {
                       <div className="font-semibold text-[#101828]">{item.title}</div>
                     </TableCell>
                     <TableCell>{formatNotificationType(item.type)}</TableCell>
-                    <TableCell>{formatNotificationTarget(item.targetType || "all")}{item.targetRoles ? ` / ${formatRoleList(item.targetRoles)}` : ""}</TableCell>
+                    <TableCell>{formatNotificationTarget(item.targetType || "all")}{item.targetRoles ? ` / ${formatRoleList(item.targetRoles)}` : ""}{item.targetType === "user" ? ` / ${getNotificationTargetLabel(item.targetType, item.targetRoles, item.targetUserIds)}` : ""}</TableCell>
                     <TableCell><span className={statusBadgeClassName(item.status)}>{formatAdminStatus(item.status)}</span></TableCell>
                     <TableCell>{formatShortDate(item.createTime)}</TableCell>
                     <TableCell>
@@ -495,6 +520,15 @@ export function AdminNotifications() {
         draftMeta={formMeta}
         stats={stats}
         onCancel={() => setPendingSend(null)}
+        onSaveDraft={() => {
+          if (pendingSend?.kind === "form") {
+            void saveNotification("draft").then((saved) => {
+              if (saved) setPendingSend(null);
+            });
+            return;
+          }
+          setPendingSend(null);
+        }}
         onConfirm={() => void confirmSend()}
       />
       <DeleteConfirmDialog
@@ -534,8 +568,57 @@ function NotificationFormDialog({
   onPreview: () => void;
   onSend: () => void;
 }) {
-  const reach = getNotificationReachEstimate(stats, form.targetType);
+  const navigate = useNavigate();
+  const role = useAdminRole();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [targetUserKeyword, setTargetUserKeyword] = useState("");
+  const selectedUserIds = useMemo(() => parseIdList(form.targetUserIds), [form.targetUserIds]);
+  const usersQuery = useQuery({
+    queryKey: adminKeys.users({ page: 1, size: 8, keyword: targetUserKeyword, status: 0 }),
+    enabled: open && form.targetType === "user" && Boolean(role),
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: "1",
+        size: "8",
+        status: "0",
+      });
+      if (targetUserKeyword.trim()) {
+        params.set("keyword", targetUserKeyword.trim());
+      }
+      const result = await adminRequest<PagedAdminResponse<AdminUserRecord>>(
+        api.get(`/api/admin/users?${params.toString()}`, { silent: true }),
+        navigate,
+        role,
+      );
+      return result || { records: [], total: 0 };
+    },
+  });
+  const targetUsers = usersQuery.data?.records || [];
+  const reach = getNotificationReachEstimate(stats, form.targetType, form.targetUserIds);
   const actionText = meta.actionText || DEFAULT_NOTIFICATION_META.actionText;
+  const sendLabel = meta.scheduled && meta.sendAt ? "定时发送" : "立即发送";
+
+  const toggleTargetUser = (userId: number) => {
+    onFormChange((prev) => {
+      const ids = parseIdList(prev.targetUserIds);
+      const nextIds = ids.includes(userId) ? ids.filter((id) => id !== userId) : [...ids, userId];
+      return { ...prev, targetUserIds: nextIds.join(",") };
+    });
+  };
+
+  const applyEditorCommand = (command: NotificationEditorCommand) => {
+    const textarea = textareaRef.current;
+    const selection = textarea
+      ? { start: textarea.selectionStart, end: textarea.selectionEnd }
+      : { start: form.content.length, end: form.content.length };
+    const result = applyNotificationEditorCommand(form.content, selection, command);
+    onFormChange((prev) => ({ ...prev, content: result.content.slice(0, 200) }));
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      const cursor = Math.min(result.cursor, textareaRef.current?.value.length || result.cursor);
+      textareaRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -578,37 +661,100 @@ function NotificationFormDialog({
                   <NotificationRadio
                     key={item.value}
                     checked={form.targetType === item.value}
-                    onChange={() => onFormChange((prev) => ({ ...prev, targetType: item.value, targetRoles: item.value === "role" ? prev.targetRoles : "" }))}
+                    onChange={() => onFormChange((prev) => ({
+                      ...prev,
+                      targetType: item.value,
+                      targetRoles: item.value === "role" ? prev.targetRoles : "",
+                      targetUserIds: item.value === "user" ? prev.targetUserIds : "",
+                    }))}
                     label={item.label}
                   />
                 ))}
-                <NotificationRadio checked={false} disabled label="指定用户" />
               </div>
             </NotificationFormField>
 
-            <NotificationFormField label="目标角色选择" required>
-              <select
-                value={String(form.targetRoles || "").split(",").filter(Boolean)[0] || ""}
-                disabled={form.targetType !== "role"}
-                onChange={(event) => onFormChange((prev) => ({ ...prev, targetRoles: event.target.value }))}
-                className={inputClassName()}
-              >
-                <option value="">请选择目标角色</option>
-                {ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
-            </NotificationFormField>
+            {form.targetType === "role" ? (
+              <NotificationFormField label="目标角色选择" required>
+                <select
+                  value={String(form.targetRoles || "").split(",").filter(Boolean)[0] || ""}
+                  onChange={(event) => onFormChange((prev) => ({ ...prev, targetRoles: event.target.value }))}
+                  className={inputClassName()}
+                >
+                  <option value="">请选择目标角色</option>
+                  {ROLE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </NotificationFormField>
+            ) : null}
+
+            {form.targetType === "user" ? (
+              <NotificationFormField label="目标用户选择" required>
+                <div className="space-y-3 rounded-[6px] border border-[#d0d5dd] bg-white p-3">
+                  <input
+                    value={targetUserKeyword}
+                    onChange={(event) => setTargetUserKeyword(event.target.value)}
+                    placeholder="搜索用户名、手机号、邮箱"
+                    className={inputClassName()}
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {targetUsers.map((user) => (
+                      <label
+                        key={user.id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-[6px] border px-3 py-2 text-sm transition ${
+                          selectedUserIds.includes(user.id) ? "border-[#1677ff] bg-blue-50" : "border-[#edf0f5] hover:border-[#b7d7ff]"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(user.id)}
+                          onChange={() => toggleTargetUser(user.id)}
+                          className="h-4 w-4 rounded border-[#d0d5dd] text-[#1677ff]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-[#101828]">{user.username || `用户 ${user.id}`}</span>
+                          <span className="block truncate text-xs text-[#667085]">ID {user.id}{user.email ? ` / ${user.email}` : ""}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedUserIds.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUserIds.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => toggleTargetUser(id)}
+                          className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#1677ff]"
+                        >
+                          用户 ID {id} ×
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#98a2b3]">请选择至少一个目标用户。</p>
+                  )}
+                </div>
+              </NotificationFormField>
+            ) : null}
 
             <NotificationFormField label="正文内容" required>
               <div className="overflow-hidden rounded-[4px] border border-[#d0d5dd] bg-white focus-within:border-[#1677ff] focus-within:ring-2 focus-within:ring-[#1677ff]/10">
                 <div className="flex h-10 items-center gap-1 border-b border-[#edf0f5] px-3 text-[#667085]">
-                  {[Bold, Italic, AlignLeft, List, Smile, Link, ImageIcon].map((Icon, index) => (
-                    <button key={index} type="button" className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-[#f2f4f7]" tabIndex={-1}>
+                  {NOTIFICATION_EDITOR_COMMANDS.map(({ command, icon: Icon, label }) => (
+                    <button
+                      key={command}
+                      type="button"
+                      aria-label={label}
+                      title={label}
+                      onClick={() => applyEditorCommand(command)}
+                      className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-[#f2f4f7]"
+                    >
                       <Icon size={16} />
                     </button>
                   ))}
                 </div>
                 <div className="relative">
                   <textarea
+                    ref={textareaRef}
                     value={form.content}
                     maxLength={200}
                     onChange={(event) => onFormChange((prev) => ({ ...prev, content: event.target.value }))}
@@ -695,7 +841,7 @@ function NotificationFormDialog({
           <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>取消</button>
           <button type="button" onClick={onSave} className={secondaryButtonClassName()}>{editing ? "保存通知" : "保存草稿"}</button>
           <button type="button" onClick={onPreview} className={secondaryButtonClassName()}>预览</button>
-          <button type="button" onClick={onSend} className={primaryButtonClassName()}>立即发送</button>
+          <button type="button" onClick={onSend} className={primaryButtonClassName()}>{sendLabel}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -775,6 +921,7 @@ function ConfirmSendNotificationDialog({
   draftMeta,
   stats,
   onCancel,
+  onSaveDraft,
   onConfirm,
 }: {
   open: boolean;
@@ -783,13 +930,15 @@ function ConfirmSendNotificationDialog({
   draftMeta: Required<NotificationMeta>;
   stats: AdminNotificationStats | null | undefined;
   onCancel: () => void;
+  onSaveDraft: () => void;
   onConfirm: () => void;
 }) {
   const record = target?.kind === "record" ? target.item : null;
   const form = record || draftForm;
   const meta = record ? parseNotificationMeta(record.attachments) : draftMeta;
-  const reach = getNotificationReachEstimate(stats, form.targetType);
+  const reach = getNotificationReachEstimate(stats, form.targetType, form.targetUserIds);
   const sendTime = meta.scheduled && meta.sendAt ? meta.sendAt.replace("T", " ") : "立即发送";
+  const confirmLabel = meta.scheduled && meta.sendAt && target?.kind === "form" ? "确认定时" : "确认发送";
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
@@ -801,20 +950,20 @@ function ConfirmSendNotificationDialog({
           <div className="rounded-[6px] border border-[#d0d5dd] bg-white p-4">
             <ConfirmSummaryRow label="通知标题：" value={form.title || "-"} />
             <ConfirmSummaryRow label="通知类型：" value={formatNotificationType(form.type)} />
-            <ConfirmSummaryRow label="发送目标：" value={getNotificationTargetLabel(form.targetType, form.targetRoles)} />
+            <ConfirmSummaryRow label="发送目标：" value={getNotificationTargetLabel(form.targetType, form.targetRoles, form.targetUserIds)} />
             <ConfirmSummaryRow label="预计触达：" value={`${formatCompactNumber(reach)} 人`} />
             <ConfirmSummaryRow label="是否弹窗：" value={form.type === "popup" ? "是" : "否"} />
             <ConfirmSummaryRow label="发送时间：" value={sendTime} />
           </div>
           <div className="flex items-center gap-3 rounded-[6px] border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-sm font-semibold text-[#f97316]">
             <AlertTriangle size={18} className="shrink-0" />
-            <span>发送后用户将立即收到通知，无法撤回，只能下架或隐藏。</span>
+            <span>{sendTime === "立即发送" ? "发送后用户将立即收到通知，无法撤回，只能下架或隐藏。" : "定时任务到达发送时间后将自动推送，发送前仍可编辑或删除。"}</span>
           </div>
         </div>
         <DialogFooter className="border-t border-[#edf0f5] bg-white px-5 py-4">
           <button type="button" onClick={onCancel} className={secondaryButtonClassName()}>取消</button>
-          <button type="button" onClick={onCancel} className={secondaryButtonClassName()}>保存草稿</button>
-          <button type="button" onClick={onConfirm} className={primaryButtonClassName()}>确认发送</button>
+          <button type="button" onClick={onSaveDraft} className={secondaryButtonClassName()}>保存草稿</button>
+          <button type="button" onClick={onConfirm} className={primaryButtonClassName()}>{confirmLabel}</button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -970,4 +1119,22 @@ function formatShortDate(value?: string | null) {
 
 function formatCompactNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(Math.max(0, Math.round(value)));
+}
+
+function parseIdList(value?: string | null) {
+  return String(value || "")
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0)
+    .filter((item, index, values) => values.indexOf(item) === index);
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 16);
+  }
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

@@ -30,6 +30,7 @@ export const NOTIFICATION_TYPE_OPTIONS = [
 export const NOTIFICATION_TARGET_OPTIONS = [
   { value: "all", label: "全体用户" },
   { value: "role", label: "指定角色" },
+  { value: "user", label: "指定用户" },
 ];
 
 export const ROLE_OPTIONS = [
@@ -272,7 +273,7 @@ export function statusBadgeClassName(value?: string | number | null) {
   if (["approved", "active", "handled", "sent", "true", "1", "0"].includes(normalized)) {
     return "rounded-[4px] bg-[#dff7ea] px-2.5 py-1 text-xs font-semibold text-[#039855]";
   }
-  if (["pending", "draft", "editing"].includes(normalized)) {
+  if (["pending", "draft", "editing", "scheduled"].includes(normalized)) {
     return "rounded-[4px] bg-[#fff4db] px-2.5 py-1 text-xs font-semibold text-[#d46b08]";
   }
   if (["rejected", "deleted", "ignored", "false", "99", "-1"].includes(normalized)) {
@@ -299,6 +300,7 @@ export function formatAdminStatus(value: unknown) {
     ignored: "已忽略",
     sent: "已发送",
     draft: "草稿",
+    scheduled: "定时中",
     editing: "编辑中",
     true: "启用",
     false: "停用",

@@ -19,6 +19,10 @@ public class SiteNotification {
     private Integer totalCount;
     private Long createdBy;
     private String attachments;
+    private LocalDateTime scheduledTime;
+    private Boolean pinned;
+    private LocalDateTime pinnedUntil;
+    private String targetUserIds;
     private LocalDateTime sendTime;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

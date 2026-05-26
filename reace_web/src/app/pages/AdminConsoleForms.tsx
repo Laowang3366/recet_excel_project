@@ -141,11 +141,22 @@ export function isEditableUserRole(value: unknown): value is AdminEditableUserRo
 }
 
 export function defaultUserForm(): AdminUserForm {
-  return { username: "", email: "", password: "", role: "user", status: 0 };
+  return { username: "", email: "", avatar: "", password: "", role: "user", status: 0, isMuted: false };
 }
 
 export function defaultNotificationForm(): AdminNotificationForm {
-  return { title: "", content: "", type: "system", status: "draft", targetType: "all", targetRoles: "", attachments: "" };
+  return {
+    title: "",
+    content: "",
+    type: "system",
+    status: "draft",
+    targetType: "all",
+    targetRoles: "",
+    targetUserIds: "",
+    attachments: "",
+    scheduledTime: null,
+    pinned: false,
+  };
 }
 
 export function defaultQuestionCategoryForm(): QuestionCategoryForm {

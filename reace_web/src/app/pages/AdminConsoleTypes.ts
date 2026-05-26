@@ -24,21 +24,30 @@ export type AdminEditableUserRole = "admin" | "moderator" | "user";
 export type AdminUserForm = {
   username: string;
   email: string;
+  avatar?: string;
   password: string;
   role: AdminEditableUserRole;
   status: number;
+  isMuted?: boolean;
 };
 
 export type AdminUserRecord = {
   id: number;
   username: string;
   email?: string | null;
+  phone?: string | null;
   avatar?: string | null;
   role?: string | null;
   status?: number | null;
   isMuted?: boolean;
   level?: number;
   points?: number;
+  exp?: number;
+  source?: string | null;
+  sourceChannel?: string | null;
+  lastLoginTime?: string | null;
+  lastActiveTime?: string | null;
+  updateTime?: string | null;
   createTime?: string | null;
 };
 
@@ -54,18 +63,27 @@ export type AdminNotificationForm = {
   status: string;
   targetType: string;
   targetRoles: string;
+  targetUserIds?: string;
   attachments: string;
+  scheduledTime?: string | null;
+  pinned?: boolean;
 };
 
 export type AdminNotificationRecord = AdminNotificationForm & {
   id: number;
   createTime?: string | null;
+  sendTime?: string | null;
+  scheduledTime?: string | null;
+  pinnedUntil?: string | null;
+  readCount?: number;
+  totalCount?: number;
 };
 
 export type AdminNotificationStats = {
   total?: number;
   sent?: number;
   draft?: number;
+  scheduled?: number;
   totalUsers?: number;
 };
 

@@ -125,11 +125,12 @@ public class AdminUserController {
         User user = new User();
         user.setUsername(username);
         user.setEmail(email);
+        user.setAvatar(normalizeAvatar(request.getAvatar()));
         user.setPassword(passwordEncoder.encode(password));
         user.setTokenVersion(0);
         user.setRole(role);
         user.setStatus(status);
-        user.setIsMuted(Boolean.FALSE);
+        user.setIsMuted(Boolean.TRUE.equals(request.getIsMuted()));
         user.setLevel(1);
         user.setPoints(0);
         user.setExp(0);
@@ -162,6 +163,9 @@ public class AdminUserController {
                 return ResponseEntity.badRequest().body(Map.of("message", "邮箱格式不正确"));
             }
             existingUser.setEmail(email);
+        }
+        if (request.getAvatar() != null) {
+            existingUser.setAvatar(normalizeAvatar(request.getAvatar()));
         }
         if (role != null) {
             existingUser.setRole(role);
@@ -291,5 +295,13 @@ public class AdminUserController {
             }
         }
         return null;
+    }
+
+    private String normalizeAvatar(String avatar) {
+        if (!StringUtils.hasText(avatar)) {
+            return null;
+        }
+        String normalized = avatar.trim();
+        return normalized.length() > 512 ? normalized.substring(0, 512) : normalized;
     }
 }

@@ -15,6 +15,8 @@ export type LayoutNotification = {
   relatedId?: number | null;
   isRead?: number | boolean | null;
   announcementType?: string | null;
+  attachments?: string | null;
+  targetLink?: string | null;
   createTime?: string | null;
 };
 

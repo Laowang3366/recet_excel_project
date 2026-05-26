@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { ApiError, api } from "../lib/api";
+import { parseNotificationMeta } from "../admin/notification-form";
 import { formatDateTime } from "../lib/format";
 import { normalizeAvatarUrl, normalizeImageUrl, parseJsonText } from "../lib/mappers";
 import { notificationKeys } from "../lib/query-keys";
@@ -154,7 +155,9 @@ export function NotificationDetail() {
     return <div className="p-10 text-center text-slate-400">加载中...</div>;
   }
 
-  const attachments = parseJsonText<NotificationAttachment[]>(notification?.attachments, []);
+  const attachmentPayload = parseJsonText<unknown>(notification?.attachments, []);
+  const attachments = Array.isArray(attachmentPayload) ? (attachmentPayload as NotificationAttachment[]) : [];
+  const notificationMeta = parseNotificationMeta(notification?.attachments);
   const targetLink = notification?.targetLink || null;
   const isAnnouncement = Boolean(notification?.isAnnouncement);
 
@@ -256,11 +259,11 @@ export function NotificationDetail() {
               <div className="mb-8 flex justify-start">
                 <button
                   type="button"
-                  onClick={() => navigate(targetLink)}
+                  onClick={() => openNotificationLink(targetLink, navigate)}
                   className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-bold text-teal-700 transition hover:bg-teal-100"
                 >
                   <LinkIcon size={16} />
-                  查看相关内容
+                  {notificationMeta.actionText || "查看相关内容"}
                 </button>
               </div>
             )}
@@ -357,4 +360,12 @@ export function NotificationDetail() {
       </div>
     </div>
   );
+}
+
+function openNotificationLink(targetLink: string, navigate: (to: string) => void) {
+  if (targetLink.startsWith("http://") || targetLink.startsWith("https://")) {
+    window.location.href = targetLink;
+    return;
+  }
+  navigate(targetLink);
 }

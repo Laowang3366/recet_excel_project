@@ -37,14 +37,25 @@ export function buildNotificationPayload(
   meta: NotificationMeta,
   statusOverride?: string,
 ): AdminNotificationForm {
+  const normalizedMeta = normalizeNotificationMeta(meta);
+  const scheduledTime = normalizedMeta.scheduled && normalizedMeta.sendAt ? normalizeDateTimeLocal(normalizedMeta.sendAt) : null;
+  const status = statusOverride === "sent" && scheduledTime ? "scheduled" : statusOverride || form.status || "draft";
   return {
     ...form,
-    status: statusOverride || form.status || "draft",
-    attachments: serializeNotificationMeta(meta),
+    status,
+    targetRoles: form.targetType === "role" ? form.targetRoles : "",
+    targetUserIds: form.targetType === "user" ? normalizeTargetUserIds(form.targetUserIds) : "",
+    attachments: serializeNotificationMeta(normalizedMeta),
+    scheduledTime: status === "scheduled" ? scheduledTime : null,
+    pinned: normalizedMeta.pinned,
   };
 }
 
-export function getNotificationTargetLabel(targetType?: string | null, targetRoles?: string | null) {
+export function getNotificationTargetLabel(targetType?: string | null, targetRoles?: string | null, targetUserIds?: string | null) {
+  if (targetType === "user") {
+    const count = countTargetUsers(targetUserIds);
+    return count > 0 ? `指定用户 ${count} 人` : "指定用户";
+  }
   if (targetType !== "role") return "全体用户";
   const labels = String(targetRoles || "")
     .split(",")
@@ -54,8 +65,15 @@ export function getNotificationTargetLabel(targetType?: string | null, targetRol
   return labels.length > 0 ? labels.join("、") : "指定角色";
 }
 
-export function getNotificationReachEstimate(stats: AdminNotificationStats | null | undefined, targetType?: string | null) {
+export function getNotificationReachEstimate(
+  stats: AdminNotificationStats | null | undefined,
+  targetType?: string | null,
+  targetUserIds?: string | null,
+) {
   const totalUsers = Number(stats?.totalUsers || 0);
+  if (targetType === "user") {
+    return countTargetUsers(targetUserIds);
+  }
   if (targetType === "role") {
     return Math.max(1, Math.round(totalUsers * 0.35));
   }
@@ -70,4 +88,24 @@ function normalizeNotificationMeta(meta: NotificationMeta): Required<Notificatio
     sendAt: String(meta.sendAt || "").trim(),
     pinned: Boolean(meta.pinned),
   };
+}
+
+function normalizeDateTimeLocal(value: string) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  return trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+}
+
+function normalizeTargetUserIds(value?: string | null) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => /^\d+$/.test(item) && Number(item) > 0)
+    .filter((item, index, values) => values.indexOf(item) === index)
+    .join(",");
+}
+
+function countTargetUsers(value?: string | null) {
+  const normalized = normalizeTargetUserIds(value);
+  return normalized ? normalized.split(",").length : 0;
 }

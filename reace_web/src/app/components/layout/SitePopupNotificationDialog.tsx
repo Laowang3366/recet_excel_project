@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 
+import { parseNotificationMeta } from "../../admin/notification-form";
 import { api } from "../../lib/api";
 import { notificationKeys } from "../../lib/query-keys";
 import { renderRichContent } from "../../lib/rich-content";
@@ -12,6 +14,7 @@ type SitePopupNotificationDialogProps = {
 };
 
 export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotificationDialogProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const popupDismissedIdsRef = useRef<Set<number>>(new Set());
   const [popupNotification, setPopupNotification] = useState<LayoutNotification | null>(null);
@@ -72,6 +75,21 @@ export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotifi
     }
   };
 
+  const handlePrimaryAction = async () => {
+    const current = popupNotification;
+    const meta = parseNotificationMeta(current?.attachments);
+    await handleClosePopupNotification();
+    const actionUrl = current?.targetLink || meta.actionUrl;
+    if (!actionUrl) return;
+    if (actionUrl.startsWith("http://") || actionUrl.startsWith("https://")) {
+      window.location.href = actionUrl;
+      return;
+    }
+    navigate(actionUrl);
+  };
+
+  const popupMeta = parseNotificationMeta(popupNotification?.attachments);
+
   return (
     <Dialog
       open={Boolean(popupNotification)}
@@ -102,10 +120,10 @@ export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotifi
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => void handleClosePopupNotification()}
+              onClick={() => void handlePrimaryAction()}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-teal-500 px-5 text-sm font-semibold text-white transition hover:bg-teal-600"
             >
-              关闭通知
+              {popupMeta.actionUrl ? popupMeta.actionText || "立即查看" : "关闭通知"}
             </button>
           </div>
         </div>

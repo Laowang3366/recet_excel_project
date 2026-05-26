@@ -17,13 +17,16 @@ describe("notification admin form helpers", () => {
         status: "draft",
         targetType: "all",
         targetRoles: "",
+        targetUserIds: "",
         attachments: "",
       },
-      { actionText: "立即查看", actionUrl: "https://www.excelcc.cn/tools", scheduled: true, sendAt: "2026-05-26T10:00" },
+      { actionText: "立即查看", actionUrl: "https://www.excelcc.cn/tools", scheduled: true, sendAt: "2026-05-26T10:00", pinned: true },
       "sent",
     );
 
-    expect(payload.status).toBe("sent");
+    expect(payload.status).toBe("scheduled");
+    expect(payload.scheduledTime).toBe("2026-05-26T10:00:00");
+    expect(payload.pinned).toBe(true);
     expect(payload.title).toBe("AI 助手升级通知");
     expect(parseNotificationMeta(payload.attachments)).toMatchObject({
       actionText: "立即查看",
@@ -45,7 +48,9 @@ describe("notification admin form helpers", () => {
 
   it("builds confirmation copy from target and stats", () => {
     expect(getNotificationTargetLabel("role", "admin,user")).toBe("管理员、普通用户");
+    expect(getNotificationTargetLabel("user", "", "3,5")).toBe("指定用户 2 人");
     expect(getNotificationTargetLabel("all", "")).toBe("全体用户");
     expect(getNotificationReachEstimate({ totalUsers: 2386 }, "all")).toBe(2386);
+    expect(getNotificationReachEstimate({ totalUsers: 2386 }, "user", "3,5")).toBe(2);
   });
 });

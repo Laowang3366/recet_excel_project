@@ -2,6 +2,9 @@ package com.excel.forum.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.excel.forum.entity.Notification;
 import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.entity.User;
@@ -11,6 +14,7 @@ import com.excel.forum.service.SiteNotificationService;
 import com.excel.forum.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -22,6 +26,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class NotificationController {
     private static final List<String> CURRENT_NOTIFICATION_TYPES = List.of("system", "site_notification", "feedback_result", "qa_case_answered", "qa_answer_accepted");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final NotificationService notificationService;
     private final SiteNotificationService siteNotificationService;
@@ -64,7 +69,7 @@ public class NotificationController {
         response.put("sendTime", notification.getSendTime());
         response.put("createTime", notification.getCreateTime());
         response.put("updateTime", notification.getUpdateTime());
-        response.put("targetLink", null);
+        response.put("targetLink", resolveSiteNotificationTargetLink(notification));
         response.put("isAnnouncement", true);
 
         if (notification.getCreatedBy() != null) {
@@ -114,7 +119,7 @@ public class NotificationController {
                 response.put("isRead", notification.getIsRead());
                 response.put("createTime", notification.getCreateTime());
                 response.put("sendTime", siteNotification.getSendTime() != null ? siteNotification.getSendTime() : notification.getCreateTime());
-                response.put("targetLink", "/notification/" + siteNotification.getId());
+                response.put("targetLink", resolveSiteNotificationTargetLink(siteNotification));
                 response.put("isAnnouncement", true);
                 response.put("readCount", siteNotification.getReadCount());
                 response.put("totalCount", siteNotification.getTotalCount());
@@ -268,5 +273,36 @@ public class NotificationController {
             case "qa_case_answered", "qa_answer_accepted" -> notification.getRelatedId() == null ? "/qa/my" : "/qa/cases/" + notification.getRelatedId() + "#answers";
             default -> null;
         };
+    }
+
+    private String resolveSiteNotificationTargetLink(SiteNotification notification) {
+        if (notification == null) {
+            return null;
+        }
+        String actionUrl = extractActionUrl(notification.getAttachments());
+        return actionUrl == null ? "/notification/" + notification.getId() : actionUrl;
+    }
+
+    private String extractActionUrl(String attachments) {
+        if (!StringUtils.hasText(attachments)) {
+            return null;
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(attachments);
+            JsonNode actionUrlNode = node.get("actionUrl");
+            if (actionUrlNode == null || !actionUrlNode.isTextual()) {
+                return null;
+            }
+            String actionUrl = actionUrlNode.asText().trim();
+            if (!StringUtils.hasText(actionUrl)) {
+                return null;
+            }
+            if (actionUrl.startsWith("/") || actionUrl.startsWith("https://") || actionUrl.startsWith("http://")) {
+                return actionUrl;
+            }
+        } catch (JsonProcessingException malformedAttachments) {
+            return null;
+        }
+        return null;
     }
 }
