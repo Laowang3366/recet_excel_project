@@ -39,6 +39,12 @@ import {
   parseNotificationMeta,
   type NotificationMeta,
 } from "../admin/notification-form";
+import {
+  notificationConfirmDialogContentClassName,
+  notificationFormDialogBodyClassName,
+  notificationFormDialogContentClassName,
+  notificationFormDialogFooterClassName,
+} from "../admin/notification-dialog-layout";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import {
@@ -533,12 +539,12 @@ function NotificationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!flex max-h-[92vh] w-[min(1180px,calc(100vw-2rem))] !max-w-none !grid-cols-1 !gap-0 overflow-hidden rounded-[8px] border border-[#e5e7eb] bg-white p-0 shadow-[0_28px_80px_rgba(15,23,42,0.26)]">
+      <DialogContent className={notificationFormDialogContentClassName}>
         <DialogHeader className="shrink-0 border-b border-[#edf0f5] px-6 py-5">
           <DialogTitle className="text-[20px] font-semibold text-[#101828]">{editing ? "编辑通知" : "新建通知"}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid min-h-0 grow gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_440px]">
+        <div className={notificationFormDialogBodyClassName}>
           <div className="space-y-4 px-6 py-5">
             <NotificationFormField label="通知标题" required>
               <div className="relative">
@@ -685,7 +691,7 @@ function NotificationFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-[#edf0f5] bg-white px-5 py-4">
+        <DialogFooter className={notificationFormDialogFooterClassName}>
           <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>取消</button>
           <button type="button" onClick={onSave} className={secondaryButtonClassName()}>{editing ? "保存通知" : "保存草稿"}</button>
           <button type="button" onClick={onPreview} className={secondaryButtonClassName()}>预览</button>
@@ -787,7 +793,7 @@ function ConfirmSendNotificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
-      <DialogContent className="w-[min(560px,calc(100vw-2rem))] !max-w-none rounded-[8px] border border-[#e5e7eb] bg-white p-0 shadow-[0_28px_80px_rgba(15,23,42,0.28)]">
+      <DialogContent className={notificationConfirmDialogContentClassName}>
         <DialogHeader className="border-b border-[#edf0f5] px-5 py-4">
           <DialogTitle className="text-[18px] font-semibold text-[#101828]">确认发送通知</DialogTitle>
         </DialogHeader>
