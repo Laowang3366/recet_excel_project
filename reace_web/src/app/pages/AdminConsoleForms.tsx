@@ -160,5 +160,5 @@ export function defaultNotificationForm(): AdminNotificationForm {
 }
 
 export function defaultQuestionCategoryForm(): QuestionCategoryForm {
-  return { name: "", description: "", groupName: "", sortOrder: 0, enabled: true };
+  return { name: "", description: "", groupName: "", frontDisplayName: "", iconKey: "folder", recommendedDifficulty: "medium", sortOrder: 0, enabled: true };
 }

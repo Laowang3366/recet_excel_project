@@ -1,6 +1,6 @@
-import { Suspense, lazy, useRef, useState, type ClipboardEvent } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, type ClipboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { ChevronDown, ChevronRight, Edit3, FileSpreadsheet, ImagePlus, LoaderCircle, MousePointer2, Plus, RotateCcw, Search, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
@@ -10,6 +10,7 @@ import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
 import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
+import { resolveInitialQuestionCategoryId } from "../admin/admin-question-url-state";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
 import { PagedAdminResponse, QuestionCategoryRecord, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson, applyQuestionDifficulty, normalizeQuestionDifficulty, resolveQuestionPointsByDifficulty, QUESTION_DIFFICULTY_POINT_OPTIONS } from "./AdminConsoleShared";
 
@@ -19,10 +20,11 @@ const ExcelWorkbookEditor = lazy(() =>
 
 export function AdminQuestions() {
   const navigate = useNavigate();
+  const location = useLocation();
   const role = useAdminRole();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [questionCategoryId, setQuestionCategoryId] = useState("");
+  const [questionCategoryId, setQuestionCategoryId] = useState(() => resolveInitialQuestionCategoryId(location.search));
   const [keywordDraft, setKeywordDraft] = useState("");
   const [keyword, setKeyword] = useState("");
   const [enabledFilter, setEnabledFilter] = useState("");
@@ -57,6 +59,15 @@ export function AdminQuestions() {
   const [editorFullscreenVersion, setEditorFullscreenVersion] = useState(0);
   const editorSnapshotGetterRef = useRef<(() => ExcelWorkbookSnapshot | null) | null>(null);
   const size = 20;
+
+  useEffect(() => {
+    const nextQuestionCategoryId = resolveInitialQuestionCategoryId(location.search);
+    if (nextQuestionCategoryId !== questionCategoryId) {
+      setQuestionCategoryId(nextQuestionCategoryId);
+      setPage(1);
+    }
+  }, [location.search, questionCategoryId]);
+
   const query = new URLSearchParams({ page: String(page), size: String(size), type: "excel_template" });
   if (questionCategoryId) query.set("questionCategoryId", questionCategoryId);
   if (keyword.trim()) query.set("keyword", keyword.trim());

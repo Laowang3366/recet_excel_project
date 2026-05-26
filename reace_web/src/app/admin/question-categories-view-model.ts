@@ -3,6 +3,9 @@ export type QuestionCategoryViewRecord = {
   name?: string | null;
   description?: string | null;
   groupName?: string | null;
+  frontDisplayName?: string | null;
+  iconKey?: string | null;
+  recommendedDifficulty?: string | null;
   sortOrder?: number | string | null;
   enabled?: boolean | null;
   questionCount?: number | string | null;
@@ -18,8 +21,11 @@ export type QuestionCategoryStats = {
 export type QuestionCategoryCard = {
   id: number;
   name: string;
+  displayName: string;
   description: string;
   groupName: string;
+  iconKey: string;
+  recommendedDifficulty: string;
   sortOrder: number;
   enabled: boolean;
   questionCount: number;
@@ -34,11 +40,34 @@ export type SortableQuestionCategoryRow = {
   sortOrder: number;
 };
 
-export const QUESTION_CATEGORY_UNSUPPORTED_DESIGN_FIELDS = [
+export type QuestionCategoryMutationForm = {
+  name: string;
+  description: string;
+  groupName: string;
+  sortOrder: number | string;
+  enabled: boolean;
+};
+
+export type QuestionCategoryDesignFields = {
+  frontDisplayName: string;
+  iconKey: string;
+  recommendedDifficulty: string;
+};
+
+export const QUESTION_CATEGORY_PERSISTED_DESIGN_FIELDS = [
   "frontDisplayName",
   "iconKey",
   "recommendedDifficulty",
 ] as const;
+
+export const DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS: QuestionCategoryDesignFields = {
+  frontDisplayName: "",
+  iconKey: "folder",
+  recommendedDifficulty: "medium",
+};
+
+const SUPPORTED_ICON_KEYS = new Set(["folder", "sigma", "chart", "pie", "table", "list", "more"]);
+const SUPPORTED_DIFFICULTIES = new Set(["easy", "medium", "hard"]);
 
 function toNumber(value: unknown, fallback = 0) {
   const numeric = Number(value);
@@ -47,6 +76,16 @@ function toNumber(value: unknown, fallback = 0) {
 
 function toText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeIconKey(value: unknown) {
+  const text = toText(value);
+  return SUPPORTED_ICON_KEYS.has(text) ? text : DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS.iconKey;
+}
+
+function normalizeRecommendedDifficulty(value: unknown) {
+  const text = toText(value);
+  return SUPPORTED_DIFFICULTIES.has(text) ? text : DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS.recommendedDifficulty;
 }
 
 function bySortOrderThenId(left: Pick<QuestionCategoryViewRecord, "id" | "sortOrder">, right: Pick<QuestionCategoryViewRecord, "id" | "sortOrder">) {
@@ -60,11 +99,15 @@ export function normalizeQuestionCategoryCards(records: QuestionCategoryViewReco
     .map((item) => {
       const enabled = item.enabled !== false;
       const questionCount = toNumber(item.questionCount);
+      const name = toText(item.name) || `分类 ${item.id}`;
       return {
         id: item.id,
-        name: toText(item.name) || `分类 ${item.id}`,
+        name,
+        displayName: toText(item.frontDisplayName) || name,
         description: toText(item.description),
         groupName: toText(item.groupName),
+        iconKey: normalizeIconKey(item.iconKey),
+        recommendedDifficulty: normalizeRecommendedDifficulty(item.recommendedDifficulty),
         sortOrder: toNumber(item.sortOrder),
         enabled,
         questionCount,
@@ -101,6 +144,20 @@ export function buildSortableCategoryRows(records: QuestionCategoryViewRecord[])
     enabled: item.enabled,
     sortOrder: (index + 1) * 10,
   }));
+}
+
+export function buildQuestionCategoryMutationPayload(form: QuestionCategoryMutationForm, designFields: Partial<QuestionCategoryDesignFields>) {
+  const name = toText(form.name);
+  return {
+    name,
+    description: toText(form.description),
+    groupName: toText(form.groupName),
+    sortOrder: toNumber(form.sortOrder),
+    enabled: Boolean(form.enabled),
+    frontDisplayName: toText(designFields.frontDisplayName) || name,
+    iconKey: normalizeIconKey(designFields.iconKey),
+    recommendedDifficulty: normalizeRecommendedDifficulty(designFields.recommendedDifficulty),
+  };
 }
 
 export function renumberSortableCategoryRows(rows: SortableQuestionCategoryRow[]) {

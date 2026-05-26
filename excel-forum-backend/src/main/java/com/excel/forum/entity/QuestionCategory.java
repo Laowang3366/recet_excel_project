@@ -18,6 +18,12 @@ public class QuestionCategory {
     private String description;
     @TableField("group_name")
     private String groupName;
+    @TableField("front_display_name")
+    private String frontDisplayName;
+    @TableField("icon_key")
+    private String iconKey;
+    @TableField("recommended_difficulty")
+    private String recommendedDifficulty;
     private Integer sortOrder;
     private Boolean enabled;
     @TableField(exist = false)

@@ -96,6 +96,9 @@ export type QuestionCategoryForm = {
   name: string;
   description: string;
   groupName: string;
+  frontDisplayName?: string;
+  iconKey?: string;
+  recommendedDifficulty?: string;
   sortOrder: number | string;
   enabled: boolean;
 };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  QUESTION_CATEGORY_UNSUPPORTED_DESIGN_FIELDS,
+  QUESTION_CATEGORY_PERSISTED_DESIGN_FIELDS,
+  buildQuestionCategoryMutationPayload,
   buildQuestionCategoryStats,
   buildSortableCategoryRows,
   moveSortableCategoryRow,
@@ -9,7 +10,7 @@ import {
 
 const records = [
   { id: 2, name: "查找引用", description: "VLOOKUP / XLOOKUP / INDEX", groupName: "", sortOrder: 20, enabled: true, questionCount: 16 },
-  { id: 1, name: "函数基础", description: "基础函数入门", groupName: "", sortOrder: 10, enabled: true, questionCount: 18 },
+  { id: 1, name: "函数基础", frontDisplayName: "函数应用进阶", iconKey: "sigma", recommendedDifficulty: "hard", description: "基础函数入门", groupName: "", sortOrder: 10, enabled: true, questionCount: 18 },
   { id: 7, name: "动态数组", description: "FILTER / SORT / UNIQUE", groupName: "", sortOrder: 70, enabled: false, questionCount: 13 },
   { id: 4, name: "文本处理", description: "字符串函数", groupName: "", sortOrder: 30, enabled: true, questionCount: 12 },
 ];
@@ -35,12 +36,61 @@ describe("question category view model", () => {
   });
 
   it("normalizes cards into the frontend chapter order", () => {
-    expect(normalizeQuestionCategoryCards(records).map((item) => `${item.name}:${item.statusLabel}:${item.sortOrder}`)).toEqual([
-      "函数基础:启用:10",
-      "查找引用:启用:20",
-      "文本处理:启用:30",
-      "动态数组:需测试:70",
+    expect(normalizeQuestionCategoryCards(records).map((item) => `${item.displayName}:${item.iconKey}:${item.recommendedDifficulty}:${item.statusLabel}:${item.sortOrder}`)).toEqual([
+      "函数应用进阶:sigma:hard:启用:10",
+      "查找引用:folder:medium:启用:20",
+      "文本处理:folder:medium:启用:30",
+      "动态数组:folder:medium:需测试:70",
     ]);
+  });
+
+  it("builds mutation payload with persisted design fields", () => {
+    expect(buildQuestionCategoryMutationPayload(
+      {
+        name: " 函数应用进阶 ",
+        description: " 进阶说明 ",
+        groupName: " 函数基础 ",
+        sortOrder: "15",
+        enabled: true,
+      },
+      {
+        frontDisplayName: " 前台函数进阶 ",
+        iconKey: "chart",
+        recommendedDifficulty: "hard",
+      },
+    )).toEqual({
+      name: "函数应用进阶",
+      description: "进阶说明",
+      groupName: "函数基础",
+      sortOrder: 15,
+      enabled: true,
+      frontDisplayName: "前台函数进阶",
+      iconKey: "chart",
+      recommendedDifficulty: "hard",
+    });
+  });
+
+  it("falls back to category name and default design fields for empty design values", () => {
+    expect(buildQuestionCategoryMutationPayload(
+      {
+        name: "函数基础",
+        description: "",
+        groupName: "",
+        sortOrder: "",
+        enabled: false,
+      },
+      {
+        frontDisplayName: "",
+        iconKey: "",
+        recommendedDifficulty: "",
+      },
+    )).toMatchObject({
+      frontDisplayName: "函数基础",
+      iconKey: "folder",
+      recommendedDifficulty: "medium",
+      sortOrder: 0,
+      enabled: false,
+    });
   });
 
   it("renumbers sortable rows after a drag reorder", () => {
@@ -55,8 +105,8 @@ describe("question category view model", () => {
     ]);
   });
 
-  it("documents design-only fields that cannot be persisted by the current API", () => {
-    expect(QUESTION_CATEGORY_UNSUPPORTED_DESIGN_FIELDS).toEqual([
+  it("documents persisted design fields", () => {
+    expect(QUESTION_CATEGORY_PERSISTED_DESIGN_FIELDS).toEqual([
       "frontDisplayName",
       "iconKey",
       "recommendedDifficulty",

@@ -15,14 +15,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/admin/question-categories")
 @RequiredArgsConstructor
 public class AdminQuestionCategoryController {
+    private static final String DEFAULT_ICON_KEY = "folder";
+    private static final String DEFAULT_RECOMMENDED_DIFFICULTY = "medium";
+    private static final Set<String> SUPPORTED_ICON_KEYS = Set.of("folder", "sigma", "chart", "pie", "table", "list", "more");
+    private static final Set<String> SUPPORTED_DIFFICULTIES = Set.of("easy", "medium", "hard");
+
     private final QuestionCategoryService questionCategoryService;
     private final PracticeCampaignService practiceCampaignService;
 
@@ -36,9 +43,8 @@ public class AdminQuestionCategoryController {
 
     @PostMapping
     public ResponseEntity<?> createQuestionCategory(@RequestBody QuestionCategory category) {
-        if (!StringUtils.hasText(category.getName())) {
-            return ResponseEntity.badRequest().body(Map.of("message", "分类名称不能为空"));
-        }
+        ResponseEntity<?> validation = normalizeCategoryPayload(category, null);
+        if (validation != null) return validation;
         if (category.getSortOrder() == null) {
             category.setSortOrder(0);
         }
@@ -52,16 +58,35 @@ public class AdminQuestionCategoryController {
         return ResponseEntity.ok(buildQuestionCategoryResponse(saved));
     }
 
+    @PutMapping("/sort")
+    public ResponseEntity<?> updateQuestionCategorySort(@RequestBody QuestionCategorySortRequest request) {
+        if (request == null || request.items() == null || request.items().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "排序列表不能为空"));
+        }
+        List<QuestionCategory> updates = new ArrayList<>();
+        for (QuestionCategorySortItem item : request.items()) {
+            if (item == null || item.id() == null || item.sortOrder() == null) {
+                return ResponseEntity.badRequest().body(Map.of("message", "排序项不完整"));
+            }
+            QuestionCategory category = new QuestionCategory();
+            category.setId(item.id());
+            category.setSortOrder(item.sortOrder());
+            updates.add(category);
+        }
+        questionCategoryService.updateBatchById(updates);
+        practiceCampaignService.syncCampaignCatalog();
+        return ResponseEntity.ok(Map.of("message", "分类排序已保存"));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<?> updateQuestionCategory(@PathVariable Long id, @RequestBody QuestionCategory category) {
         QuestionCategory existing = questionCategoryService.getById(id);
         if (existing == null) {
             return ResponseEntity.notFound().build();
         }
-        if (!StringUtils.hasText(category.getName())) {
-            return ResponseEntity.badRequest().body(Map.of("message", "分类名称不能为空"));
-        }
         category.setId(id);
+        ResponseEntity<?> validation = normalizeCategoryPayload(category, existing);
+        if (validation != null) return validation;
         if (category.getSortOrder() == null) {
             category.setSortOrder(existing.getSortOrder());
         }
@@ -96,11 +121,64 @@ public class AdminQuestionCategoryController {
         response.put("name", category.getName());
         response.put("description", category.getDescription());
         response.put("groupName", category.getGroupName());
+        response.put("frontDisplayName", StringUtils.hasText(category.getFrontDisplayName()) ? category.getFrontDisplayName() : category.getName());
+        response.put("iconKey", StringUtils.hasText(category.getIconKey()) ? category.getIconKey() : DEFAULT_ICON_KEY);
+        response.put("recommendedDifficulty", StringUtils.hasText(category.getRecommendedDifficulty()) ? category.getRecommendedDifficulty() : DEFAULT_RECOMMENDED_DIFFICULTY);
         response.put("sortOrder", category.getSortOrder());
         response.put("enabled", category.getEnabled());
         response.put("questionCount", category.getQuestionCount() == null ? 0 : category.getQuestionCount());
         response.put("createTime", category.getCreateTime());
         response.put("updateTime", category.getUpdateTime());
         return response;
+    }
+
+    private ResponseEntity<?> normalizeCategoryPayload(QuestionCategory category, QuestionCategory existing) {
+        if (!StringUtils.hasText(category.getName())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "分类名称不能为空"));
+        }
+        category.setName(category.getName().trim());
+        if (category.getDescription() != null) {
+            category.setDescription(category.getDescription().trim());
+        } else if (existing != null) {
+            category.setDescription(existing.getDescription());
+        }
+        if (category.getGroupName() != null) {
+            category.setGroupName(category.getGroupName().trim());
+        } else if (existing != null) {
+            category.setGroupName(existing.getGroupName());
+        }
+
+        String frontDisplayName = category.getFrontDisplayName();
+        if (frontDisplayName == null && existing != null) {
+            frontDisplayName = existing.getFrontDisplayName();
+        }
+        category.setFrontDisplayName(StringUtils.hasText(frontDisplayName) ? frontDisplayName.trim() : category.getName());
+
+        String iconKey = category.getIconKey();
+        if (iconKey == null && existing != null) {
+            iconKey = existing.getIconKey();
+        }
+        iconKey = StringUtils.hasText(iconKey) ? iconKey.trim() : DEFAULT_ICON_KEY;
+        if (!SUPPORTED_ICON_KEYS.contains(iconKey)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "分类图标不正确"));
+        }
+        category.setIconKey(iconKey);
+
+        String recommendedDifficulty = category.getRecommendedDifficulty();
+        if (recommendedDifficulty == null && existing != null) {
+            recommendedDifficulty = existing.getRecommendedDifficulty();
+        }
+        recommendedDifficulty = StringUtils.hasText(recommendedDifficulty) ? recommendedDifficulty.trim() : DEFAULT_RECOMMENDED_DIFFICULTY;
+        if (!SUPPORTED_DIFFICULTIES.contains(recommendedDifficulty)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "推荐难度不正确"));
+        }
+        category.setRecommendedDifficulty(recommendedDifficulty);
+        return null;
+    }
+
+    private record QuestionCategorySortRequest(List<QuestionCategorySortItem> items) {
+    }
+
+    private record QuestionCategorySortItem(Long id, Integer sortOrder) {
     }
 }

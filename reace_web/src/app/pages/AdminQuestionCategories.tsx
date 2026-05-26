@@ -29,7 +29,10 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Switch } from "../components/ui/switch";
 import {
+  DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS,
+  QuestionCategoryDesignFields,
   SortableQuestionCategoryRow,
+  buildQuestionCategoryMutationPayload,
   buildQuestionCategoryStats,
   buildSortableCategoryRows,
   moveSortableCategoryRow,
@@ -50,16 +53,6 @@ import {
   useAdminRole,
 } from "./AdminConsoleShared";
 
-type CategoryDesignFields = {
-  iconKey: string;
-  recommendedDifficulty: string;
-};
-
-const defaultDesignFields: CategoryDesignFields = {
-  iconKey: "folder",
-  recommendedDifficulty: "medium",
-};
-
 const iconOptions = [
   { key: "folder", label: "文件夹", icon: Folder },
   { key: "sigma", label: "函数", icon: Sigma },
@@ -69,6 +62,10 @@ const iconOptions = [
   { key: "list", label: "清单", icon: ClipboardList },
   { key: "more", label: "更多", icon: MoreHorizontal },
 ];
+
+function resolveCategoryIcon(iconKey?: string | null) {
+  return iconOptions.find((item) => item.key === iconKey)?.icon || Folder;
+}
 
 const difficultyOptions = [
   { value: "easy", label: "基础" },
@@ -84,7 +81,7 @@ export function AdminQuestionCategories() {
   const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<QuestionCategoryRecord | null>(null);
   const [form, setForm] = useState<QuestionCategoryForm>(defaultQuestionCategoryForm());
-  const [designFields, setDesignFields] = useState<CategoryDesignFields>(defaultDesignFields);
+  const [designFields, setDesignFields] = useState<QuestionCategoryDesignFields>(DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS);
   const [sortRows, setSortRows] = useState<SortableQuestionCategoryRow[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
@@ -109,7 +106,7 @@ export function AdminQuestionCategories() {
   const openCreate = () => {
     setEditing(null);
     setForm({ ...defaultQuestionCategoryForm(), sortOrder: getNextSortOrder(records) });
-    setDesignFields(defaultDesignFields);
+    setDesignFields(DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS);
     setOpen(true);
   };
 
@@ -122,18 +119,12 @@ export function AdminQuestionCategories() {
       sortOrder: Number(item.sortOrder || 0),
       enabled: item.enabled ?? true,
     });
-    setDesignFields(defaultDesignFields);
+    setDesignFields(getDesignFieldsFromRecord(item));
     setOpen(true);
   };
 
   const submit = async () => {
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      groupName: form.groupName.trim(),
-      sortOrder: Number(form.sortOrder || 0),
-      enabled: Boolean(form.enabled),
-    };
+    const payload = buildQuestionCategoryMutationPayload(form, designFields);
     if (!payload.name) {
       toast.error("请填写分类名称");
       return;
@@ -153,14 +144,15 @@ export function AdminQuestionCategories() {
   };
 
   const toggleEnabled = async (item: QuestionCategoryRecord, nextEnabled: boolean) => {
+    const payload = buildQuestionCategoryMutationPayload({
+      name: item.name || "",
+      description: item.description || "",
+      groupName: item.groupName || "",
+      sortOrder: Number(item.sortOrder || 0),
+      enabled: nextEnabled,
+    }, getDesignFieldsFromRecord(item));
     const result = await adminRequest(
-      api.put(`/api/admin/question-categories/${item.id}`, {
-        name: item.name,
-        description: item.description,
-        groupName: item.groupName,
-        sortOrder: Number(item.sortOrder || 0),
-        enabled: nextEnabled,
-      }),
+      api.put(`/api/admin/question-categories/${item.id}`, payload),
       navigate,
       role,
       nextEnabled ? "启用题目分类" : "停用题目分类",
@@ -195,16 +187,14 @@ export function AdminQuestionCategories() {
 
   const submitSort = async () => {
     try {
+      const updates = [];
       for (const row of sortRows) {
         const source = records.find((item) => item.id === row.id);
         if (!source || Number(source.sortOrder ?? 0) === Number(row.sortOrder)) continue;
-        await api.put(`/api/admin/question-categories/${row.id}`, {
-          name: source.name || "",
-          description: source.description || "",
-          groupName: source.groupName || "",
-          enabled: source.enabled ?? true,
-          sortOrder: Number(row.sortOrder || 0),
-        });
+        updates.push({ id: row.id, sortOrder: Number(row.sortOrder || 0) });
+      }
+      if (updates.length > 0) {
+        await api.put("/api/admin/question-categories/sort", { items: updates });
       }
       setSortOpen(false);
       await refreshCategories();
@@ -390,14 +380,15 @@ function CategoryCard({
   onSort: () => void;
   onViewQuestions: () => void;
 }) {
+  const Icon = resolveCategoryIcon(item.iconKey);
   return (
     <article className="group flex h-[158px] flex-col overflow-hidden rounded-[8px] border border-[#e5e7eb] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.04)] transition hover:border-[#b7d6ff] hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]">
       <div className="relative flex min-h-0 flex-1 gap-4 px-5 py-4">
         <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[#e8f1ff] text-[#075ff7]">
-          <Folder size={27} fill="#075ff7" />
+          <Icon size={27} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[20px] font-semibold text-[#101828]" title={item.name}>{item.name}</h3>
+          <h3 className="truncate text-[20px] font-semibold text-[#101828]" title={item.displayName}>{item.displayName}</h3>
           <p className="mt-1 min-h-[24px] truncate text-[16px] text-[#344054]" title={item.description}>{item.description || item.groupName || "分类说明待补充"}</p>
           <div className="mt-3 grid grid-cols-[minmax(58px,1fr)_84px_90px] items-center gap-3 text-[15px] text-[#344054]">
             <span>{item.questionCount} 题</span>
@@ -443,7 +434,7 @@ function DraftCategoryRow({
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2f6] text-[#667085]">
         <Folder size={24} />
       </div>
-      <div className="min-w-0 flex-1 truncate text-[18px] font-semibold">更多分类： <span className="font-medium">{item.name}</span></div>
+      <div className="min-w-0 flex-1 truncate text-[18px] font-semibold">更多分类： <span className="font-medium">{item.displayName}</span></div>
       <div className="hidden text-[16px] md:block">{item.questionCount} 题</div>
       <div className="rounded-[4px] bg-[#eef2f6] px-4 py-1 text-sm font-semibold text-[#475467]">{item.statusLabel}</div>
       <div className="hidden text-[16px] md:block">排序 {item.sortOrder}</div>
@@ -498,10 +489,10 @@ function QuestionCategoryDialog({
   editing: QuestionCategoryRecord | null;
   form: QuestionCategoryForm;
   groupOptions: string[];
-  designFields: CategoryDesignFields;
+  designFields: QuestionCategoryDesignFields;
   onOpenChange: (open: boolean) => void;
   onFormChange: (form: QuestionCategoryForm) => void;
-  onDesignFieldsChange: (fields: CategoryDesignFields) => void;
+  onDesignFieldsChange: (fields: QuestionCategoryDesignFields) => void;
   onSubmit: () => void;
 }) {
   return (
@@ -541,7 +532,7 @@ function QuestionCategoryDialog({
               </div>
             </HorizontalField>
             <HorizontalField label="前台显示名称" required>
-              <CountedInput value={form.name} max={50} onChange={(value) => onFormChange({ ...form, name: value })} />
+              <CountedInput value={designFields.frontDisplayName} max={50} onChange={(value) => onDesignFieldsChange({ ...designFields, frontDisplayName: value })} />
             </HorizontalField>
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
               <HorizontalField label="排序值" required compact>
@@ -756,6 +747,14 @@ function buildGroupOptions(records: QuestionCategoryRecord[], current: string | 
   });
   if (typeof current === "string" && current.trim()) values.add(current.trim());
   return [...values];
+}
+
+function getDesignFieldsFromRecord(item: QuestionCategoryRecord): QuestionCategoryDesignFields {
+  return {
+    frontDisplayName: item.frontDisplayName || item.name || "",
+    iconKey: item.iconKey || DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS.iconKey,
+    recommendedDifficulty: item.recommendedDifficulty || DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS.recommendedDifficulty,
+  };
 }
 
 function getNextSortOrder(records: QuestionCategoryRecord[]) {
