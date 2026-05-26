@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-26 21:31 Asia/Shanghai
+
+- Scope: 后台用户管理交互与统计修复
+- Verification: local quality gate passed before deploy; https://www.excelcc.cn/ -> 200; https://www.excelcc.cn/api/public/home-overview -> 200; https://www.excelcc.cn/practice -> 200; https://www.excelcc.cn/api/practice/campaign/chapters -> 200; https://www.excelcc.cn/admin/users -> 200; remote standard deploy completed for runtime commit 42136ca; remote service checks returned active services and local API 200.
+- Deploy: pushed origin/main, then ran bash scripts/deploy/production-deploy.sh in /www/wwwroot/excelcc/kick-deploy/repo on the server.
+- Server backup: /www/wwwroot/excelcc/kick-deploy/backups/20260526-132842
+- Notes: fixed admin user detail outside-click close, action menu outside-click close, level-system mapping, stats cards, and add-user dialog spacing; /www/wwwroot/quick-translate was not changed.
+
 ## 2026-05-26 20:39 Asia/Shanghai
 
 - Scope: 后台通知与用户管理界面重构
