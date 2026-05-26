@@ -7,6 +7,7 @@ __pycache__/
 .idea/
 .vscode/
 run-logs/
+.worktrees/
 
 # Backend
 excel-forum-backend/target/

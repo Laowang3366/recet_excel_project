@@ -39,3 +39,13 @@ Backend configuration is driven by `excel-forum-backend/src/main/resources/appli
 Before deploying or updating `https://www.excelcc.cn/`, read `ONLINE_UPDATE_LOG.md` at the repository root. After each successful online deployment, append a new entry at the top of that file with the change scope, verification commands, deployment target, server backup path, and notes. Do not record secrets or passwords in the log.
 
 Production deployments should use the server-side pull workflow documented in `docs/deployment-operations.md`: run `bash scripts/deploy/production-deploy.sh` from `/www/wwwroot/excelcc/kick-deploy/repo` on the server, with `/www/wwwroot/excelcc/kick-deploy/deploy.env` configured from `scripts/deploy/deploy.env.example`. Avoid local `dist` upload deployments except as an explicit emergency fallback, and record that fallback in `ONLINE_UPDATE_LOG.md`.
+
+## Module-Split Development Mode
+Use module-split mode for parallel Codex sessions in this repository. Keep `main` as the clean integration and deployment baseline; start each module or feature in its own worktree and branch.
+
+- Create new module worktrees with `powershell -ExecutionPolicy Bypass -File scripts\dev\new-module-worktree.ps1 -Module <module> -Feature <feature>`.
+- Worktrees live under `.worktrees/` and branches use `codex/<module>-<feature>`.
+- One session should own one module scope. Avoid cross-cutting edits unless the task explicitly needs them.
+- Coordinate before editing high-conflict files such as `AGENTS.md`, `CLAUDE.md`, `docs/README.md`, `ONLINE_UPDATE_LOG.md`, `reace_web/src/app/routes.tsx`, shared API utilities, package files, backend migrations, and deployment scripts.
+- Do not edit `ONLINE_UPDATE_LOG.md` except in the deployment session after a successful online deployment.
+- Read `docs/模块分工开发模式.md` before starting a parallel module task.

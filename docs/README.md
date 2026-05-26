@@ -7,6 +7,7 @@
 - [部署与运维说明](./deployment-operations.md)
 - [发布检查清单](./maintenance/release-checklist.md)
 - [项目开发规范](./开发规范.md)
+- [模块分工开发模式](./模块分工开发模式.md)
 - [项目文件结构说明](./项目文件结构说明.md)
 - [项目完整链路说明](./项目完整链路说明.md)
 - [代码审查清单](./maintenance/code-review-checklist.md)
