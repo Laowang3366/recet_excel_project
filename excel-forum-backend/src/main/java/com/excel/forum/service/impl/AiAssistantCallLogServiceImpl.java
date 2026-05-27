@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -19,11 +20,17 @@ public class AiAssistantCallLogServiceImpl extends ServiceImpl<AiAssistantCallLo
 
     @Override
     public void record(Long userId, Long configId, String model, boolean success, boolean fallbackUsed, long latencyMs, String errorMessage) {
-        record(userId, configId, model, "assistant_chat", success, fallbackUsed, latencyMs, errorMessage);
+        record(userId, configId, model, "assistant_chat", success, fallbackUsed, latencyMs, errorMessage, null, null, null);
     }
 
     @Override
     public void record(Long userId, Long configId, String model, String toolType, boolean success, boolean fallbackUsed, long latencyMs, String errorMessage) {
+        record(userId, configId, model, toolType, success, fallbackUsed, latencyMs, errorMessage, null, null, null);
+    }
+
+    @Override
+    public void record(Long userId, Long configId, String model, String toolType, boolean success, boolean fallbackUsed, long latencyMs,
+                       String errorMessage, String questionSummary, String requestPreview, String responsePreview) {
         if (userId == null) {
             return;
         }
@@ -32,6 +39,9 @@ public class AiAssistantCallLogServiceImpl extends ServiceImpl<AiAssistantCallLo
         log.setConfigId(configId);
         log.setModel(model);
         log.setToolType(clamp(toolType, 50) == null ? "assistant_chat" : clamp(toolType, 50));
+        log.setQuestionSummary(clamp(questionSummary, 255));
+        log.setRequestPreview(clamp(requestPreview, 4000));
+        log.setResponsePreview(clamp(responsePreview, 4000));
         log.setSuccess(success);
         log.setFallbackUsed(fallbackUsed);
         log.setLatencyMs(Math.max(0L, latencyMs));
@@ -55,6 +65,56 @@ public class AiAssistantCallLogServiceImpl extends ServiceImpl<AiAssistantCallLo
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("overview", callLogMapper.selectOverview(startTime, endTime));
         response.put("records", callLogMapper.selectUserStats(startTime, endTime, normalizedKeyword, offset, normalizedSize));
+        response.put("failureReasons", callLogMapper.selectFailureReasons(startTime, endTime, null));
+        response.put("total", total == null ? 0L : total);
+        response.put("current", normalizedPage);
+        response.put("size", normalizedSize);
+        return response;
+    }
+
+    @Override
+    public Map<String, Object> getUserDetail(Long userId, LocalDate startDate, LocalDate endDate, long page, long size) {
+        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        long normalizedPage = Math.max(1L, page);
+        long normalizedSize = Math.min(50L, Math.max(1L, size));
+        long offset = (normalizedPage - 1L) * normalizedSize;
+
+        Map<String, Object> profile = callLogMapper.selectUserProfile(userId);
+        if (profile == null) {
+            profile = new LinkedHashMap<>();
+            profile.put("userId", userId);
+            profile.put("username", "用户#" + userId);
+            profile.put("email", "");
+            profile.put("level", 1);
+            profile.put("points", 0);
+        }
+        Map<String, Object> summary = callLogMapper.selectUserSummary(startTime, endTime, userId);
+        List<Map<String, Object>> records = callLogMapper.selectUserCallRecords(startTime, endTime, userId, offset, normalizedSize);
+        Long total = callLogMapper.countUserCallRecords(startTime, endTime, userId);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("profile", profile);
+        response.put("summary", summary == null ? Map.of() : summary);
+        response.put("records", records);
+        response.put("failureReasons", callLogMapper.selectFailureReasons(startTime, endTime, userId));
+        response.put("total", total == null ? 0L : total);
+        response.put("current", normalizedPage);
+        response.put("size", normalizedSize);
+        return response;
+    }
+
+    @Override
+    public Map<String, Object> getUserRawLogs(Long userId, LocalDate startDate, LocalDate endDate, long page, long size) {
+        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        long normalizedPage = Math.max(1L, page);
+        long normalizedSize = Math.min(50L, Math.max(1L, size));
+        long offset = (normalizedPage - 1L) * normalizedSize;
+        Long total = callLogMapper.countUserCallRecords(startTime, endTime, userId);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("records", callLogMapper.selectUserRawLogs(startTime, endTime, userId, offset, normalizedSize));
         response.put("total", total == null ? 0L : total);
         response.put("current", normalizedPage);
         response.put("size", normalizedSize);

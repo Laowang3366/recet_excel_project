@@ -85,10 +85,11 @@ public class FormulaExplainServiceImpl implements FormulaExplainService {
         ToolBillingService.BillingResult billing = billingService.charge(userId, FORMULA_EXPLAIN_COST_POINTS, TOOL_TYPE, "公式解释扣除 1 积分");
         long startedAt = System.currentTimeMillis();
         AiCompletionService.Result result = null;
+        String userPrompt = buildUserPrompt(normalized, analysis);
         try {
             result = aiCompletionService.complete(new AiCompletionService.Request(
                     SYSTEM_PROMPT,
-                    buildUserPrompt(normalized, analysis),
+                    userPrompt,
                     List.of(),
                     1200,
                     0.2
@@ -105,7 +106,8 @@ public class FormulaExplainServiceImpl implements FormulaExplainService {
             billingService.recordCharge(userId, FORMULA_EXPLAIN_COST_POINTS, TOOL_TYPE, record.getId(), "公式解释扣除 1 积分", billing.currentPoints());
             response.setRecordId(record.getId());
             response.setCreateTime(record.getCreateTime());
-            recordFormulaCall(userId, result.configId(), result.model(), true, result.fallbackUsed(), startedAt, null);
+            recordFormulaCall(userId, result.configId(), result.model(), true, result.fallbackUsed(), startedAt,
+                    null, normalized.formula(), userPrompt, result.answer());
             return response;
         } catch (RuntimeException e) {
             billingService.refund(userId, FORMULA_EXPLAIN_COST_POINTS);
@@ -119,7 +121,10 @@ public class FormulaExplainServiceImpl implements FormulaExplainService {
                     false,
                     result != null && result.fallbackUsed(),
                     startedAt,
-                    errorMessage
+                    errorMessage,
+                    normalized.formula(),
+                    userPrompt,
+                    result == null ? null : result.answer()
             );
             throw e;
         }
@@ -408,7 +413,8 @@ public class FormulaExplainServiceImpl implements FormulaExplainService {
     }
 
     private void recordFormulaCall(Long userId, Long configId, String model, boolean success,
-                                   boolean fallbackUsed, long startedAt, String errorMessage) {
+                                   boolean fallbackUsed, long startedAt, String errorMessage,
+                                   String questionSummary, String requestPreview, String responsePreview) {
         try {
             aiAssistantCallLogService.record(
                     userId,
@@ -418,7 +424,10 @@ public class FormulaExplainServiceImpl implements FormulaExplainService {
                     success,
                     fallbackUsed,
                     System.currentTimeMillis() - startedAt,
-                    errorMessage
+                    errorMessage,
+                    questionSummary,
+                    requestPreview,
+                    responsePreview
             );
         } catch (RuntimeException e) {
             log.warn("formula explain call stat record failed: {}", e.toString());

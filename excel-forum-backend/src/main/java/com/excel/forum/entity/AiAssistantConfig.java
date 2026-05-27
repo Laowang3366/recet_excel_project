@@ -18,6 +18,8 @@ public class AiAssistantConfig {
     private String baseUrl;
     private String apiKey;
     private String model;
+    private String backupModel;
+    private Integer maxRetries;
     private String reasoningEffort;
     private Integer timeoutMs;
     private String systemPrompt;
