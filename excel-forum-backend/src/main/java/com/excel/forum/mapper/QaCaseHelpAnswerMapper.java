@@ -21,6 +21,7 @@ public interface QaCaseHelpAnswerMapper extends BaseMapper<QaCaseHelpAnswer> {
             </foreach>
             AND deleted_at IS NULL
             AND status != 'deleted'
+            AND status != 'rejected'
             GROUP BY case_id
             </script>
             """)

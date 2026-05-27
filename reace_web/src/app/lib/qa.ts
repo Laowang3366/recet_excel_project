@@ -9,8 +9,11 @@ export type QaAuthor = {
 export type QaSolutionShare = {
   id: number;
   userId?: number;
+  sourceType?: "practice" | "qa_case" | string;
   answerId?: number;
   questionId?: number;
+  qaCaseId?: number | null;
+  qaAnswerId?: number | null;
   title?: string | null;
   thoughtText?: string | null;
   thoughtSource?: "manual" | "ai" | "empty" | string;
@@ -43,6 +46,10 @@ export type QaCaseHelp = {
   status?: "open" | "answered" | "accepted" | "closed" | "deleted" | string;
   acceptedAnswerId?: number | null;
   acceptedAt?: string | null;
+  assignedUserId?: number | null;
+  assignedBy?: number | null;
+  assignedAt?: string | null;
+  assignmentNote?: string | null;
   templateFileUrl?: string | null;
   answerSheet?: string | null;
   answerRange?: string | null;
@@ -60,11 +67,15 @@ export type QaCaseAnswer = {
   caseId?: number;
   userId?: number;
   answerFileUrl?: string | null;
-  status?: "active" | "accepted" | "deleted" | string;
+  status?: "active" | "approved" | "accepted" | "rejected" | "deleted" | string;
   upVoteCount?: number;
   downVoteCount?: number;
   rewardPoints?: number;
   acceptedAt?: string | null;
+  reviewerId?: number | null;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  publishedAt?: string | null;
   createTime?: string | null;
   updateTime?: string | null;
   author?: QaAuthor | null;

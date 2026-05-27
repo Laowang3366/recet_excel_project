@@ -19,6 +19,9 @@ public class QaCaseHelpFeedback {
     private String reason;
     private String detail;
     private String status;
+    private Long handledBy;
+    private LocalDateTime handledAt;
+    private String handleNote;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     private LocalDateTime deletedAt;
