@@ -14,6 +14,7 @@ import com.excel.forum.mapper.PracticeLevelMapper;
 import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.UserExpLog;
+import com.excel.forum.entity.ExperienceLevelRule;
 import com.excel.forum.entity.ExperienceRule;
 import com.excel.forum.util.HtmlSanitizer;
 import com.excel.forum.service.ExperienceService;
@@ -48,6 +49,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -272,6 +274,128 @@ class AdminManagementControllersTest {
                 .andExpect(jsonPath("$.message").value("用户角色不正确"));
 
         verify(userService, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateLevelRulePersistsSortOrder() throws Exception {
+        ExperienceLevelRule existing = new ExperienceLevelRule();
+        existing.setId(14L);
+        existing.setLevel(4);
+        existing.setName("实战学员");
+        existing.setThreshold(1200);
+        existing.setEnabled(true);
+        existing.setSortOrder(4);
+
+        when(experienceLevelRuleService.getByLevel(4)).thenReturn(existing);
+        when(experienceLevelRuleService.listOrderedRules()).thenReturn(List.of(existing));
+        when(userService.list(any(QueryWrapper.class))).thenReturn(List.of());
+
+        mockMvc.perform(put("/api/admin/levels/rules/4")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"实战学员","threshold":1200,"enabled":true,"sortOrder":9}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sortOrder").value(9));
+
+        ArgumentCaptor<ExperienceLevelRule> ruleCaptor = ArgumentCaptor.forClass(ExperienceLevelRule.class);
+        verify(experienceLevelRuleService).updateById(ruleCaptor.capture());
+        assertThat(ruleCaptor.getValue().getSortOrder()).isEqualTo(9);
+    }
+
+    @Test
+    void updateLevelRulePersistsPresentationMetadata() throws Exception {
+        ExperienceLevelRule existing = new ExperienceLevelRule();
+        existing.setId(17L);
+        existing.setLevel(7);
+        existing.setName("公式大师");
+        existing.setThreshold(8000);
+        existing.setEnabled(true);
+        existing.setSortOrder(7);
+
+        when(experienceLevelRuleService.getByLevel(7)).thenReturn(existing);
+        when(experienceLevelRuleService.listOrderedRules()).thenReturn(List.of(existing));
+        when(userService.list(any(QueryWrapper.class))).thenReturn(List.of());
+
+        mockMvc.perform(put("/api/admin/levels/rules/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"公式大师","threshold":8000,"maxExp":11999,"iconTone":"blue","benefits":"解锁高阶题库、优先体验新功能","enabled":true,"sortOrder":7}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxExp").value(11999))
+                .andExpect(jsonPath("$.iconTone").value("blue"))
+                .andExpect(jsonPath("$.benefits").value("解锁高阶题库、优先体验新功能"))
+                .andExpect(jsonPath("$.rangeText").value("8000-11999 经验"));
+
+        ArgumentCaptor<ExperienceLevelRule> ruleCaptor = ArgumentCaptor.forClass(ExperienceLevelRule.class);
+        verify(experienceLevelRuleService).updateById(ruleCaptor.capture());
+        assertThat(ruleCaptor.getValue().getMaxExp()).isEqualTo(11999);
+        assertThat(ruleCaptor.getValue().getIconTone()).isEqualTo("blue");
+        assertThat(ruleCaptor.getValue().getBenefits()).isEqualTo("解锁高阶题库、优先体验新功能");
+    }
+
+    @Test
+    void getLevelUserDetailReturnsRecentLogs() throws Exception {
+        ExperienceLevelRule levelRule = new ExperienceLevelRule();
+        levelRule.setLevel(6);
+        levelRule.setName("表格达人");
+        levelRule.setThreshold(5000);
+        levelRule.setEnabled(true);
+
+        User user = new User();
+        user.setId(7L);
+        user.setUsername("aquan76504");
+        user.setLevel(6);
+        user.setExp(6240);
+        user.setPoints(2450);
+
+        UserExpLog log = new UserExpLog();
+        log.setId(31L);
+        log.setUserId(7L);
+        log.setBizType("manual_adjust");
+        log.setExpChange(120);
+        log.setReason("管理员调整经验");
+
+        Page<UserExpLog> page = new Page<>(1, 5, 1);
+        page.setRecords(List.of(log));
+
+        when(userService.getById(7L)).thenReturn(user);
+        when(experienceLevelRuleService.listEnabledRules()).thenReturn(List.of(levelRule));
+        when(experienceService.getProgress(6240)).thenReturn(Map.of("level", 6, "levelName", "表格达人"));
+        when(experienceService.page(any(Page.class), any(QueryWrapper.class))).thenReturn(page);
+
+        mockMvc.perform(get("/api/admin/levels/users/7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.username").value("aquan76504"))
+                .andExpect(jsonPath("$.user.levelName").value("表格达人"))
+                .andExpect(jsonPath("$.recentLogs[0].reason").value("管理员调整经验"))
+                .andExpect(jsonPath("$.recentLogs[0].expChange").value(120));
+    }
+
+    @Test
+    void recalculatePreviewCountsAffectedUsersWithoutUpdating() throws Exception {
+        User stale = new User();
+        stale.setId(1L);
+        stale.setLevel(2);
+        stale.setExp(6240);
+        User current = new User();
+        current.setId(2L);
+        current.setLevel(3);
+        current.setExp(860);
+
+        when(userService.list(any(QueryWrapper.class))).thenReturn(List.of(stale, current));
+        when(experienceService.getProgress(6240)).thenReturn(Map.of("level", 6));
+        when(experienceService.getProgress(860)).thenReturn(Map.of("level", 3));
+
+        mockMvc.perform(get("/api/admin/levels/recalculate-preview"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.affectedUsers").value(1))
+                .andExpect(jsonPath("$.totalUsers").value(2))
+                .andExpect(jsonPath("$.estimatedMinutesMin").value(1))
+                .andExpect(jsonPath("$.estimatedMinutesMax").value(3));
+
+        verify(userService, never()).updateById(any(User.class));
     }
 
     @Test

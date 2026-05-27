@@ -1,25 +1,97 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { Edit3, RefreshCcw, Trash2 } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import {
+  AlertTriangle,
+  Award,
+  BadgeCheck,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  FileText,
+  Medal,
+  PlusCircle,
+  RefreshCcw,
+  ShieldCheck,
+  Star,
+  Target,
+  Trash2,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
-import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminStatCard, AdminStatGrid, FilterBar, FilterField, formatMaybeDate, formatExperienceBizType, EXPERIENCE_BIZ_TYPE_OPTIONS, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
-import { PagedAdminResponse, LevelRuleForm, LevelRuleRecord, ExpRuleForm, ExpRuleRecord, LevelsOverviewResponse, LevelUserRecord, ExpLogRecord, adminRequest, showAdminSuccess, runAdminBulkDelete, openAdminPrompt, openAdminConfirm, formatAdminEntityMessage, useAdminRole, DeleteConfirmDialog, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, generateMachineIdentifier } from "./AdminConsoleShared";
+import {
+  AdminBulkCheckbox,
+  AdminEmptyState,
+  AdminPageShell,
+  EXPERIENCE_BIZ_TYPE_OPTIONS,
+  formatExperienceBizType,
+  formatMaybeDate,
+  inputClassName,
+  primaryButtonClassName,
+  secondaryButtonClassName,
+  textareaClassName,
+} from "../admin/shared";
+import {
+  DeleteConfirmDialog,
+  ExpLogRecord,
+  ExpRuleForm,
+  ExpRuleRecord,
+  Field,
+  FormDialog,
+  LevelRuleForm,
+  LevelRuleRecord,
+  LevelRecalculatePreviewResponse,
+  LevelUserDetailResponse,
+  LevelUserRecord,
+  LevelsOverviewResponse,
+  PagedAdminResponse,
+  adminRequest,
+  formatAdminEntityMessage,
+  generateMachineIdentifier,
+  openAdminConfirm,
+  openAdminPrompt,
+  runAdminBulkDelete,
+  showAdminSuccess,
+  useAdminRole,
+} from "./AdminConsoleShared";
+import {
+  buildLevelDashboard,
+  getLevelBadgeClassName,
+  getLevelBadgeTone,
+  getLevelProgressPercent,
+} from "./AdminLevelsViewModel";
+
+type LevelTab = "rules" | "users" | "expRules" | "logs";
+type LevelIconTone = "slate" | "green" | "orange" | "purple" | "pink" | "blue";
+
+const levelTabs: Array<{ key: LevelTab; label: string }> = [
+  { key: "rules", label: "等级规则" },
+  { key: "users", label: "用户等级" },
+  { key: "expRules", label: "经验规则" },
+  { key: "logs", label: "经验日志" },
+];
+
+const levelIconTones: LevelIconTone[] = ["slate", "green", "orange", "purple", "pink", "blue"];
 
 export function AdminLevels() {
   const navigate = useNavigate();
   const role = useAdminRole();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<LevelTab>("rules");
   const [userPage, setUserPage] = useState(1);
   const [logPage, setLogPage] = useState(1);
   const [levelRuleOpen, setLevelRuleOpen] = useState(false);
   const [levelRuleEditing, setLevelRuleEditing] = useState<LevelRuleRecord | null>(null);
   const [pendingLevelRuleRemove, setPendingLevelRuleRemove] = useState<LevelRuleRecord | null>(null);
   const [levelRulesBulkDeleting, setLevelRulesBulkDeleting] = useState(false);
-  const [levelRuleForm, setLevelRuleForm] = useState<LevelRuleForm>({ level: "", name: "", threshold: "0", enabled: true });
+  const [levelRuleForm, setLevelRuleForm] = useState<LevelRuleForm>({ level: "", name: "", threshold: "0", sortOrder: "0", enabled: true });
+  const [levelRuleMaxExp, setLevelRuleMaxExp] = useState("");
+  const [levelIconTone, setLevelIconTone] = useState<LevelIconTone>("blue");
+  const [levelRuleBenefits, setLevelRuleBenefits] = useState("");
   const [expRuleOpen, setExpRuleOpen] = useState(false);
   const [expRuleEditing, setExpRuleEditing] = useState<ExpRuleRecord | null>(null);
   const [pendingExpRuleRemove, setPendingExpRuleRemove] = useState<ExpRuleRecord | null>(null);
@@ -29,6 +101,9 @@ export function AdminLevels() {
   const [levelFilter, setLevelFilter] = useState("");
   const [logUsername, setLogUsername] = useState("");
   const [bizType, setBizType] = useState("");
+  const [recalculateOpen, setRecalculateOpen] = useState(false);
+  const [recalculateInput, setRecalculateInput] = useState("");
+  const [detailUserId, setDetailUserId] = useState<number | null>(null);
   const size = 10;
   const userQuery = new URLSearchParams({ page: String(userPage), size: String(size) });
   if (userKeyword.trim()) userQuery.set("keyword", userKeyword.trim());
@@ -61,14 +136,35 @@ export function AdminLevels() {
       return result || { records: [], total: 0 };
     },
   });
+  const recalculatePreviewQuery = useQuery({
+    queryKey: ["admin", "levels", "recalculate-preview"],
+    enabled: Boolean(role && recalculateOpen),
+    queryFn: async () => {
+      const result = await adminRequest<LevelRecalculatePreviewResponse>(api.get("/api/admin/levels/recalculate-preview", { silent: true }), navigate, role);
+      return result || null;
+    },
+  });
+  const userDetailQuery = useQuery({
+    queryKey: ["admin", "levels", "users", detailUserId, "detail"],
+    enabled: Boolean(role && detailUserId),
+    queryFn: async () => {
+      const result = await adminRequest<LevelUserDetailResponse>(api.get(`/api/admin/levels/users/${detailUserId}`, { silent: true }), navigate, role);
+      return result || null;
+    },
+  });
 
   const overview = overviewQuery.data;
+  const recalculatePreview = recalculatePreviewQuery.data;
+  const userDetail = userDetailQuery.data;
+  const dashboard = useMemo(() => buildLevelDashboard(overview), [overview]);
   const levelRules = overview?.levelRules || [];
   const expRules = overview?.expRules || [];
   const users = usersQuery.data?.records || [];
   const userTotal = usersQuery.data?.total || 0;
   const logs = logsQuery.data?.records || [];
   const logTotal = logsQuery.data?.total || 0;
+  const userPages = Math.max(1, Math.ceil(userTotal / Math.max(size, 1)));
+  const logPages = Math.max(1, Math.ceil(logTotal / Math.max(size, 1)));
   const levelRuleBulkSelection = useAdminBulkSelection(levelRules, (item) => item.level);
   const expRuleBulkSelection = useAdminBulkSelection(expRules, (item) => item.key);
   const existingExpRuleKeys = useMemo(() => expRules.map((item) => String(item.key || "").trim()).filter(Boolean), [expRules]);
@@ -79,14 +175,21 @@ export function AdminLevels() {
       ? EXPERIENCE_BIZ_TYPE_OPTIONS
       : [...EXPERIENCE_BIZ_TYPE_OPTIONS, { value: normalizedCurrentBizType, label: normalizedCurrentBizType }];
   }, [bizType]);
+  const chartDistribution = dashboard.distribution.length > 0
+    ? dashboard.distribution
+    : levelRules.map((item) => ({ level: item.level, name: item.name, threshold: item.threshold, userCount: 0 }));
 
   const refreshOverview = () => queryClient.invalidateQueries({ queryKey: adminKeys.levelsOverview() }).then(() => undefined);
   const refreshUsers = () => queryClient.invalidateQueries({ queryKey: adminKeys.levelsUsers({ page: userPage, size, keyword: userKeyword.trim(), level: levelFilter }) }).then(() => undefined);
   const refreshLogs = () => queryClient.invalidateQueries({ queryKey: adminKeys.levelsLogs({ page: logPage, size, username: logUsername.trim(), bizType: bizType.trim() }) }).then(() => undefined);
 
   const openCreateLevelRule = () => {
+    const nextLevel = levelRules.reduce((max, item) => Math.max(max, Number(item.level || 0)), 0) + 1;
     setLevelRuleEditing(null);
-    setLevelRuleForm({ level: "", name: "", threshold: "0", enabled: true });
+    setLevelRuleForm({ level: String(nextLevel), name: "", threshold: "0", sortOrder: String(nextLevel), enabled: true });
+    setLevelRuleMaxExp("");
+    setLevelIconTone("blue");
+    setLevelRuleBenefits("");
     setLevelRuleOpen(true);
   };
 
@@ -96,8 +199,15 @@ export function AdminLevels() {
       level: String(item.level ?? ""),
       name: String(item.name ?? ""),
       threshold: String(item.threshold ?? 0),
+      sortOrder: String(item.sortOrder ?? item.level ?? 0),
       enabled: item.enabled ?? true,
     });
+    const nextRule = levelRules
+      .filter((rule) => Number(rule.level) > Number(item.level))
+      .sort((left, right) => Number(left.level) - Number(right.level))[0];
+    setLevelRuleMaxExp(item.maxExp != null ? String(item.maxExp) : nextRule?.threshold ? String(Math.max(Number(nextRule.threshold) - 1, Number(item.threshold || 0))) : "");
+    setLevelIconTone(toLevelIconTone(item.iconTone, toneFromLevel(item.level)));
+    setLevelRuleBenefits(String(item.benefits || ""));
     setLevelRuleOpen(true);
   };
 
@@ -106,14 +216,22 @@ export function AdminLevels() {
       level: Number(levelRuleForm.level),
       name: String(levelRuleForm.name || "").trim(),
       threshold: Number(levelRuleForm.threshold),
+      maxExp: toNullableNumber(levelRuleMaxExp),
+      iconTone: levelIconTone,
+      benefits: levelRuleBenefits.trim(),
       enabled: Boolean(levelRuleForm.enabled),
+      sortOrder: Number(levelRuleForm.sortOrder || levelRuleForm.level || 0),
     };
     const result = levelRuleEditing
       ? await adminRequest(
         api.put(`/api/admin/levels/rules/${levelRuleEditing.level}`, {
           name: payload.name,
           threshold: payload.threshold,
+          maxExp: payload.maxExp,
+          iconTone: payload.iconTone,
+          benefits: payload.benefits,
           enabled: payload.enabled,
+          sortOrder: payload.sortOrder,
         }),
         navigate,
         role,
@@ -180,7 +298,11 @@ export function AdminLevels() {
       api.put(`/api/admin/levels/rules/${item.level}`, {
         name: item.name,
         threshold: Number(item.threshold || 0),
+        maxExp: item.maxExp ?? null,
+        iconTone: item.iconTone || toneFromLevel(item.level),
+        benefits: item.benefits || "",
         enabled: nextEnabled,
+        sortOrder: Number(item.sortOrder || item.level || 0),
       }),
       navigate,
       role,
@@ -339,309 +461,228 @@ export function AdminLevels() {
   };
 
   const recalculate = async () => {
+    if (recalculateInput.trim() !== "确认重算") return;
     const result = await adminRequest(api.post("/api/admin/levels/recalculate", {}), navigate, role, "重算等级");
     if (!result) return;
+    setRecalculateOpen(false);
+    setRecalculateInput("");
     showAdminSuccess("等级重算已完成");
-    await Promise.all([refreshOverview(), refreshUsers(), refreshLogs()]);
+    await Promise.all([
+      refreshOverview(),
+      refreshUsers(),
+      refreshLogs(),
+      queryClient.invalidateQueries({ queryKey: ["admin", "levels", "recalculate-preview"] }),
+    ]);
   };
 
   return (
     <AdminPageShell
       title="等级体系"
-      description="查看等级分布、经验规则，并校准用户等级。"
+      description=""
+      actions={(
+        <>
+          <button type="button" onClick={() => setRecalculateOpen(true)} className={secondaryButtonClassName()}>
+            <RefreshCcw size={16} />
+            重新计算等级
+          </button>
+          <button type="button" onClick={openCreateLevelRule} className={primaryButtonClassName()}>
+            <PlusCircle size={16} />
+            新增等级
+          </button>
+        </>
+      )}
     >
-      <AdminStatGrid>
-        <AdminStatCard label="用户数" value={overview?.stats?.userCount ?? "-"} />
-        <AdminStatCard label="总经验值" value={overview?.stats?.totalExp ?? "-"} />
-        <AdminStatCard label="今日经验变化" value={overview?.stats?.todayExp ?? "-"} />
-        <AdminStatCard label="最高等级" value={`${overview?.stats?.highestLevelName || "-"} / Lv.${overview?.stats?.highestLevel || "-"}`} hint={`人数 ${overview?.stats?.highestLevelUsers ?? "-"}`} />
-      </AdminStatGrid>
-
-      <div className="mb-6 flex items-center justify-end">
-        <button type="button" onClick={recalculate} className={primaryButtonClassName()}>
-          <RefreshCcw size={16} />
-          重算等级
-        </button>
+      <div className="rounded-[8px] border border-[#e5e7eb] bg-white px-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-wrap gap-4">
+          {levelTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative h-12 px-3 text-[15px] font-semibold transition ${
+                activeTab === tab.key ? "text-[#1677ff]" : "text-[#344054] hover:text-[#1677ff]"
+              }`}
+            >
+              {tab.label}
+              {activeTab === tab.key && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t bg-[#1677ff]" />}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.82),rgba(255,255,255,0.96))] p-5 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[20px] font-black text-slate-900">等级定义</h3>
-              <p className="mt-1 text-sm text-slate-500">定义每一级的名称、阈值与启用状态。</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-                {levelRules.length} 条定义
-              </span>
-              <AddButton onClick={openCreateLevelRule}>新增定义</AddButton>
-            </div>
-          </div>
-          <AdminBulkActions
-            selectedCount={levelRuleBulkSelection.selectedCount}
-            totalCount={levelRules.length}
-            allVisibleSelected={levelRuleBulkSelection.allVisibleSelected}
-            deleting={levelRulesBulkDeleting}
-            onToggleAll={levelRuleBulkSelection.toggleAllVisible}
-            onClear={levelRuleBulkSelection.clear}
-            onDeleteSelected={() => void removeSelectedLevelRules()}
-          />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">选择</TableHead>
-                <TableHead>等级</TableHead>
-                <TableHead>名称</TableHead>
-                <TableHead>经验阈值</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {levelRules.map((item) => (
-                <TableRow key={item.level}>
-                  <TableCell>
-                    <AdminBulkCheckbox
-                      checked={levelRuleBulkSelection.isSelected(item.level)}
-                      onChange={() => levelRuleBulkSelection.toggleOne(item.level)}
-                      label={`选择等级定义 ${item.name || item.level}`}
-                    />
-                  </TableCell>
-                  <TableCell>Lv.{item.level}</TableCell>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.threshold}</TableCell>
-                      <TableCell>
-                        <AdminTableSwitch
-                          checked={Boolean(item.enabled ?? true)}
-                          onCheckedChange={(next) => void toggleLevelRuleEnabled(item, next)}
-                        />
-                      </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => updateLevelRule(item)} className={secondaryButtonClassName()}><Edit3 size={14} />调整定义</button>
-                      <button type="button" onClick={() => removeLevelRule(item)} className={secondaryButtonClassName()}><Trash2 size={14} />删除</button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
-
-        <section className="rounded-[32px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[20px] font-black text-slate-900">等级用户</h3>
-              <p className="mt-1 text-sm text-slate-500">按用户或等级快速筛查，并校准异常等级。</p>
-            </div>
-            <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-              共 {userTotal} 人
-            </span>
-          </div>
-          <FilterBar>
-            <FilterField label="关键词">
-              <input value={userKeyword} onChange={(e) => { setUserKeyword(e.target.value); setUserPage(1); }} className={inputClassName()} placeholder="用户名 / 邮箱" />
-            </FilterField>
-            <FilterField label="等级">
-              <input value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value); setUserPage(1); }} className={inputClassName()} placeholder="如 3" />
-            </FilterField>
-          </FilterBar>
-          <div className="mt-5">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>用户</TableHead>
-                  <TableHead>等级</TableHead>
-                  <TableHead>经验</TableHead>
-                  <TableHead>进度</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.username}</TableCell>
-                    <TableCell>{item.levelName} / Lv.{item.level}</TableCell>
-                    <TableCell>{item.exp}</TableCell>
-                    <TableCell>{item.progress?.current ?? 0} / {item.progress?.nextThreshold ?? "-"}</TableCell>
-                    <TableCell>
-                      <button type="button" onClick={() => updateUser(item)} className={secondaryButtonClassName()}><Edit3 size={14} />调整</button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {users.length === 0 && <AdminEmptyState message="暂无等级用户数据。" />}
-            <div className="mt-4">
-              <AdminPagination current={userPage} size={size} total={userTotal} onChange={setUserPage} />
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(239,246,255,0.88),rgba(255,255,255,0.98))] p-5 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[20px] font-black text-slate-900">经验规则</h3>
-              <p className="mt-1 text-sm text-slate-500">配置每种行为的经验变化区间与启用状态。</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-                {expRules.length} 条规则
-              </span>
-              <AddButton onClick={openCreateExpRule}>新增规则</AddButton>
-            </div>
-          </div>
-          <AdminBulkActions
-            selectedCount={expRuleBulkSelection.selectedCount}
-            totalCount={expRules.length}
-            allVisibleSelected={expRuleBulkSelection.allVisibleSelected}
-            deleting={expRulesBulkDeleting}
-            onToggleAll={expRuleBulkSelection.toggleAllVisible}
-            onClear={expRuleBulkSelection.clear}
-            onDeleteSelected={() => void removeSelectedExpRules()}
-          />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">选择</TableHead>
-                <TableHead>规则</TableHead>
-                <TableHead>经验范围</TableHead>
-                <TableHead>最多可获得</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {expRules.map((item) => (
-                <TableRow key={item.key}>
-                  <TableCell>
-                    <AdminBulkCheckbox
-                      checked={expRuleBulkSelection.isSelected(item.key)}
-                      onChange={() => expRuleBulkSelection.toggleOne(item.key)}
-                      label={`选择经验规则 ${item.label || item.key}`}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-bold text-slate-800">{item.label}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.description || "-"}</div>
-                  </TableCell>
-                  <TableCell>{item.rangeText}</TableCell>
-                  <TableCell>{item.maxObtainCount && item.maxObtainCount > 0 ? `${item.maxObtainCount} 次` : "不限制"}</TableCell>
-                      <TableCell>
-                        <AdminTableSwitch
-                          checked={Boolean(item.enabled)}
-                          onCheckedChange={(next) => void toggleExpRuleEnabled(item, next)}
-                        />
-                      </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => updateExpRule(item)} className={secondaryButtonClassName()}><Edit3 size={14} />调整规则</button>
-                      <button type="button" onClick={() => removeExpRule(item)} className={secondaryButtonClassName()}><Trash2 size={14} />删除</button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
-
-        <section className="rounded-[32px] border border-slate-200/80 bg-white/95 p-5 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.35)] backdrop-blur md:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[20px] font-black text-slate-900">经验日志</h3>
-              <p className="mt-1 text-sm text-slate-500">从日志维度回看经验流转，验证规则是否按预期生效。</p>
-            </div>
-            <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-bold text-slate-500 shadow-sm">
-              共 {logTotal} 条
-            </span>
-          </div>
-          <FilterBar>
-            <FilterField label="用户名">
-              <input value={logUsername} onChange={(e) => { setLogUsername(e.target.value); setLogPage(1); }} className={inputClassName()} />
-            </FilterField>
-            <FilterField label="业务类型">
-              <select value={bizType} onChange={(e) => { setBizType(e.target.value); setLogPage(1); }} className={inputClassName()}>
-                <option value="">全部业务</option>
-                {experienceBizTypeOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </select>
-            </FilterField>
-          </FilterBar>
-          <div className="mt-5">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>用户</TableHead>
-                  <TableHead>业务</TableHead>
-                  <TableHead>经验变化</TableHead>
-                  <TableHead>原因</TableHead>
-                  <TableHead>时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.user?.username || "-"}</TableCell>
-                    <TableCell>{formatExperienceBizType(item.bizLabel || item.bizType)}</TableCell>
-                    <TableCell>{item.expChange}</TableCell>
-                    <TableCell>{item.reason || "-"}</TableCell>
-                    <TableCell>{formatMaybeDate(item.createTime)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {logs.length === 0 && <AdminEmptyState message="暂无经验日志。" />}
-            <div className="mt-4">
-              <AdminPagination current={logPage} size={size} total={logTotal} onChange={setLogPage} />
-            </div>
-          </div>
-        </section>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <LevelMetricCard icon={Award} tone="blue" label="等级规则" value={dashboard.levelRuleCount} hint={dashboard.enabledLevelRuleCount === dashboard.levelRuleCount ? "全部启用" : `启用 ${dashboard.enabledLevelRuleCount}`} />
+        <LevelMetricCard icon={ShieldCheck} tone="green" label="经验规则" value={dashboard.expRuleCount} hint={`启用 ${dashboard.enabledExpRuleCount}`} />
+        <LevelMetricCard icon={Target} tone="orange" label="需校准" value={dashboard.pendingReviewCount} hint="暂无" />
+        <LevelMetricCard icon={FileText} tone="red" label="经验日志" value={logTotal.toLocaleString()} hint="累计" />
       </div>
+
+      {activeTab === "rules" && (
+        <>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <LevelLadderPanel
+              levelRules={levelRules}
+              selected={levelRuleBulkSelection}
+              onToggleEnabled={toggleLevelRuleEnabled}
+              onEdit={updateLevelRule}
+              onRemove={removeLevelRule}
+              onRemoveSelected={() => void removeSelectedLevelRules()}
+              deleting={levelRulesBulkDeleting}
+            />
+            <LevelDistributionPanel distribution={chartDistribution} highestLevelUsers={dashboard.highestLevelUsers} />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <UsersPanel
+              users={users.slice(0, 4)}
+              userTotal={userTotal}
+              onUpdateUser={updateUser}
+              onViewUser={(item) => setDetailUserId(item.id)}
+              compact
+            />
+            <RiskPanel />
+          </div>
+        </>
+      )}
+
+      {activeTab === "users" && (
+        <UsersPanel
+          users={users}
+          userTotal={userTotal}
+          onUpdateUser={updateUser}
+          onViewUser={(item) => setDetailUserId(item.id)}
+          userKeyword={userKeyword}
+          setUserKeyword={setUserKeyword}
+          levelFilter={levelFilter}
+          setLevelFilter={setLevelFilter}
+          setUserPage={setUserPage}
+          currentPage={userPage}
+          totalPages={userPages}
+          onPageChange={setUserPage}
+        />
+      )}
+
+      {activeTab === "expRules" && (
+        <ExpRulesPanel
+          expRules={expRules}
+          selected={expRuleBulkSelection}
+          onCreate={openCreateExpRule}
+          onEdit={updateExpRule}
+          onRemove={removeExpRule}
+          onRemoveSelected={() => void removeSelectedExpRules()}
+          onToggleEnabled={toggleExpRuleEnabled}
+          deleting={expRulesBulkDeleting}
+        />
+      )}
+
+      {activeTab === "logs" && (
+        <LogsPanel
+          logs={logs}
+          logTotal={logTotal}
+          logUsername={logUsername}
+          setLogUsername={setLogUsername}
+          bizType={bizType}
+          setBizType={setBizType}
+          options={experienceBizTypeOptions}
+          setLogPage={setLogPage}
+          currentPage={logPage}
+          totalPages={logPages}
+          onPageChange={setLogPage}
+        />
+      )}
 
       <FormDialog
         open={levelRuleOpen}
         onOpenChange={setLevelRuleOpen}
-        title={levelRuleEditing ? `编辑 Lv.${levelRuleEditing.level} 等级定义` : "新增等级定义"}
-        description="可配置等级名称、经验阈值与启用状态。新增或删除后会自动重算受影响用户等级。"
-        submitLabel={levelRuleEditing ? "保存定义" : "创建定义"}
-        contentClassName="w-[min(640px,calc(100vw-2rem))]"
-        bodyClassName="px-5 py-4"
+        title={levelRuleEditing ? "编辑等级规则" : "新增等级规则"}
+        description="配置等级编号、名称、经验阈值、启用状态和排序。"
+        submitLabel="保存等级"
+        contentClassName="w-[min(860px,calc(100vw-2rem))]"
+        bodyClassName="p-0"
         onSubmit={submitLevelRule}
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="等级值">
-            <input
-              type="number"
-              min={1}
-              value={levelRuleForm.level}
-              disabled={Boolean(levelRuleEditing)}
-              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, level: e.target.value }))}
-              className={inputClassName()}
-            />
-          </Field>
-          <Field label="等级名称">
-            <input
-              value={levelRuleForm.name}
-              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, name: e.target.value }))}
-              className={inputClassName()}
-            />
-          </Field>
-          <Field label="经验阈值">
-            <input
-              type="number"
-              min={0}
-              value={levelRuleForm.threshold}
-              onChange={(e) => setLevelRuleForm((prev) => ({ ...prev, threshold: e.target.value }))}
-              className={inputClassName()}
-            />
-          </Field>
-          <Field label="启用状态">
-            <AdminFormSwitch
-              label="启用该等级定义"
-              checked={Boolean(levelRuleForm.enabled)}
-              onCheckedChange={(next) => setLevelRuleForm((prev) => ({ ...prev, enabled: next }))}
-            />
-          </Field>
+        <div className="grid md:grid-cols-[1fr_324px]">
+          <div className="space-y-4 p-6">
+            <RequiredField label="等级编号">
+              <input type="number" min={1} value={levelRuleForm.level} disabled={Boolean(levelRuleEditing)} onChange={(event) => setLevelRuleForm((prev) => ({ ...prev, level: event.target.value }))} className={inputClassName()} />
+            </RequiredField>
+            <RequiredField label="等级名称">
+              <input value={levelRuleForm.name} onChange={(event) => setLevelRuleForm((prev) => ({ ...prev, name: event.target.value }))} className={inputClassName()} placeholder="公式大师" />
+            </RequiredField>
+            <RequiredField label="最低经验值">
+              <input type="number" min={0} value={levelRuleForm.threshold} onChange={(event) => setLevelRuleForm((prev) => ({ ...prev, threshold: event.target.value }))} className={inputClassName()} />
+            </RequiredField>
+            <Field label="最高经验值">
+              <input type="number" min={0} value={levelRuleMaxExp} onChange={(event) => setLevelRuleMaxExp(event.target.value)} className={inputClassName()} placeholder="由下一等级阈值决定" />
+            </Field>
+            <RequiredField label="等级图标">
+              <div className="flex flex-wrap gap-2">
+                {levelIconTones.map((tone) => (
+                  <button
+                    key={tone}
+                    type="button"
+                    onClick={() => setLevelIconTone(tone)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-[8px] border ${levelIconTone === tone ? "border-[#1677ff] ring-2 ring-[#1677ff]/20" : "border-[#d0d5dd]"}`}
+                  >
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-[6px] ${levelIconToneClassName(tone)}`}>
+                      <Medal size={16} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </RequiredField>
+            <RequiredField label="等级权益说明">
+              <textarea
+                value={levelRuleBenefits}
+                onChange={(event) => setLevelRuleBenefits(event.target.value)}
+                maxLength={100}
+                className={textareaClassName()}
+                placeholder="解锁高阶题库、优先体验新功能、等级徽章展示"
+              />
+              <div className="mt-1 text-right text-xs text-[#667085]">{levelRuleBenefits.length}/100</div>
+            </RequiredField>
+            <div className="grid grid-cols-[auto_1fr] items-center gap-4">
+              <span className="text-sm font-semibold text-[#344054]">是否启用：</span>
+              <button
+                type="button"
+                onClick={() => setLevelRuleForm((prev) => ({ ...prev, enabled: !prev.enabled }))}
+                className={`h-7 w-12 rounded-full p-0.5 transition ${levelRuleForm.enabled ? "bg-[#1677ff]" : "bg-[#d0d5dd]"}`}
+              >
+                <span className={`block h-6 w-6 rounded-full bg-white shadow transition ${levelRuleForm.enabled ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+            <RequiredField label="排序">
+              <input type="number" min={0} value={levelRuleForm.sortOrder || ""} onChange={(event) => setLevelRuleForm((prev) => ({ ...prev, sortOrder: event.target.value }))} className={inputClassName()} />
+            </RequiredField>
+          </div>
+          <div className="border-l border-[#edf0f5] bg-[#fbfcfe] p-6">
+            <h3 className="text-center text-[16px] font-semibold text-[#344054]">用户等级徽章预览</h3>
+            <div className="mt-8 flex flex-col items-center">
+              <div className={`relative flex h-24 w-24 items-center justify-center rounded-[22px] border-4 border-[#ffc35a] bg-gradient-to-br ${levelPreviewGradient(levelIconTone)} text-white shadow-[0_18px_42px_rgba(22,119,255,0.28)]`}>
+                <Star size={42} fill="currentColor" />
+              </div>
+              <div className="mt-5 text-center text-[28px] font-semibold text-[#1677ff]">Lv.{levelRuleForm.level || "-"}</div>
+              <div className="text-center text-[18px] font-semibold text-[#1677ff]">{levelRuleForm.name || "公式大师"}</div>
+              <div className="mt-5 flex w-full items-center justify-between rounded-[6px] border border-[#e5e7eb] bg-white px-4 py-3 text-sm">
+                <span className="text-[#344054]">经验范围：{Number(levelRuleForm.threshold || 0).toLocaleString()} - {levelRuleMaxExp || "∞"}</span>
+                <span className="rounded-[4px] bg-[#e6f8ef] px-2 py-1 text-xs font-semibold text-[#0f9f5f]">已启用</span>
+              </div>
+              <div className="mt-5 w-full border-t border-[#e5e7eb] pt-5">
+                <div className="mb-3 text-center text-sm font-semibold text-[#344054]">用户端展示示例</div>
+                <div className="rounded-[8px] border border-[#e5e7eb] bg-white p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e6f4ff] text-[#1677ff]"><UserRound size={22} /></div>
+                    <div>
+                      <div className="font-semibold text-[#101828]">示例用户</div>
+                      <div className="mt-1 inline-flex rounded-[4px] bg-[#e6f4ff] px-2 py-0.5 text-xs font-semibold text-[#1677ff]">Lv.{levelRuleForm.level || "-"} {levelRuleForm.name || "公式大师"}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-[#667085]">经验值 8,765 / {levelRuleMaxExp || "11,999"}</div>
+                  <div className="mt-2 h-2 rounded-full bg-[#edf0f5]"><div className="h-2 w-[72%] rounded-full bg-[#1677ff]" /></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </FormDialog>
 
@@ -649,7 +690,7 @@ export function AdminLevels() {
         open={expRuleOpen}
         onOpenChange={setExpRuleOpen}
         title={expRuleEditing ? `编辑经验规则 ${expRuleEditing.label}` : "新增经验规则"}
-        description="固定奖励规则可将最小值和最大值设置成一致；随机奖励规则可设置一个范围。"
+        description="配置经验来源、经验范围、每日上限和启用状态。"
         submitLabel={expRuleEditing ? "保存规则" : "创建规则"}
         contentClassName="w-[min(760px,calc(100vw-2rem))]"
         bodyClassName="px-5 py-4"
@@ -657,18 +698,13 @@ export function AdminLevels() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="规则标识">
-            <input
-              value={expRuleForm.key}
-              readOnly
-              className={`${inputClassName()} bg-slate-50 text-slate-500`}
-              placeholder="将根据规则名称自动生成"
-            />
+            <input value={expRuleForm.key} readOnly className={`${inputClassName()} bg-[#f8fafc] text-[#667085]`} placeholder="将根据规则名称自动生成" />
           </Field>
           <Field label="规则名称">
             <input
               value={expRuleForm.name}
-              onChange={(e) => {
-                const nextName = e.target.value;
+              onChange={(event) => {
+                const nextName = event.target.value;
                 setExpRuleForm((prev) => ({
                   ...prev,
                   name: nextName,
@@ -679,50 +715,119 @@ export function AdminLevels() {
             />
           </Field>
           <Field label="最小经验值">
-            <input
-              type="number"
-              min={0}
-              value={expRuleForm.minExp}
-              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, minExp: e.target.value }))}
-              className={inputClassName()}
-            />
+            <input type="number" min={0} value={expRuleForm.minExp} onChange={(event) => setExpRuleForm((prev) => ({ ...prev, minExp: event.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="最大经验值">
-            <input
-              type="number"
-              min={0}
-              value={expRuleForm.maxExp}
-              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, maxExp: e.target.value }))}
-              className={inputClassName()}
-            />
+            <input type="number" min={0} value={expRuleForm.maxExp} onChange={(event) => setExpRuleForm((prev) => ({ ...prev, maxExp: event.target.value }))} className={inputClassName()} />
           </Field>
           <Field label="最多可获得次数">
-            <input
-              type="number"
-              min={0}
-              value={expRuleForm.maxObtainCount}
-              onChange={(e) => setExpRuleForm((prev) => ({ ...prev, maxObtainCount: e.target.value }))}
-              className={inputClassName()}
-              placeholder="留空或 0 表示不限制"
-            />
+            <input type="number" min={0} value={expRuleForm.maxObtainCount} onChange={(event) => setExpRuleForm((prev) => ({ ...prev, maxObtainCount: event.target.value }))} className={inputClassName()} placeholder="留空或 0 表示不限制" />
+          </Field>
+          <Field label="启用状态">
+            <button type="button" onClick={() => setExpRuleForm((prev) => ({ ...prev, enabled: !prev.enabled }))} className={`h-7 w-12 rounded-full p-0.5 transition ${expRuleForm.enabled ? "bg-[#1677ff]" : "bg-[#d0d5dd]"}`}>
+              <span className={`block h-6 w-6 rounded-full bg-white shadow transition ${expRuleForm.enabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
           </Field>
           <div className="md:col-span-2">
             <Field label="规则说明">
-              <textarea
-                value={expRuleForm.description}
-                onChange={(e) => setExpRuleForm((prev) => ({ ...prev, description: e.target.value }))}
-                className={textareaClassName()}
-              />
+              <textarea value={expRuleForm.description} onChange={(event) => setExpRuleForm((prev) => ({ ...prev, description: event.target.value }))} className={textareaClassName()} />
             </Field>
           </div>
-          <Field label="启用状态">
-            <AdminFormSwitch
-              label="启用该经验规则"
-              checked={Boolean(expRuleForm.enabled)}
-              onCheckedChange={(next) => setExpRuleForm((prev) => ({ ...prev, enabled: next }))}
-            />
-          </Field>
         </div>
+      </FormDialog>
+
+      <FormDialog
+        open={recalculateOpen}
+        onOpenChange={setRecalculateOpen}
+        title="确认重新计算用户等级"
+        description="重新计算会按当前经验规则更新用户等级展示。"
+        submitLabel="开始重新计算"
+        contentClassName="w-[min(520px,calc(100vw-2rem))]"
+        onSubmit={recalculate}
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#fff7e6] text-[#fa8c16]">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="space-y-4 text-sm leading-6 text-[#344054]">
+            <div className="font-semibold text-[#1677ff]">
+              影响用户数：{formatOptionalNumber(recalculatePreview?.affectedUsers)}
+              <span className="ml-2 text-[#667085]">/ 总用户 {formatOptionalNumber(recalculatePreview?.totalUsers ?? overview?.stats?.userCount)}</span>
+            </div>
+            <div className="flex items-start gap-2"><BadgeCheck size={18} className="mt-1 shrink-0" />将根据当前经验规则重新计算所有用户等级</div>
+            <div className="flex items-start gap-2">
+              <CalendarDays size={18} className="mt-1 shrink-0" />
+              预计耗时：约 {recalculatePreview?.estimatedMinutesMin ?? 1}-{recalculatePreview?.estimatedMinutesMax ?? 3} 分钟
+            </div>
+            <div className="rounded-[8px] border border-[#ffd591] bg-[#fff7e6] px-4 py-3 font-medium">风险提示：该操作会修改用户等级展示，请确认规则无误</div>
+            <label className="block">
+              <div className="mb-2 font-semibold">请输入 “确认重算” 继续</div>
+              <input value={recalculateInput} onChange={(event) => setRecalculateInput(event.target.value)} className={inputClassName()} placeholder="确认重算" />
+            </label>
+          </div>
+        </div>
+      </FormDialog>
+
+      <FormDialog
+        open={Boolean(detailUserId)}
+        onOpenChange={(next) => {
+          if (!next) setDetailUserId(null);
+        }}
+        title="用户等级详情"
+        submitLabel="关闭"
+        contentClassName="w-[min(720px,calc(100vw-2rem))]"
+        onSubmit={() => setDetailUserId(null)}
+      >
+        {userDetailQuery.isFetching ? (
+          <div className="py-8 text-center text-sm text-[#667085]">加载中...</div>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid gap-3 rounded-[8px] border border-[#e5e7eb] bg-[#fbfcfe] p-4 sm:grid-cols-4">
+              <div>
+                <div className="text-xs text-[#667085]">用户</div>
+                <div className="mt-1 font-semibold text-[#101828]">{userDetail?.user?.username || "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-[#667085]">等级</div>
+                <div className="mt-1 font-semibold text-[#1677ff]">Lv.{userDetail?.user?.level ?? "-"} {userDetail?.user?.levelName || ""}</div>
+              </div>
+              <div>
+                <div className="text-xs text-[#667085]">经验</div>
+                <div className="mt-1 font-semibold text-[#101828]">{formatOptionalNumber(userDetail?.user?.exp)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-[#667085]">积分</div>
+                <div className="mt-1 font-semibold text-[#101828]">{formatOptionalNumber(userDetail?.user?.points)}</div>
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-sm font-semibold text-[#344054]">最近经验日志</div>
+              <div className="overflow-hidden rounded-[8px] border border-[#edf0f5]">
+                <table className="w-full min-w-[520px] border-collapse text-sm">
+                  <thead className="bg-[#f6f8fb] text-[#344054]">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">来源</th>
+                      <th className="px-4 py-3 text-left font-semibold">变动</th>
+                      <th className="px-4 py-3 text-left font-semibold">原因</th>
+                      <th className="px-4 py-3 text-left font-semibold">时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(userDetail?.recentLogs || []).map((item) => (
+                      <tr key={item.id} className="border-t border-[#edf0f5] text-[#344054]">
+                        <td className="px-4 py-3">{item.bizLabel || formatExperienceBizType(item.bizType)}</td>
+                        <td className={`px-4 py-3 font-semibold ${Number(item.expChange || 0) >= 0 ? "text-[#00a854]" : "text-[#f5222d]"}`}>{formatSignedNumber(item.expChange)}</td>
+                        <td className="px-4 py-3">{item.reason || "-"}</td>
+                        <td className="px-4 py-3">{formatMaybeDate(item.createTime)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(userDetail?.recentLogs || []).length === 0 && <AdminEmptyState message="暂无经验日志。" />}
+            </div>
+          </div>
+        )}
       </FormDialog>
 
       <DeleteConfirmDialog
@@ -744,4 +849,457 @@ export function AdminLevels() {
       />
     </AdminPageShell>
   );
+}
+
+function LevelMetricCard({
+  icon: Icon,
+  tone,
+  label,
+  value,
+  hint,
+}: {
+  icon: LucideIcon;
+  tone: "blue" | "green" | "orange" | "red";
+  label: string;
+  value: ReactNode;
+  hint: ReactNode;
+}) {
+  const toneClass = {
+    blue: "from-[#2f7dff] to-[#0052d9]",
+    green: "from-[#22c55e] to-[#0f9f5f]",
+    orange: "from-[#ffa940] to-[#fa8c16]",
+    red: "from-[#ff4d5d] to-[#f5222d]",
+  }[tone];
+  return (
+    <div className="rounded-[8px] border border-[#e5e7eb] bg-white p-6 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-5">
+        <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${toneClass} text-white shadow-[0_10px_24px_rgba(22,119,255,0.22)]`}>
+          <Icon size={30} />
+        </div>
+        <div>
+          <div className="text-[15px] font-medium text-[#475467]">{label}</div>
+          <div className="mt-2 text-[30px] font-semibold leading-none text-[#101828]">{value}</div>
+          <div className="mt-2 text-[14px] text-[#667085]">{hint}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LevelLadderPanel({
+  levelRules,
+  selected,
+  onToggleEnabled,
+  onEdit,
+  onRemove,
+  onRemoveSelected,
+  deleting,
+}: {
+  levelRules: LevelRuleRecord[];
+  selected: ReturnType<typeof useAdminBulkSelection<LevelRuleRecord, number>>;
+  onToggleEnabled: (item: LevelRuleRecord, next: boolean) => void;
+  onEdit: (item: LevelRuleRecord) => void;
+  onRemove: (item: LevelRuleRecord) => void;
+  onRemoveSelected: () => void;
+  deleting: boolean;
+}) {
+  return (
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-[#1f1f1f]">等级阶梯</h2>
+        <button type="button" onClick={onRemoveSelected} disabled={selected.selectedCount === 0 || deleting} className={secondaryButtonClassName()}>
+          批量操作
+        </button>
+      </div>
+      <div className="relative space-y-2 pl-9">
+        <div className="absolute bottom-5 left-3 top-5 w-[3px] rounded-full bg-[#1677ff]" />
+        {levelRules.map((item) => {
+          const tone = toLevelIconTone(item.iconTone, toneFromLevel(item.level));
+          return (
+            <div key={item.level} className="relative flex min-h-[46px] items-center gap-3 rounded-[6px] border border-[#e5e7eb] bg-white px-4 py-2 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+              <span className="absolute -left-[34px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-[3px] border-[#1677ff] bg-white" />
+              <AdminBulkCheckbox checked={selected.isSelected(item.level)} onChange={() => selected.toggleOne(item.level)} label={`选择 Lv.${item.level}`} />
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] ring-1 ring-[#d0d5dd] ${levelIconToneClassName(tone)}`}>
+                <Medal size={18} />
+              </div>
+              <div className="w-16 font-semibold text-[#101828]">Lv.{item.level}</div>
+              <div className="min-w-[96px] text-[#344054]">{item.name || "-"}</div>
+              <div className="ml-auto text-sm text-[#475467]">{item.rangeText || `${Number(item.threshold || 0).toLocaleString()}+ 经验`}</div>
+              <button type="button" onClick={() => onToggleEnabled(item, !(item.enabled ?? true))} className={`rounded-[4px] px-2.5 py-1 text-xs font-semibold ${item.enabled === false ? "bg-[#fff7e6] text-[#d46b08]" : "bg-[#e6f8ef] text-[#0f9f5f]"}`}>
+                {item.enabled === false ? "停用" : "启用"}
+              </button>
+              <button type="button" onClick={() => onEdit(item)} className="text-[#1677ff]"><Edit3 size={16} /></button>
+              <button type="button" onClick={() => onRemove(item)} className="text-[#cf1322]"><Trash2 size={16} /></button>
+            </div>
+          );
+        })}
+      </div>
+      {levelRules.length === 0 && <AdminEmptyState message="暂无等级定义。" />}
+    </section>
+  );
+}
+
+function LevelDistributionPanel({
+  distribution,
+  highestLevelUsers,
+}: {
+  distribution: NonNullable<LevelsOverviewResponse["distribution"]>;
+  highestLevelUsers: number;
+}) {
+  const maxValue = Math.max(1, ...distribution.map((item) => Number(item.userCount || 0)));
+  return (
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-[#1f1f1f]">用户等级分布</h2>
+        <div className="text-sm text-[#475467]">当前最高等级用户： <span className="font-semibold text-[#344054]">{highestLevelUsers}</span></div>
+      </div>
+      <div className="grid h-[250px] grid-cols-[44px_minmax(0,1fr)] gap-4">
+        <div className="flex flex-col justify-between text-right text-xs text-[#667085]">
+          <span>3,000</span>
+          <span>2,400</span>
+          <span>1,800</span>
+          <span>1,200</span>
+          <span>600</span>
+          <span>0</span>
+        </div>
+        <div className="relative flex items-end justify-around gap-3 border-b border-l border-[#e5e7eb] px-4 pb-0">
+          <div className="absolute inset-x-0 top-0 h-px border-t border-dashed border-[#d9e1ec]" />
+          <div className="absolute inset-x-0 top-[20%] h-px border-t border-dashed border-[#d9e1ec]" />
+          <div className="absolute inset-x-0 top-[40%] h-px border-t border-dashed border-[#d9e1ec]" />
+          <div className="absolute inset-x-0 top-[60%] h-px border-t border-dashed border-[#d9e1ec]" />
+          <div className="absolute inset-x-0 top-[80%] h-px border-t border-dashed border-[#d9e1ec]" />
+          {distribution.map((item) => {
+            const height = Math.max(8, Math.round((Number(item.userCount || 0) / maxValue) * 186));
+            return (
+              <div key={item.level} className="relative z-10 flex w-[86px] flex-col items-center justify-end">
+                <div className="mb-2 text-sm font-medium text-[#344054]">{Number(item.userCount || 0).toLocaleString()}</div>
+                <div className="w-10 rounded-t-[4px] bg-[#1677ff] shadow-[0_8px_18px_rgba(22,119,255,0.24)]" style={{ height }} />
+                <div className="mt-2 text-center text-xs leading-5 text-[#344054]">Lv.{item.level}<br />{item.name || "-"}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UsersPanel({
+  users,
+  userTotal,
+  onUpdateUser,
+  onViewUser,
+  userKeyword,
+  setUserKeyword,
+  levelFilter,
+  setLevelFilter,
+  setUserPage,
+  currentPage,
+  totalPages,
+  onPageChange,
+  compact = false,
+}: {
+  users: LevelUserRecord[];
+  userTotal: number;
+  onUpdateUser: (item: LevelUserRecord) => void;
+  onViewUser: (item: LevelUserRecord) => void;
+  userKeyword?: string;
+  setUserKeyword?: (value: string) => void;
+  levelFilter?: string;
+  setLevelFilter?: (value: string) => void;
+  setUserPage?: (page: number) => void;
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
+  compact?: boolean;
+}) {
+  return (
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-[#1f1f1f]">用户等级</h2>
+        {!compact && <span className="text-sm text-[#667085]">共 {userTotal} 人</span>}
+      </div>
+      {!compact && (
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <input value={userKeyword || ""} onChange={(event) => { setUserKeyword?.(event.target.value); setUserPage?.(1); }} className={inputClassName()} placeholder="用户名 / 邮箱" />
+          <input value={levelFilter || ""} onChange={(event) => { setLevelFilter?.(event.target.value); setUserPage?.(1); }} className={inputClassName()} placeholder="等级，如 3" />
+        </div>
+      )}
+      <div className="overflow-hidden rounded-[8px] border border-[#edf0f5]">
+        <table className="w-full min-w-[860px] border-collapse text-sm">
+          <thead className="bg-[#f6f8fb] text-[#344054]">
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold">用户</th>
+              <th className="px-4 py-3 text-left font-semibold">等级</th>
+              <th className="px-4 py-3 text-left font-semibold">经验</th>
+              <th className="px-4 py-3 text-left font-semibold">进度</th>
+              <th className="px-4 py-3 text-left font-semibold">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((item) => {
+              const progress = getLevelProgressPercent(item);
+              const tone = getLevelBadgeTone(item.level);
+              return (
+                <tr key={item.id} className="border-t border-[#edf0f5] text-[#344054]">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${avatarTone(item.username)}`}>{(item.username || "?").slice(0, 1).toUpperCase()}</div>
+                      {item.username || "-"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-[4px] px-2.5 py-1 text-xs font-semibold ring-1 ${getLevelBadgeClassName(tone)}`}>
+                      Lv.{item.level} {item.levelName}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{Number(item.exp || 0).toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-44 rounded-full bg-[#edf0f5]"><div className="h-2 rounded-full bg-[#1677ff]" style={{ width: `${progress}%` }} /></div>
+                      <span className="text-xs text-[#475467]">{progress}%</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-4">
+                      <button type="button" onClick={() => onViewUser(item)} className="font-semibold text-[#1677ff]">详情</button>
+                      <button type="button" onClick={() => onUpdateUser(item)} className={secondaryButtonClassName()}>
+                        <Edit3 size={14} />
+                        调整经验
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {users.length === 0 && <AdminEmptyState message="暂无等级用户数据。" />}
+      {!compact && currentPage && totalPages && onPageChange && (
+        <div className="mt-4 flex items-center justify-between text-sm text-[#475467]">
+          <span>第 {currentPage} / {totalPages} 页</span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={currentPage <= 1} onClick={() => onPageChange(Math.max(1, currentPage - 1))} className={secondaryButtonClassName()}><ChevronLeft size={16} />上一页</button>
+            <button type="button" disabled={currentPage >= totalPages} onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} className={secondaryButtonClassName()}>下一页<ChevronRight size={16} /></button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RiskPanel() {
+  return (
+    <section className="rounded-[8px] border border-[#ffbb55] bg-[#fffaf0] p-7 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-3 text-[20px] font-semibold text-[#1f1f1f]">
+        <AlertTriangle className="text-[#fa8c16]" />
+        风险提示
+      </div>
+      <p className="mt-8 text-[16px] leading-9 text-[#1f2937]">重新计算等级属于高影响操作，需要明确影响用户数量并二次确认。</p>
+    </section>
+  );
+}
+
+function ExpRulesPanel({
+  expRules,
+  selected,
+  onCreate,
+  onEdit,
+  onRemove,
+  onRemoveSelected,
+  onToggleEnabled,
+  deleting,
+}: {
+  expRules: ExpRuleRecord[];
+  selected: ReturnType<typeof useAdminBulkSelection<ExpRuleRecord, string>>;
+  onCreate: () => void;
+  onEdit: (item: ExpRuleRecord) => void;
+  onRemove: (item: ExpRuleRecord) => void;
+  onRemoveSelected: () => void;
+  onToggleEnabled: (item: ExpRuleRecord, next: boolean) => void;
+  deleting: boolean;
+}) {
+  return (
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-[#1f1f1f]">经验规则</h2>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onRemoveSelected} disabled={selected.selectedCount === 0 || deleting} className={secondaryButtonClassName()}>批量操作</button>
+          <button type="button" onClick={onCreate} className={primaryButtonClassName()}><PlusCircle size={16} />新增规则</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-[8px] border border-[#edf0f5]">
+        <table className="w-full min-w-[820px] border-collapse text-sm">
+          <thead className="bg-[#f6f8fb] text-[#344054]">
+            <tr>
+              <th className="w-12 px-4 py-3 text-left"><AdminBulkCheckbox checked={selected.allVisibleSelected} onChange={selected.toggleAllVisible} label="选择全部经验规则" /></th>
+              <th className="px-4 py-3 text-left font-semibold">规则</th>
+              <th className="px-4 py-3 text-left font-semibold">经验范围</th>
+              <th className="px-4 py-3 text-left font-semibold">最多可获得</th>
+              <th className="px-4 py-3 text-left font-semibold">状态</th>
+              <th className="px-4 py-3 text-left font-semibold">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expRules.map((item) => (
+              <tr key={item.key} className="border-t border-[#edf0f5] text-[#344054]">
+                <td className="px-4 py-3"><AdminBulkCheckbox checked={selected.isSelected(item.key)} onChange={() => selected.toggleOne(item.key)} label={`选择 ${item.label}`} /></td>
+                <td className="px-4 py-3"><div className="font-semibold">{item.label}</div><div className="mt-1 text-xs text-[#667085]">{item.description || item.key}</div></td>
+                <td className="px-4 py-3">{item.rangeText}</td>
+                <td className="px-4 py-3">{item.maxObtainCount && item.maxObtainCount > 0 ? `${item.maxObtainCount} 次` : "不限制"}</td>
+                <td className="px-4 py-3"><button type="button" onClick={() => onToggleEnabled(item, !(item.enabled ?? true))} className={`rounded-[4px] px-2.5 py-1 text-xs font-semibold ${item.enabled === false ? "bg-[#fff7e6] text-[#d46b08]" : "bg-[#e6f8ef] text-[#0f9f5f]"}`}>{item.enabled === false ? "停用" : "启用"}</button></td>
+                <td className="px-4 py-3"><div className="flex gap-3"><button type="button" onClick={() => onEdit(item)} className="text-[#1677ff]"><Edit3 size={16} /></button><button type="button" onClick={() => onRemove(item)} className="text-[#cf1322]"><Trash2 size={16} /></button></div></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function LogsPanel({
+  logs,
+  logTotal,
+  logUsername,
+  setLogUsername,
+  bizType,
+  setBizType,
+  options,
+  setLogPage,
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  logs: ExpLogRecord[];
+  logTotal: number;
+  logUsername: string;
+  setLogUsername: (value: string) => void;
+  bizType: string;
+  setBizType: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  setLogPage: (page: number) => void;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <section className="rounded-[8px] border border-[#e5e7eb] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-[#1f1f1f]">经验日志</h2>
+        <span className="text-sm text-[#667085]">共 {logTotal} 条</span>
+      </div>
+      <div className="mb-4 grid gap-3 md:grid-cols-2">
+        <input value={logUsername} onChange={(event) => { setLogUsername(event.target.value); setLogPage(1); }} className={inputClassName()} placeholder="用户名" />
+        <select value={bizType} onChange={(event) => { setBizType(event.target.value); setLogPage(1); }} className={inputClassName()}>
+          <option value="">全部业务</option>
+          {options.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+      </div>
+      <div className="overflow-hidden rounded-[8px] border border-[#edf0f5]">
+        <table className="w-full min-w-[760px] border-collapse text-sm">
+          <thead className="bg-[#f6f8fb] text-[#344054]">
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold">用户</th>
+              <th className="px-4 py-3 text-left font-semibold">业务</th>
+              <th className="px-4 py-3 text-left font-semibold">经验变化</th>
+              <th className="px-4 py-3 text-left font-semibold">原因</th>
+              <th className="px-4 py-3 text-left font-semibold">时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((item) => (
+              <tr key={item.id} className="border-t border-[#edf0f5] text-[#344054]">
+                <td className="px-4 py-3">{item.user?.username || "-"}</td>
+                <td className="px-4 py-3">{formatExperienceBizType(item.bizLabel || item.bizType)}</td>
+                <td className={`px-4 py-3 font-semibold ${Number(item.expChange || 0) >= 0 ? "text-[#00a854]" : "text-[#f5222d]"}`}>{Number(item.expChange || 0) >= 0 ? `+${item.expChange || 0}` : item.expChange}</td>
+                <td className="px-4 py-3">{item.reason || "-"}</td>
+                <td className="px-4 py-3">{formatMaybeDate(item.createTime)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-sm text-[#475467]">
+        <span>第 {currentPage} / {totalPages} 页</span>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={currentPage <= 1} onClick={() => onPageChange(Math.max(1, currentPage - 1))} className={secondaryButtonClassName()}><ChevronLeft size={16} />上一页</button>
+          <button type="button" disabled={currentPage >= totalPages} onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} className={secondaryButtonClassName()}>下一页<ChevronRight size={16} /></button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RequiredField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 text-sm font-semibold text-[#344054]"><span className="text-[#f5222d]">* </span>{label}</div>
+      {children}
+    </label>
+  );
+}
+
+function toNullableNumber(value: unknown) {
+  if (value === "" || value === null || typeof value === "undefined") return null;
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function toLevelIconTone(value: unknown, fallback: LevelIconTone = "blue"): LevelIconTone {
+  return levelIconTones.includes(value as LevelIconTone) ? (value as LevelIconTone) : fallback;
+}
+
+function formatOptionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "-";
+}
+
+function formatSignedNumber(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+function toneFromLevel(level: unknown): LevelIconTone {
+  const numeric = Number(level || 0);
+  if (numeric <= 1) return "blue";
+  if (numeric === 2) return "green";
+  if (numeric === 3) return "orange";
+  if (numeric === 4) return "purple";
+  if (numeric === 5) return "pink";
+  return "blue";
+}
+
+function levelIconToneClassName(tone: LevelIconTone) {
+  const map: Record<LevelIconTone, string> = {
+    slate: "bg-[#eef2f6] text-[#667085]",
+    green: "bg-[#e6f8ef] text-[#0f9f5f]",
+    orange: "bg-[#fff7e6] text-[#d46b08]",
+    purple: "bg-[#f4edff] text-[#722ed1]",
+    pink: "bg-[#fff0f6] text-[#eb2f96]",
+    blue: "bg-[#e6f4ff] text-[#1677ff]",
+  };
+  return map[tone];
+}
+
+function levelPreviewGradient(tone: LevelIconTone) {
+  const map: Record<LevelIconTone, string> = {
+    slate: "from-[#667085] to-[#344054]",
+    green: "from-[#22c55e] to-[#0f9f5f]",
+    orange: "from-[#ffa940] to-[#fa8c16]",
+    purple: "from-[#9254de] to-[#531dab]",
+    pink: "from-[#ff85c0] to-[#c41d7f]",
+    blue: "from-[#2f7dff] to-[#0052d9]",
+  };
+  return map[tone];
+}
+
+function avatarTone(username?: string | null) {
+  const key = (username || "").charCodeAt(0) % 4;
+  return [
+    "bg-[#e6f4ff] text-[#0958d9]",
+    "bg-[#e6f8ef] text-[#0f9f5f]",
+    "bg-[#f4edff] text-[#722ed1]",
+    "bg-[#fff7e6] text-[#d46b08]",
+  ][Number.isFinite(key) ? key : 0];
 }

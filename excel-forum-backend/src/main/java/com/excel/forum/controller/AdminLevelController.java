@@ -87,6 +87,9 @@ public class AdminLevelController {
                 item.put("threshold", safeInt(rule.getThreshold()));
                 item.put("enabled", true);
                 item.put("sortOrder", safeInt(rule.getLevel()));
+                item.put("maxExp", null);
+                item.put("iconTone", normalizeIconTone(null, "blue"));
+                item.put("benefits", null);
                 item.put("rangeText", "达到 " + safeInt(rule.getThreshold()) + " 经验");
                 return item;
             }).collect(Collectors.toList());
@@ -116,8 +119,11 @@ public class AdminLevelController {
         Integer level = parseInteger(body == null ? null : body.getLevel());
         String name = body == null || body.getName() == null ? null : body.getName().trim();
         Integer threshold = parseInteger(body == null ? null : body.getThreshold());
+        Integer maxExp = parseInteger(body == null ? null : body.getMaxExp());
         Boolean enabled = body == null || body.getEnabled() == null ? Boolean.TRUE : body.getEnabled();
         Integer sortOrder = body == null || body.getSortOrder() == null ? null : parseInteger(body.getSortOrder());
+        String iconTone = normalizeIconTone(body == null ? null : body.getIconTone(), "blue");
+        String benefits = normalizeNullableText(body == null ? null : body.getBenefits());
 
         if (level == null || level < 1) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级值必须大于 0"));
@@ -131,6 +137,9 @@ public class AdminLevelController {
         if (threshold == null || threshold < 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级阈值不能小于 0"));
         }
+        if (maxExp != null && maxExp < threshold) {
+            return ResponseEntity.badRequest().body(Map.of("message", "最高经验值不能小于最低经验值"));
+        }
 
         ResponseEntity<?> invalidThreshold = validateLevelThreshold(level, threshold, null);
         if (invalidThreshold != null) {
@@ -141,8 +150,11 @@ public class AdminLevelController {
         created.setLevel(level);
         created.setName(name);
         created.setThreshold(threshold);
+        created.setMaxExp(maxExp);
         created.setEnabled(enabled == null || enabled);
         created.setSortOrder(sortOrder == null ? level * 10 : Math.max(sortOrder, 0));
+        created.setIconTone(iconTone);
+        created.setBenefits(benefits);
         experienceLevelRuleService.save(created);
 
         int recalculated = recalculateAllLevels();
@@ -160,13 +172,20 @@ public class AdminLevelController {
 
         String nextName = body == null || body.getName() == null ? existing.getName() : body.getName().trim();
         Integer nextThreshold = body == null || body.getThreshold() == null ? existing.getThreshold() : parseInteger(body.getThreshold());
+        Integer nextMaxExp = body == null || body.getMaxExp() == null ? existing.getMaxExp() : parseInteger(body.getMaxExp());
         Boolean nextEnabled = body == null || body.getEnabled() == null ? existing.getEnabled() : body.getEnabled();
+        Integer nextSortOrder = body == null || body.getSortOrder() == null ? existing.getSortOrder() : parseInteger(body.getSortOrder());
+        String nextIconTone = normalizeIconTone(body == null ? null : body.getIconTone(), existing.getIconTone());
+        String nextBenefits = body == null || body.getBenefits() == null ? existing.getBenefits() : normalizeNullableText(body.getBenefits());
 
         if (nextName == null || nextName.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级名称不能为空"));
         }
         if (nextThreshold == null || nextThreshold < 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "等级阈值不能小于 0"));
+        }
+        if (nextMaxExp != null && nextMaxExp < nextThreshold) {
+            return ResponseEntity.badRequest().body(Map.of("message", "最高经验值不能小于最低经验值"));
         }
         if (Boolean.FALSE.equals(nextEnabled) && (existing.getEnabled() == null || existing.getEnabled())
                 && experienceLevelRuleService.listEnabledRules().size() <= 1) {
@@ -180,10 +199,15 @@ public class AdminLevelController {
 
         existing.setName(nextName);
         existing.setThreshold(nextThreshold);
+        existing.setMaxExp(nextMaxExp);
         existing.setEnabled(nextEnabled == null || nextEnabled);
-        if (existing.getSortOrder() == null) {
+        if (nextSortOrder == null) {
             existing.setSortOrder(safeInt(existing.getLevel()));
+        } else {
+            existing.setSortOrder(Math.max(nextSortOrder, 0));
         }
+        existing.setIconTone(nextIconTone);
+        existing.setBenefits(nextBenefits);
         experienceLevelRuleService.updateById(existing);
         int recalculated = recalculateAllLevels();
         Map<String, Object> response = buildLevelRuleResponse(existing);
@@ -327,6 +351,29 @@ public class AdminLevelController {
         ));
     }
 
+    @GetMapping("/users/{id}")
+    public ResponseEntity<?> getLevelUserDetail(@PathVariable Long id) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
+        }
+
+        Page<UserExpLog> pageRequest = new Page<>(1, 5);
+        QueryWrapper<UserExpLog> queryWrapper = new QueryWrapper<UserExpLog>()
+                .eq("user_id", id)
+                .orderByDesc("create_time");
+        Page<UserExpLog> result = experienceService.page(pageRequest, queryWrapper);
+        List<Map<String, Object>> recentLogs = result.getRecords().stream()
+                .map(log -> buildLevelLogResponse(log, user))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of(
+                "user", buildLevelUserResponse(user),
+                "recentLogs", recentLogs,
+                "totalLogs", result.getTotal()
+        ));
+    }
+
     @PutMapping("/users/{id}")
     public ResponseEntity<?> updateLevelUser(@PathVariable Long id, @RequestBody AdminLevelUserUpdateRequest body) {
         User existing = userService.getById(id);
@@ -429,6 +476,14 @@ public class AdminLevelController {
         ));
     }
 
+    @GetMapping("/recalculate-preview")
+    public ResponseEntity<?> getRecalculatePreview() {
+        Map<String, Object> preview = calculateRecalculatePreview();
+        preview.put("estimatedMinutesMin", 1);
+        preview.put("estimatedMinutesMax", 3);
+        return ResponseEntity.ok(preview);
+    }
+
     @PostMapping("/recalculate")
     public ResponseEntity<?> recalculateLevels() {
         int updated = recalculateAllLevels();
@@ -520,10 +575,38 @@ public class AdminLevelController {
         item.put("level", safeInt(rule.getLevel()));
         item.put("name", defaultText(rule.getName(), "未命名等级"));
         item.put("threshold", safeInt(rule.getThreshold()));
+        item.put("maxExp", rule.getMaxExp());
         item.put("enabled", rule.getEnabled() == null || rule.getEnabled());
         item.put("sortOrder", safeInt(rule.getSortOrder()));
-        item.put("rangeText", "达到 " + safeInt(rule.getThreshold()) + " 经验");
+        item.put("iconTone", normalizeIconTone(rule.getIconTone(), "blue"));
+        item.put("benefits", rule.getBenefits());
+        item.put("rangeText", formatLevelRangeText(rule));
         return item;
+    }
+
+    private String formatLevelRangeText(ExperienceLevelRule rule) {
+        int minExp = safeInt(rule.getThreshold());
+        Integer maxExp = rule.getMaxExp();
+        if (maxExp != null && maxExp >= minExp) {
+            return minExp + "-" + maxExp + " 经验";
+        }
+        return minExp + "+ 经验";
+    }
+
+    private String normalizeIconTone(String value, String fallback) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        if (List.of("slate", "green", "orange", "purple", "pink", "blue").contains(normalized)) {
+            return normalized;
+        }
+        return fallback == null || fallback.isBlank() ? "blue" : fallback.trim().toLowerCase();
+    }
+
+    private String normalizeNullableText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private String resolveLevelName(int level) {
@@ -561,6 +644,22 @@ public class AdminLevelController {
             ));
         }
         return null;
+    }
+
+    private Map<String, Object> calculateRecalculatePreview() {
+        List<User> users = userService.list(new QueryWrapper<User>().select("id", "level", "exp"));
+        int affected = 0;
+        for (User user : users) {
+            Map<String, Object> progress = experienceService.getProgress(user.getExp());
+            int expectedLevel = safeInt(progress.get("level"));
+            if (!Objects.equals(user.getLevel(), expectedLevel)) {
+                affected += 1;
+            }
+        }
+        Map<String, Object> preview = new HashMap<>();
+        preview.put("affectedUsers", affected);
+        preview.put("totalUsers", users.size());
+        return preview;
     }
 
     private int recalculateAllLevels() {
