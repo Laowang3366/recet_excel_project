@@ -7,4 +7,6 @@ public class AdminPointsGrantRequest {
     private String username;
     private Object points;
     private String reason;
+    private String businessNo;
+    private Boolean notifyUser;
 }

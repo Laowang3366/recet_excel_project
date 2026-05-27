@@ -14,6 +14,8 @@ import com.excel.forum.mapper.PracticeLevelMapper;
 import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.entity.User;
 import com.excel.forum.entity.UserExpLog;
+import com.excel.forum.entity.PointsRule;
+import com.excel.forum.entity.PointsRuleOption;
 import com.excel.forum.entity.ExperienceRule;
 import com.excel.forum.util.HtmlSanitizer;
 import com.excel.forum.service.ExperienceService;
@@ -47,7 +49,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -259,6 +263,108 @@ class AdminManagementControllersTest {
         assertThat(savedNotification.getTargetRoles()).isEqualTo("user,admin");
         assertThat(savedNotification.getCreatedBy()).isEqualTo(3L);
         assertThat(savedNotification.getStatus()).isEqualTo("draft");
+    }
+
+    @Test
+    void grantPointsAllowsManualDeduction() throws Exception {
+        User user = new User();
+        user.setId(7L);
+        user.setUsername("excel_user_82");
+        user.setPoints(120);
+        User updatedUser = new User();
+        updatedUser.setId(7L);
+        updatedUser.setUsername("excel_user_82");
+        updatedUser.setPoints(100);
+        when(userService.findByUsername("excel_user_82")).thenReturn(user);
+        when(userService.getById(7L)).thenReturn(updatedUser);
+
+        mockMvc.perform(post("/api/admin/points/grant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"excel_user_82","points":-20,"reason":"模板兑换扣减"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.points").value(-20))
+                .andExpect(jsonPath("$.balance").value(100));
+
+        verify(pointsRecordService).addManualPointsRecord(7L, -20, "模板兑换扣减", null, true);
+        verify(notificationService).createNotification(eq(7L), eq("system"), eq("管理员扣减了你 20 积分，原因：模板兑换扣减"), isNull());
+    }
+
+    @Test
+    void grantPointsStoresBusinessNoAndSkipsNotificationWhenDisabled() throws Exception {
+        User user = new User();
+        user.setId(7L);
+        user.setUsername("excel_user_82");
+        user.setPoints(120);
+        User updatedUser = new User();
+        updatedUser.setId(7L);
+        updatedUser.setUsername("excel_user_82");
+        updatedUser.setPoints(170);
+        when(userService.findByUsername("excel_user_82")).thenReturn(user);
+        when(userService.getById(7L)).thenReturn(updatedUser);
+
+        mockMvc.perform(post("/api/admin/points/grant")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"excel_user_82","points":50,"reason":"活动补发积分","businessNo":"ORDER-20260524-018","notifyUser":false}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.points").value(50))
+                .andExpect(jsonPath("$.businessNo").value("ORDER-20260524-018"))
+                .andExpect(jsonPath("$.notifyUser").value(false));
+
+        verify(pointsRecordService).addManualPointsRecord(7L, 50, "活动补发积分", "ORDER-20260524-018", false);
+        verify(notificationService, never()).createNotification(any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void createPointsRulePersistsLimitAndValidityWindow() throws Exception {
+        PointsRuleOption type = new PointsRuleOption();
+        type.setKind("type");
+        type.setOptionValue("daily");
+        PointsRuleOption taskKey = new PointsRuleOption();
+        taskKey.setKind("task_key");
+        taskKey.setOptionValue("daily_checkin");
+        when(pointsRuleOptionService.getByKindAndValue("type", "daily")).thenReturn(type);
+        when(pointsRuleOptionService.getByKindAndValue("task_key", "daily_checkin")).thenReturn(taskKey);
+        when(pointsRuleService.count(any(QueryWrapper.class))).thenReturn(0L);
+        doAnswer(invocation -> {
+            PointsRule rule = invocation.getArgument(0);
+            rule.setId(81L);
+            return true;
+        }).when(pointsRuleService).save(any(PointsRule.class));
+
+        mockMvc.perform(post("/api/admin/points/rules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"每日签到奖励","description":"每日签到可获得积分","taskKey":"daily_checkin","points":5,"type":"daily","dailyLimit":1,"effectiveAt":"2026-05-25T00:00:00","expiresAt":"2026-06-25T00:00:00","enabled":true,"userVisible":true,"sortOrder":10}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dailyLimit").value(1));
+
+        ArgumentCaptor<PointsRule> ruleCaptor = ArgumentCaptor.forClass(PointsRule.class);
+        verify(pointsRuleService).save(ruleCaptor.capture());
+        PointsRule savedRule = ruleCaptor.getValue();
+        assertThat(savedRule.getDailyLimit()).isEqualTo(1);
+        assertThat(savedRule.getEffectiveAt()).isEqualTo(LocalDateTime.of(2026, 5, 25, 0, 0));
+        assertThat(savedRule.getExpiresAt()).isEqualTo(LocalDateTime.of(2026, 6, 25, 0, 0));
+    }
+
+    @Test
+    void pointsStatsExposeIssuedConsumedAndAnomalyCounts() throws Exception {
+        when(userService.count(any(QueryWrapper.class))).thenReturn(12L);
+        when(pointsRecordService.getMap(any(QueryWrapper.class)))
+                .thenReturn(Map.of("total_points", 9000))
+                .thenReturn(Map.of("total_points", 12340))
+                .thenReturn(Map.of("total_points", -4800));
+        when(pointsRecordService.countManualAnomalyRecords()).thenReturn(2L);
+
+        mockMvc.perform(get("/api/admin/points/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.todayIssued").value(12340))
+                .andExpect(jsonPath("$.todayConsumed").value(4800))
+                .andExpect(jsonPath("$.anomalyRecords").value(2));
     }
 
     @Test

@@ -14,6 +14,12 @@ public class PointsRule {
     private String taskKey;
     private Integer points;
     private String type;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer dailyLimit;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime effectiveAt;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private LocalDateTime expiresAt;
     private Boolean enabled;
     private Boolean userVisible;
     private Integer sortOrder;

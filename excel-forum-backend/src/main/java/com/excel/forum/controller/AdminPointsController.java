@@ -53,12 +53,14 @@ public class AdminPointsController {
         String username = body == null || body.getUsername() == null ? "" : body.getUsername().trim();
         Integer points = parseInteger(body == null ? null : body.getPoints());
         String reason = body == null || body.getReason() == null ? "" : body.getReason().trim();
+        String businessNo = body == null || body.getBusinessNo() == null ? null : body.getBusinessNo().trim();
+        boolean notifyUser = body == null || body.getNotifyUser() == null || body.getNotifyUser();
 
         if (!StringUtils.hasText(username)) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户名不能为空"));
         }
-        if (points == null || points <= 0) {
-            return ResponseEntity.badRequest().body(Map.of("message", "发放积分必须大于0"));
+        if (points == null || points == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "积分变动不能为0"));
         }
         if (!StringUtils.hasText(reason)) {
             return ResponseEntity.badRequest().body(Map.of("message", "发放原因不能为空"));
@@ -69,23 +71,32 @@ public class AdminPointsController {
             return ResponseEntity.badRequest().body(Map.of("message", "用户不存在"));
         }
 
-        pointsRecordService.addPointsRecord(user.getId(), "管理员发放", points, reason);
+        if (businessNo != null && businessNo.isBlank()) {
+            businessNo = null;
+        }
+        pointsRecordService.addManualPointsRecord(user.getId(), points, reason, businessNo, notifyUser);
         User updatedUser = userService.getById(user.getId());
-        notificationService.createNotification(
-                user.getId(),
-                "system",
-                "管理员为你发放了 " + points + " 积分，原因：" + reason,
-                null
-        );
+        if (notifyUser) {
+            int absolutePoints = Math.abs(points);
+            String operationText = points > 0 ? "发放了你 " + absolutePoints : "扣减了你 " + absolutePoints;
+            notificationService.createNotification(
+                    user.getId(),
+                    "system",
+                    "管理员" + operationText + " 积分，原因：" + reason,
+                    null
+            );
+        }
 
-        return ResponseEntity.ok(Map.of(
-                "message", "积分发放成功",
-                "userId", user.getId(),
-                "username", user.getUsername(),
-                "points", points,
-                "balance", updatedUser == null ? safeInt(user.getPoints()) : safeInt(updatedUser.getPoints()),
-                "reason", reason
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", points > 0 ? "积分发放成功" : "积分扣减成功");
+        response.put("userId", user.getId());
+        response.put("username", user.getUsername());
+        response.put("points", points);
+        response.put("balance", updatedUser == null ? safeInt(user.getPoints()) : safeInt(updatedUser.getPoints()));
+        response.put("reason", reason);
+        response.put("businessNo", businessNo);
+        response.put("notifyUser", notifyUser);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/rules")
@@ -195,9 +206,20 @@ public class AdminPointsController {
         stats.put("totalPoints", extractStatValue(pointsRecordService.getMap(totalWrapper), "total_points"));
 
         QueryWrapper<PointsRecord> todayWrapper = new QueryWrapper<>();
+        LocalDateTime todayStart = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
         todayWrapper.select("COALESCE(SUM(`change`), 0) AS total_points")
-                .ge("create_time", LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0));
-        stats.put("todayPoints", extractStatValue(pointsRecordService.getMap(todayWrapper), "total_points"));
+                .ge("create_time", todayStart)
+                .gt("`change`", 0);
+        int todayIssued = extractStatValue(pointsRecordService.getMap(todayWrapper), "total_points");
+        stats.put("todayPoints", todayIssued);
+        stats.put("todayIssued", todayIssued);
+
+        QueryWrapper<PointsRecord> consumedWrapper = new QueryWrapper<>();
+        consumedWrapper.select("COALESCE(SUM(`change`), 0) AS total_points")
+                .ge("create_time", todayStart)
+                .lt("`change`", 0);
+        stats.put("todayConsumed", Math.abs(extractStatValue(pointsRecordService.getMap(consumedWrapper), "total_points")));
+        stats.put("anomalyRecords", pointsRecordService.countManualAnomalyRecords());
 
         return ResponseEntity.ok(stats);
     }
@@ -219,6 +241,12 @@ public class AdminPointsController {
         }
         if (rule.getPoints() == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "积分值不能为空"));
+        }
+        if (rule.getDailyLimit() != null && rule.getDailyLimit() < 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "每日上限不能小于 0"));
+        }
+        if (rule.getEffectiveAt() != null && rule.getExpiresAt() != null && !rule.getExpiresAt().isAfter(rule.getEffectiveAt())) {
+            return ResponseEntity.badRequest().body(Map.of("message", "失效时间必须晚于生效时间"));
         }
         String effectiveType = StringUtils.hasText(rule.getType()) ? rule.getType().trim() : "daily";
         if (pointsRuleOptionService.getByKindAndValue(POINTS_OPTION_KIND_TYPE, effectiveType) == null) {
@@ -287,6 +315,9 @@ public class AdminPointsController {
         }
         if (rule.getSortOrder() == null) {
             rule.setSortOrder(0);
+        }
+        if (rule.getDailyLimit() != null) {
+            rule.setDailyLimit(Math.max(rule.getDailyLimit(), 0));
         }
     }
 

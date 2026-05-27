@@ -1,7 +1,19 @@
 import type { AdminOptionChoiceInput, PointsOptionForm, PointsOptionKind, PointsOptionRecord, PointsRuleForm } from "./AdminConsoleTypes";
 
 export function defaultPointsRuleForm(defaultType = "daily"): PointsRuleForm {
-  return { name: "", description: "", taskKey: "", points: 0, type: defaultType, enabled: true, userVisible: true, sortOrder: 0 };
+  return {
+    name: "",
+    description: "",
+    taskKey: "",
+    points: 0,
+    type: defaultType,
+    dailyLimit: 1,
+    effectiveAt: "",
+    expiresAt: "",
+    enabled: true,
+    userVisible: true,
+    sortOrder: 0,
+  };
 }
 
 export function defaultPointsOptionForm(kind: PointsOptionKind): PointsOptionForm {
