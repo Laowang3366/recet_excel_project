@@ -18,8 +18,7 @@ describe("question bank view model", () => {
     expect(QUESTION_EDITOR_STEPS.map((item) => item.label)).toEqual([
       "基本信息",
       "上传模板",
-      "答题区域",
-      "判题规则",
+      "答题与判题",
       "预览发布",
     ]);
   });

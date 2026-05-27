@@ -7,7 +7,7 @@ export type QuestionBankTab = {
   label: string;
 };
 
-export type QuestionEditorStepKey = "basic" | "template" | "answer" | "grading" | "preview";
+export type QuestionEditorStepKey = "basic" | "template" | "answer" | "preview";
 
 export type QuestionEditorStep = {
   key: QuestionEditorStepKey;
@@ -49,9 +49,8 @@ export const QUESTION_BANK_TABS: QuestionBankTab[] = [
 
 export const QUESTION_EDITOR_STEPS: QuestionEditorStep[] = [
   { key: "basic", label: "基本信息", description: "标题、分类、奖励分值", icon: FileSpreadsheet },
-  { key: "template", label: "上传模板", description: "题干模板、参考工作表", icon: ClipboardCheck },
-  { key: "answer", label: "答题区域", description: "作答单元格、输入限制", icon: Blocks },
-  { key: "grading", label: "判题规则", description: "公式校验、快照比对、一键测试", icon: ShieldCheck },
+  { key: "template", label: "上传模板", description: "模板文件、编辑器操作", icon: ClipboardCheck },
+  { key: "answer", label: "答题与判题", description: "答题区域、判题规则、一键测试", icon: ShieldCheck },
   { key: "preview", label: "预览发布", description: "前台预览、发布确认", icon: Flag },
 ];
 
