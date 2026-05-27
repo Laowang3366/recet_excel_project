@@ -3,6 +3,7 @@ import {
   buildAssistantDashboardMetrics,
   buildAssistantConfigTestSignature,
   buildFailureReasonRows,
+  buildFailureReasonDetailSummary,
   buildRawLogDisplayRows,
   buildTestPanelFromResult,
   buildUserDetailMetrics,
@@ -93,7 +94,7 @@ describe("admin assistant view model", () => {
       model: "gpt-5.4-mini",
       backupModel: "gpt-5.5",
       maxRetries: 3,
-      timeoutSeconds: 30,
+      timeoutMinutes: 1,
       systemPrompt: "prompt",
       promptMode: "text",
     });
@@ -104,7 +105,7 @@ describe("admin assistant view model", () => {
       model: "gpt-5.4-mini",
       backupModel: "gpt-5.5",
       maxRetries: 3,
-      timeoutSeconds: 30,
+      timeoutMinutes: 1,
       systemPrompt: "prompt",
       promptMode: "text",
     })).toBe(baseline);
@@ -113,9 +114,22 @@ describe("admin assistant view model", () => {
       apiKey: "sk-test",
       model: "gpt-5.5",
       maxRetries: 3,
-      timeoutSeconds: 30,
+      timeoutMinutes: 1,
       systemPrompt: "prompt",
       promptMode: "text",
     })).not.toBe(baseline);
+  });
+
+  it("summarizes failure detail rows for the detail dialog", () => {
+    const rows = buildFailureReasonRows([
+      { reason: "timeout", count: 2 },
+      { reason: "rate_limit", count: 1 },
+    ]);
+
+    expect(buildFailureReasonDetailSummary(rows)).toEqual({
+      totalFailures: 3,
+      primaryReason: "超时",
+      primaryCount: 2,
+    });
   });
 });

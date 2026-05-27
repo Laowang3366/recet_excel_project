@@ -37,7 +37,7 @@ export type AssistantConfigTestSignatureInput = {
   backupModel?: string | null;
   maxRetries?: number | string | null;
   reasoningEffort?: string | null;
-  timeoutSeconds?: number | string | null;
+  timeoutMinutes?: number | string | null;
   systemPrompt?: string | null;
   promptFileName?: string | null;
   promptMode?: string | null;
@@ -116,6 +116,22 @@ export function buildFailureReasonRows(reasons: AssistantFailureReasonInput[], t
   ];
 }
 
+export function buildFailureReasonDetailSummary(rows: Array<{ label: string; count: number }>) {
+  const totalFailures = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const primary = rows.reduce<{ label: string; count: number } | null>((current, row) => {
+    const count = Number(row.count || 0);
+    if (!current || count > current.count) {
+      return { label: row.label, count };
+    }
+    return current;
+  }, null);
+  return {
+    totalFailures,
+    primaryReason: primary?.label || "-",
+    primaryCount: primary?.count || 0,
+  };
+}
+
 export function buildTestPanelFromResult(result: AssistantTestCallResultInput) {
   const answer = String(result.answer || "").trim() || "测试调用成功，但模型未返回可展示内容。";
   const modelLine = result.model ? `\n\n模型：${result.model}` : "";
@@ -149,7 +165,7 @@ export function buildAssistantConfigTestSignature(input: AssistantConfigTestSign
     backupModel: normalizeSignatureText(input.backupModel),
     maxRetries: Number(input.maxRetries || 0),
     reasoningEffort: normalizeSignatureText(input.reasoningEffort).toLowerCase(),
-    timeoutSeconds: Number(input.timeoutSeconds || 0),
+    timeoutMinutes: Number(input.timeoutMinutes || 0),
     systemPrompt: normalizeSignatureText(input.systemPrompt),
     promptFileName: normalizeSignatureText(input.promptFileName),
     promptMode: normalizeSignatureText(input.promptMode),
