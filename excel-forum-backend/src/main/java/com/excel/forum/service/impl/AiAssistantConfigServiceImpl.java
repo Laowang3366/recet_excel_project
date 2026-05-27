@@ -36,10 +36,11 @@ import static com.excel.forum.util.QueryPageUtils.first;
 public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigMapper, AiAssistantConfig> implements AiAssistantConfigService {
     private static final Set<String> REASONING_EFFORT_VALUES = Set.of("low", "medium", "high");
     private static final int DEFAULT_TIMEOUT_MS = 60000;
-    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MIN_TIMEOUT_MS = 1000;
     private static final int MAX_TIMEOUT_MS = 3600000;
     private static final int MIN_TIMEOUT_MINUTES = 1;
     private static final int MAX_TIMEOUT_MINUTES = 60;
+    private static final int MAX_MAX_RETRIES = 10;
 
     private final ObjectMapper objectMapper;
     private final Environment environment;
@@ -196,10 +197,13 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
         map.put("apiKeyMasked", maskKey(config.getApiKey()));
         map.put("hasApiKey", !isBlank(config.getApiKey()));
         map.put("model", defaultString(config.getModel()));
+        map.put("backupModel", defaultString(config.getBackupModel()));
+        map.put("maxRetries", normalizeMaxRetries(config.getMaxRetries()));
         map.put("reasoningEffort", defaultString(config.getReasoningEffort()));
         int timeoutMs = normalizeTimeoutMs(config.getTimeoutMs());
         map.put("timeoutMs", timeoutMs);
         map.put("timeoutMinutes", timeoutMsToMinutes(timeoutMs));
+        map.put("timeoutSeconds", timeoutMsToSeconds(timeoutMs));
         map.put("systemPrompt", defaultString(config.getSystemPrompt()));
         map.put("promptFileName", defaultString(config.getPromptFileName()));
         map.put("enabled", !Boolean.FALSE.equals(config.getEnabled()));
@@ -253,6 +257,17 @@ public class AiAssistantConfigServiceImpl extends ServiceImpl<AiAssistantConfigM
 
     private Integer timeoutMsToMinutes(Integer value) {
         return Math.min(MAX_TIMEOUT_MINUTES, Math.max(MIN_TIMEOUT_MINUTES, (int) Math.ceil(normalizeTimeoutMs(value) / 60000.0)));
+    }
+
+    private Integer timeoutMsToSeconds(Integer value) {
+        return Math.min(MAX_TIMEOUT_MS / 1000, Math.max(1, (int) Math.ceil(normalizeTimeoutMs(value) / 1000.0)));
+    }
+
+    private Integer normalizeMaxRetries(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        return Math.min(MAX_MAX_RETRIES, Math.max(0, value));
     }
 
     private String firstText(String primary, String fallback) {

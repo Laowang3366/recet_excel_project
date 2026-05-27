@@ -82,9 +82,11 @@ public class AssistantServiceImpl implements AssistantService {
                     maxOutputTokens(),
                     0.3
             ));
-            recordAssistantCall(userId, result.configId(), result.model(), true, result.fallbackUsed(), System.currentTimeMillis() - startedAt, null);
+            recordAssistantCall(userId, result.configId(), result.model(), true, result.fallbackUsed(),
+                    System.currentTimeMillis() - startedAt, null, message, prompt, result.answer());
         } catch (RuntimeException e) {
-            recordAssistantCall(userId, null, "", false, false, System.currentTimeMillis() - startedAt, e.getMessage());
+            recordAssistantCall(userId, null, "", false, false,
+                    System.currentTimeMillis() - startedAt, e.getMessage(), message, prompt, null);
             throw e;
         }
 
@@ -272,9 +274,23 @@ public class AssistantServiceImpl implements AssistantService {
     private boolean isBlank(String value) { return value == null || value.trim().isEmpty(); }
     private String defaultString(Object value) { return value == null ? "" : String.valueOf(value); }
     private String defaultIfBlank(String value, String fallback) { return isBlank(value) ? fallback : value.trim(); }
-    private void recordAssistantCall(Long userId, Long configId, String model, boolean success, boolean fallbackUsed, long latencyMs, String errorMessage) {
+    private void recordAssistantCall(Long userId, Long configId, String model, boolean success, boolean fallbackUsed,
+                                     long latencyMs, String errorMessage, String questionSummary,
+                                     String requestPreview, String responsePreview) {
         try {
-            aiAssistantCallLogService.record(userId, configId, model, "assistant_chat", success, fallbackUsed, latencyMs, errorMessage);
+            aiAssistantCallLogService.record(
+                    userId,
+                    configId,
+                    model,
+                    "assistant_chat",
+                    success,
+                    fallbackUsed,
+                    latencyMs,
+                    errorMessage,
+                    questionSummary,
+                    requestPreview,
+                    responsePreview
+            );
         } catch (Exception e) {
             log.warn("assistant call stat record failed: {}", e.toString());
         }

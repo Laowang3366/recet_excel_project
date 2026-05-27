@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,7 +88,7 @@ class AssistantServiceImplTest {
     }
 
     @Test
-    void chatRecordsAssistantChatToolType() {
+    void chatRecordsAssistantChatSummaryAndRawPreviews() {
         TutorialArticleService tutorialArticleService = mock(TutorialArticleService.class);
         QuestionService questionService = mock(QuestionService.class);
         AiAssistantCallLogService callLogService = mock(AiAssistantCallLogService.class);
@@ -113,7 +114,19 @@ class AssistantServiceImplTest {
 
         chatService.chat(7L, request);
 
-        verify(callLogService).record(eq(7L), eq(9L), eq("gpt-test"), eq("assistant_chat"), eq(true), eq(false), anyLong(), eq(null));
+        verify(callLogService).record(
+                eq(7L),
+                eq(9L),
+                eq("gpt-test"),
+                eq("assistant_chat"),
+                eq(true),
+                eq(false),
+                anyLong(),
+                eq(null),
+                eq("怎么求和"),
+                contains("用户问题：\n怎么求和"),
+                eq("回答")
+        );
     }
 
     @SuppressWarnings("unchecked")

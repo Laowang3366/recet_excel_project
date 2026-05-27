@@ -4,8 +4,10 @@ import com.excel.forum.entity.AiAssistantConfig;
 import com.excel.forum.entity.dto.AdminAiAssistantConfigRequest;
 import com.excel.forum.entity.dto.AdminAiAssistantDefaultPromptRequest;
 import com.excel.forum.entity.dto.AdminAiAssistantModelRequest;
+import com.excel.forum.entity.dto.AdminAiAssistantTestRequest;
 import com.excel.forum.service.AiAssistantCallLogService;
 import com.excel.forum.service.AiAssistantConfigService;
+import com.excel.forum.service.AiCompletionService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -31,13 +33,16 @@ import java.util.Set;
 public class AdminAssistantController {
     private static final Set<String> REASONING_EFFORT_VALUES = Set.of("low", "medium", "high");
     private static final int DEFAULT_TIMEOUT_MS = 60000;
-    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MIN_TIMEOUT_MS = 1000;
     private static final int MAX_TIMEOUT_MS = 3600000;
     private static final int MIN_TIMEOUT_MINUTES = 1;
     private static final int MAX_TIMEOUT_MINUTES = 60;
+    private static final int MIN_MAX_RETRIES = 0;
+    private static final int MAX_MAX_RETRIES = 10;
 
     private final AiAssistantConfigService aiAssistantConfigService;
     private final AiAssistantCallLogService aiAssistantCallLogService;
+    private final AiCompletionService aiCompletionService;
 
     @GetMapping("/configs")
     public ResponseEntity<?> getConfigs() {
@@ -123,6 +128,31 @@ public class AdminAssistantController {
         )));
     }
 
+    @PostMapping("/test-call")
+    public ResponseEntity<?> testCall(@RequestBody AdminAiAssistantTestRequest request) {
+        String validationMessage = validateTestRequest(request);
+        if (validationMessage != null) {
+            return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+        }
+        AiAssistantConfig config = buildTestConfig(request);
+        long startedAt = System.currentTimeMillis();
+        AiCompletionService.Result result = aiCompletionService.completeWithConfig(config, new AiCompletionService.Request(
+                null,
+                request.getTestQuestion().trim(),
+                java.util.List.of(),
+                1200,
+                0.2
+        ));
+        long latencyMs = Math.max(0L, System.currentTimeMillis() - startedAt);
+        return ResponseEntity.ok(Map.of(
+                "answer", result.answer(),
+                "model", result.model(),
+                "fallbackUsed", result.fallbackUsed(),
+                "configId", result.configId() == null ? "" : result.configId(),
+                "latencyMs", latencyMs
+        ));
+    }
+
     @GetMapping("/stats")
     public ResponseEntity<?> getStats(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -131,6 +161,26 @@ public class AdminAssistantController {
             @RequestParam(defaultValue = "1") Long page,
             @RequestParam(defaultValue = "10") Long size) {
         return ResponseEntity.ok(aiAssistantCallLogService.getUserStats(startDate, endDate, keyword, page, size));
+    }
+
+    @GetMapping("/stats/users/{userId}")
+    public ResponseEntity<?> getUserDetail(
+            @PathVariable Long userId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "1") Long page,
+            @RequestParam(defaultValue = "10") Long size) {
+        return ResponseEntity.ok(aiAssistantCallLogService.getUserDetail(userId, startDate, endDate, page, size));
+    }
+
+    @GetMapping("/stats/users/{userId}/raw-logs")
+    public ResponseEntity<?> getUserRawLogs(
+            @PathVariable Long userId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "1") Long page,
+            @RequestParam(defaultValue = "10") Long size) {
+        return ResponseEntity.ok(aiAssistantCallLogService.getUserRawLogs(userId, startDate, endDate, page, size));
     }
 
     private String validateRequest(AdminAiAssistantConfigRequest request, boolean creating) {
@@ -152,6 +202,10 @@ public class AdminAssistantController {
         if (!isBlank(request.getReasoningEffort()) && !REASONING_EFFORT_VALUES.contains(request.getReasoningEffort().trim().toLowerCase())) {
             return "推理等级不支持";
         }
+        if (request.getMaxRetries() != null
+                && (request.getMaxRetries() < MIN_MAX_RETRIES || request.getMaxRetries() > MAX_MAX_RETRIES)) {
+            return "最大重试次数需在 0 到 10 之间";
+        }
         if (request.getTimeoutMinutes() != null
                 && (request.getTimeoutMinutes() < MIN_TIMEOUT_MINUTES || request.getTimeoutMinutes() > MAX_TIMEOUT_MINUTES)) {
             return "模型超时时间需在 1 分钟到 60 分钟之间";
@@ -159,12 +213,71 @@ public class AdminAssistantController {
         if (request.getTimeoutMinutes() == null
                 && request.getTimeoutMs() != null
                 && (request.getTimeoutMs() < MIN_TIMEOUT_MS || request.getTimeoutMs() > MAX_TIMEOUT_MS)) {
-            return "模型超时时间需在 1 分钟到 60 分钟之间";
+            return "模型超时时间需在 1 秒到 3600 秒之间";
         }
         if (Boolean.TRUE.equals(request.getActive()) && Boolean.FALSE.equals(request.getEnabled())) {
             return "生效配置必须保持启用";
         }
         return null;
+    }
+
+    private String validateTestRequest(AdminAiAssistantTestRequest request) {
+        if (request == null) {
+            return "请求参数不能为空";
+        }
+        if (isBlank(request.getTestQuestion())) {
+            return "测试问题不能为空";
+        }
+        if (isBlank(request.getBaseUrl()) && request.getConfigId() == null) {
+            return "URL 不能为空";
+        }
+        if (isBlank(request.getModel()) && request.getConfigId() == null) {
+            return "模型不能为空";
+        }
+        if (isBlank(request.getApiKey()) && request.getConfigId() == null) {
+            return "SK 密钥不能为空";
+        }
+        if (!isBlank(request.getReasoningEffort()) && !REASONING_EFFORT_VALUES.contains(request.getReasoningEffort().trim().toLowerCase())) {
+            return "推理等级不支持";
+        }
+        if (request.getMaxRetries() != null
+                && (request.getMaxRetries() < MIN_MAX_RETRIES || request.getMaxRetries() > MAX_MAX_RETRIES)) {
+            return "最大重试次数需在 0 到 10 之间";
+        }
+        if (request.getTimeoutMinutes() != null
+                && (request.getTimeoutMinutes() < MIN_TIMEOUT_MINUTES || request.getTimeoutMinutes() > MAX_TIMEOUT_MINUTES)) {
+            return "模型超时时间需在 1 分钟到 60 分钟之间";
+        }
+        if (request.getTimeoutMinutes() == null
+                && request.getTimeoutMs() != null
+                && (request.getTimeoutMs() < MIN_TIMEOUT_MS || request.getTimeoutMs() > MAX_TIMEOUT_MS)) {
+            return "模型超时时间需在 1 秒到 3600 秒之间";
+        }
+        return null;
+    }
+
+    private AiAssistantConfig buildTestConfig(AdminAiAssistantTestRequest request) {
+        AiAssistantConfig stored = request.getConfigId() == null ? null : aiAssistantConfigService.getById(request.getConfigId());
+        if (request.getConfigId() != null && stored == null) {
+            throw new IllegalArgumentException("AI 助手配置不存在");
+        }
+        AiAssistantConfig config = new AiAssistantConfig();
+        if (stored != null) {
+            config.setId(stored.getId());
+        }
+        config.setBaseUrl(firstText(request.getBaseUrl(), stored == null ? null : stored.getBaseUrl()));
+        config.setApiKey(firstApiKey(request.getApiKey(), stored == null ? null : stored.getApiKey()));
+        config.setModel(firstText(request.getModel(), stored == null ? null : stored.getModel()));
+        config.setBackupModel(firstText(request.getBackupModel(), stored == null ? null : stored.getBackupModel()));
+        config.setMaxRetries(request.getMaxRetries() == null
+                ? normalizeMaxRetries(stored == null ? null : stored.getMaxRetries())
+                : normalizeMaxRetries(request.getMaxRetries()));
+        config.setReasoningEffort(firstText(request.getReasoningEffort(), stored == null ? null : stored.getReasoningEffort()));
+        config.setTimeoutMs(request.getTimeoutMinutes() != null || request.getTimeoutMs() != null
+                ? resolveTimeoutMs(request)
+                : normalizeTimeoutMs(stored == null ? null : stored.getTimeoutMs()));
+        config.setSystemPrompt(firstText(request.getSystemPrompt(), stored == null ? null : stored.getSystemPrompt()));
+        return config;
     }
 
     private void applyRequest(AiAssistantConfig config, AdminAiAssistantConfigRequest request, boolean creating) {
@@ -174,6 +287,8 @@ public class AdminAssistantController {
             config.setApiKey(request.getApiKey().trim());
         }
         config.setModel(normalizeText(request.getModel()));
+        config.setBackupModel(normalizeText(request.getBackupModel()));
+        config.setMaxRetries(normalizeMaxRetries(request.getMaxRetries()));
         config.setReasoningEffort(normalizeReasoningEffort(request.getReasoningEffort()));
         config.setTimeoutMs(resolveTimeoutMs(request));
         config.setSystemPrompt(normalizeText(request.getSystemPrompt()));
@@ -216,6 +331,26 @@ public class AdminAssistantController {
             return DEFAULT_TIMEOUT_MS;
         }
         return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, value));
+    }
+
+    private Integer normalizeMaxRetries(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        return Math.min(MAX_MAX_RETRIES, Math.max(MIN_MAX_RETRIES, value));
+    }
+
+    private String firstText(String primary, String fallback) {
+        String normalizedPrimary = normalizeText(primary);
+        return normalizedPrimary == null ? normalizeText(fallback) : normalizedPrimary;
+    }
+
+    private String firstApiKey(String submitted, String stored) {
+        String normalizedSubmitted = normalizeText(submitted);
+        if (normalizedSubmitted == null || normalizedSubmitted.contains("****") || normalizedSubmitted.matches("^[*•●]+$")) {
+            return normalizeText(stored);
+        }
+        return normalizedSubmitted;
     }
 
     private String normalizeText(String value) {

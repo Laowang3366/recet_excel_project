@@ -18,6 +18,9 @@ public class AiAssistantCallLog {
     private Long configId;
     private String model;
     private String toolType;
+    private String questionSummary;
+    private String requestPreview;
+    private String responsePreview;
     private Boolean success;
     private Boolean fallbackUsed;
     private Long latencyMs;

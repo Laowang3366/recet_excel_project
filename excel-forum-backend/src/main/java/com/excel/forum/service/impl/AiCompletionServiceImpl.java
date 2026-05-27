@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class AiCompletionServiceImpl implements AiCompletionService {
     private static final int DEFAULT_TIMEOUT_MS = 60000;
-    private static final int MIN_TIMEOUT_MS = 60000;
+    private static final int MIN_TIMEOUT_MS = 1000;
     private static final int MAX_TIMEOUT_MS = 3600000;
     private static final int MIN_TIMEOUT_MINUTES = 1;
     private static final int MAX_TIMEOUT_MINUTES = 60;
@@ -48,31 +48,41 @@ public class AiCompletionServiceImpl implements AiCompletionService {
 
     @Override
     public Result complete(Request request) {
+        return completeWithRuntimeConfig(resolveRuntimeConfig(), request);
+    }
+
+    @Override
+    public Result completeWithConfig(AiAssistantConfig config, Request request) {
+        return completeWithRuntimeConfig(resolveRuntimeConfig(config), request);
+    }
+
+    private Result completeWithRuntimeConfig(RuntimeConfig runtimeConfig, Request request) {
         if (request == null || isBlank(request.userPrompt())) {
             throw new IllegalArgumentException("请输入需要发送给 AI 的内容");
         }
-        RuntimeConfig runtimeConfig = resolveRuntimeConfig();
         String systemPrompt = isBlank(request.systemPromptOverride())
                 ? runtimeConfig.systemPrompt()
                 : request.systemPromptOverride();
         List<ImageInput> images = request.images() == null ? List.of() : request.images();
         long startedAt = System.currentTimeMillis();
-        try {
-            String answer = callOpenAiCompatible(
-                    runtimeConfig.baseUrl(),
-                    runtimeConfig.apiKey(),
-                    runtimeConfig.model(),
-                    runtimeConfig.reasoningEffort(),
-                    runtimeConfig.timeoutMs(),
-                    systemPrompt,
-                    request.userPrompt(),
-                    images,
-                    request.maxOutputTokens(),
-                    request.temperature()
-            );
-            return new Result(answer, runtimeConfig.model(), false, runtimeConfig.configId());
-        } catch (Exception primaryError) {
-            log.warn("AI completion primary model failed after {}ms: {}", System.currentTimeMillis() - startedAt, primaryError.toString());
+        for (int attempt = 0; attempt <= runtimeConfig.maxRetries(); attempt++) {
+            try {
+                String answer = callOpenAiCompatible(
+                        runtimeConfig.baseUrl(),
+                        runtimeConfig.apiKey(),
+                        runtimeConfig.model(),
+                        runtimeConfig.reasoningEffort(),
+                        runtimeConfig.timeoutMs(),
+                        systemPrompt,
+                        request.userPrompt(),
+                        images,
+                        request.maxOutputTokens(),
+                        request.temperature()
+                );
+                return new Result(answer, runtimeConfig.model(), false, runtimeConfig.configId());
+            } catch (Exception primaryError) {
+                log.warn("AI completion primary model attempt {} failed after {}ms: {}", attempt + 1, System.currentTimeMillis() - startedAt, primaryError.toString());
+            }
         }
         if (runtimeConfig.hasFallback()) {
             try {
@@ -96,12 +106,41 @@ public class AiCompletionServiceImpl implements AiCompletionService {
         throw new IllegalStateException("AI 助手暂时不可用，请稍后再试");
     }
 
+    private RuntimeConfig resolveRuntimeConfig(AiAssistantConfig config) {
+        if (config == null) {
+            throw new IllegalArgumentException("AI 助手配置不能为空");
+        }
+        String baseUrl = trimToNull(config.getBaseUrl());
+        String apiKey = trimToNull(config.getApiKey());
+        String model = trimToNull(config.getModel());
+        String backupModel = trimToNull(config.getBackupModel());
+        String reasoningEffort = normalizeReasoningEffort(config.getReasoningEffort());
+        int timeoutMs = normalizeTimeoutMs(config.getTimeoutMs());
+        if (baseUrl == null || apiKey == null || model == null) {
+            throw new IllegalArgumentException("请填写 URL、API Key 和模型后再测试");
+        }
+        return new RuntimeConfig(
+                config.getId(),
+                normalizeBaseUrl(baseUrl),
+                apiKey,
+                model,
+                reasoningEffort,
+                backupModel == null ? null : normalizeBaseUrl(baseUrl),
+                backupModel == null ? null : apiKey,
+                backupModel,
+                normalizeMaxRetries(config.getMaxRetries()),
+                timeoutMs,
+                promptProvider.resolveSystemPrompt(config.getSystemPrompt())
+        );
+    }
+
     private RuntimeConfig resolveRuntimeConfig() {
         AiAssistantConfig activeConfig = aiAssistantConfigService.getActiveConfig();
         if (activeConfig != null) {
             String baseUrl = trimToNull(activeConfig.getBaseUrl());
             String apiKey = trimToNull(activeConfig.getApiKey());
             String model = trimToNull(activeConfig.getModel());
+            String backupModel = trimToNull(activeConfig.getBackupModel());
             String reasoningEffort = normalizeReasoningEffort(activeConfig.getReasoningEffort());
             int timeoutMs = normalizeTimeoutMs(activeConfig.getTimeoutMs());
             if (baseUrl == null || apiKey == null || model == null) {
@@ -113,9 +152,10 @@ public class AiCompletionServiceImpl implements AiCompletionService {
                     apiKey,
                     model,
                     reasoningEffort,
-                    null,
-                    null,
-                    null,
+                    backupModel == null ? null : normalizeBaseUrl(baseUrl),
+                    backupModel == null ? null : apiKey,
+                    backupModel,
+                    normalizeMaxRetries(activeConfig.getMaxRetries()),
                     timeoutMs,
                     promptProvider.resolveSystemPrompt(activeConfig.getSystemPrompt())
             );
@@ -131,6 +171,7 @@ public class AiCompletionServiceImpl implements AiCompletionService {
         String fallbackBaseUrl = trimToNull(environment.getProperty("AI_ASSISTANT_FALLBACK_BASE_URL", primaryBaseUrl));
         String fallbackApiKey = trimToNull(environment.getProperty("AI_ASSISTANT_FALLBACK_API_KEY", primaryApiKey));
         String fallbackModel = trimToNull(environment.getProperty("AI_ASSISTANT_FALLBACK_MODEL"));
+        int maxRetries = normalizeMaxRetries(environment.getProperty("AI_ASSISTANT_MAX_RETRIES", Integer.class, 0));
         int timeoutMs = environmentTimeoutMs();
         if (primaryBaseUrl == null || primaryApiKey == null || primaryModel == null) {
             throw new IllegalStateException("AI 助手配置不完整");
@@ -144,6 +185,7 @@ public class AiCompletionServiceImpl implements AiCompletionService {
                 fallbackBaseUrl == null ? null : normalizeBaseUrl(fallbackBaseUrl),
                 fallbackApiKey,
                 fallbackModel,
+                maxRetries,
                 timeoutMs,
                 promptProvider.getDefaultPrompt().content()
         );
@@ -250,6 +292,13 @@ public class AiCompletionServiceImpl implements AiCompletionService {
         return minutes * 60 * 1000;
     }
 
+    private int normalizeMaxRetries(Integer value) {
+        if (value == null) {
+            return 0;
+        }
+        return Math.min(10, Math.max(0, value));
+    }
+
     private String normalizeReasoningEffort(String value) {
         String normalized = trimToNull(value);
         if (normalized == null) {
@@ -280,7 +329,7 @@ public class AiCompletionServiceImpl implements AiCompletionService {
 
     private record RuntimeConfig(Long configId, String baseUrl, String apiKey, String model, String reasoningEffort,
                                  String fallbackBaseUrl, String fallbackApiKey, String fallbackModel,
-                                 int timeoutMs, String systemPrompt) {
+                                 int maxRetries, int timeoutMs, String systemPrompt) {
         boolean hasFallback() {
             return fallbackBaseUrl != null && fallbackApiKey != null && fallbackModel != null;
         }

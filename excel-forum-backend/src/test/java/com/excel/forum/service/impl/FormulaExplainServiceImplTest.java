@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
@@ -63,7 +64,19 @@ class FormulaExplainServiceImplTest {
                 && "success".equals(record.getStatus())
                 && !record.getCacheHit()
                 && record.getPointsCost() == 1));
-        verify(callLogService).record(eq(7L), eq(3L), eq("gpt-test"), eq("formula_explain"), eq(true), eq(false), anyLong(), eq(null));
+        verify(callLogService).record(
+                eq(7L),
+                eq(3L),
+                eq("gpt-test"),
+                eq("formula_explain"),
+                eq(true),
+                eq(false),
+                anyLong(),
+                eq(null),
+                eq("=XLOOKUP(A2,客户表[手机号],客户表[姓名])"),
+                contains("原始公式："),
+                contains("这条公式按手机号查找姓名")
+        );
         verify(billingService).charge(7L, 1, "formula_explain", "公式解释扣除 1 积分");
     }
 
@@ -103,7 +116,19 @@ class FormulaExplainServiceImplTest {
                 () -> service.explain(7L, request));
 
         assertEquals("公式解释结果解析失败，请稍后重试", error.getMessage());
-        verify(callLogService).record(eq(7L), eq(3L), eq("gpt-test"), eq("formula_explain"), eq(false), eq(false), anyLong(), eq("公式解释结果解析失败，请稍后重试"));
+        verify(callLogService).record(
+                eq(7L),
+                eq(3L),
+                eq("gpt-test"),
+                eq("formula_explain"),
+                eq(false),
+                eq(false),
+                anyLong(),
+                eq("公式解释结果解析失败，请稍后重试"),
+                eq("=SUM(A1:A10)"),
+                contains("原始公式："),
+                eq("not-json")
+        );
     }
 
     @Test
