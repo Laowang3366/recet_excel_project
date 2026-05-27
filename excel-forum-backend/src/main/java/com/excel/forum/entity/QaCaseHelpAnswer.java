@@ -22,6 +22,10 @@ public class QaCaseHelpAnswer {
     private Integer downVoteCount;
     private Integer rewardPoints;
     private LocalDateTime acceptedAt;
+    private Long reviewerId;
+    private String reviewNote;
+    private LocalDateTime reviewedAt;
+    private LocalDateTime publishedAt;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

@@ -15,9 +15,12 @@ public class QaSolutionShare {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
+    private String sourceType;
     private Long recordId;
     private Long answerId;
     private Long questionId;
+    private Long qaCaseId;
+    private Long qaAnswerId;
     private String title;
     private String thoughtText;
     private String thoughtSource;

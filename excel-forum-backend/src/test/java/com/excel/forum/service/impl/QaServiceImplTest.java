@@ -5,7 +5,13 @@ import com.excel.forum.entity.PracticeAnswer;
 import com.excel.forum.entity.PracticeRecord;
 import com.excel.forum.entity.QaCaseHelp;
 import com.excel.forum.entity.QaCaseHelpAnswer;
+import com.excel.forum.entity.QaCaseHelpFeedback;
+import com.excel.forum.entity.QaSolutionShare;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AdminQaAssignRequest;
+import com.excel.forum.entity.dto.AdminQaFeaturedShareRequest;
+import com.excel.forum.entity.dto.AdminQaFeedbackHandleRequest;
+import com.excel.forum.entity.dto.AdminQaReviewRequest;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
 import com.excel.forum.entity.dto.QaCaseAnswerRequest;
@@ -343,5 +349,137 @@ class QaServiceImplTest {
                 contains("销售榜单求助"),
                 org.mockito.ArgumentMatchers.eq(30L)
         );
+    }
+
+    @Test
+    void adminAssignCaseStoresAssignmentMetadata() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setUserId(7L);
+        qaCase.setTitle("销售榜单求助");
+        qaCase.setStatus("open");
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+
+        AdminQaAssignRequest request = new AdminQaAssignRequest();
+        request.setAssigneeUserId(88L);
+        request.setNote("交给讲师处理");
+
+        service.adminAssignCase(30L, 9L, request);
+
+        ArgumentCaptor<QaCaseHelp> captor = ArgumentCaptor.forClass(QaCaseHelp.class);
+        verify(caseHelpMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getAssignedUserId()).isEqualTo(88L);
+        assertThat(captor.getValue().getAssignedBy()).isEqualTo(9L);
+        assertThat(captor.getValue().getAssignmentNote()).isEqualTo("交给讲师处理");
+        assertThat(captor.getValue().getAssignedAt()).isNotNull();
+    }
+
+    @Test
+    void adminReviewCaseAnswerApprovesAndPersistsAuditMetadata() {
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setUserId(9L);
+        answer.setStatus("active");
+
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        AdminQaReviewRequest request = new AdminQaReviewRequest();
+        request.setAction("approve");
+        request.setNote("答案准确，可以发布");
+
+        service.adminReviewCaseAnswer(44L, 5L, request);
+
+        ArgumentCaptor<QaCaseHelpAnswer> captor = ArgumentCaptor.forClass(QaCaseHelpAnswer.class);
+        verify(caseHelpAnswerMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("approved");
+        assertThat(captor.getValue().getReviewerId()).isEqualTo(5L);
+        assertThat(captor.getValue().getReviewNote()).isEqualTo("答案准确，可以发布");
+        assertThat(captor.getValue().getReviewedAt()).isNotNull();
+        assertThat(captor.getValue().getPublishedAt()).isNotNull();
+    }
+
+    @Test
+    void adminReviewCaseAnswerRejectsAndKeepsUnpublished() {
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setUserId(9L);
+        answer.setStatus("active");
+
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        AdminQaReviewRequest request = new AdminQaReviewRequest();
+        request.setAction("reject");
+        request.setNote("答案无法复现");
+
+        service.adminReviewCaseAnswer(44L, 5L, request);
+
+        ArgumentCaptor<QaCaseHelpAnswer> captor = ArgumentCaptor.forClass(QaCaseHelpAnswer.class);
+        verify(caseHelpAnswerMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("rejected");
+        assertThat(captor.getValue().getPublishedAt()).isNull();
+    }
+
+    @Test
+    void adminHandleFeedbackStoresHandledMetadata() {
+        QaCaseHelpFeedback feedback = new QaCaseHelpFeedback();
+        feedback.setId(70L);
+        feedback.setCaseId(30L);
+        feedback.setUserId(9L);
+        feedback.setReason("unclear_requirement");
+        feedback.setStatus("active");
+
+        when(caseHelpFeedbackMapper.selectById(70L)).thenReturn(feedback);
+
+        AdminQaFeedbackHandleRequest request = new AdminQaFeedbackHandleRequest();
+        request.setStatus("handled");
+        request.setNote("已补充说明");
+
+        service.adminHandleFeedback(70L, 5L, request);
+
+        ArgumentCaptor<QaCaseHelpFeedback> captor = ArgumentCaptor.forClass(QaCaseHelpFeedback.class);
+        verify(caseHelpFeedbackMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("handled");
+        assertThat(captor.getValue().getHandledBy()).isEqualTo(5L);
+        assertThat(captor.getValue().getHandleNote()).isEqualTo("已补充说明");
+        assertThat(captor.getValue().getHandledAt()).isNotNull();
+    }
+
+    @Test
+    void adminCreateFeaturedShareFromQaAnswerCreatesPublishedQaSource() {
+        QaCaseHelp qaCase = new QaCaseHelp();
+        qaCase.setId(30L);
+        qaCase.setUserId(7L);
+        qaCase.setTitle("销售榜单求助");
+        qaCase.setDescription("请检查 COUNTIFS 公式。");
+        qaCase.setStatus("answered");
+
+        QaCaseHelpAnswer answer = new QaCaseHelpAnswer();
+        answer.setId(44L);
+        answer.setCaseId(30L);
+        answer.setUserId(9L);
+        answer.setStatus("approved");
+
+        when(caseHelpMapper.selectById(30L)).thenReturn(qaCase);
+        when(caseHelpAnswerMapper.selectById(44L)).thenReturn(answer);
+
+        AdminQaFeaturedShareRequest request = new AdminQaFeaturedShareRequest();
+        request.setCaseId(30L);
+        request.setAnswerId(44L);
+        request.setTitle("多条件统计公式错误");
+        request.setThoughtText("建议拆分条件检查。");
+
+        service.adminCreateFeaturedShare(5L, request);
+
+        ArgumentCaptor<QaSolutionShare> captor = ArgumentCaptor.forClass(QaSolutionShare.class);
+        verify(solutionShareMapper).insert(captor.capture());
+        assertThat(captor.getValue().getSourceType()).isEqualTo("qa_case");
+        assertThat(captor.getValue().getUserId()).isEqualTo(9L);
+        assertThat(captor.getValue().getQaCaseId()).isEqualTo(30L);
+        assertThat(captor.getValue().getQaAnswerId()).isEqualTo(44L);
+        assertThat(captor.getValue().getTitle()).isEqualTo("多条件统计公式错误");
+        assertThat(captor.getValue().getStatus()).isEqualTo("published");
     }
 }

@@ -24,6 +24,10 @@ public class QaCaseHelp {
     private String status;
     private Long acceptedAnswerId;
     private LocalDateTime acceptedAt;
+    private Long assignedUserId;
+    private Long assignedBy;
+    private LocalDateTime assignedAt;
+    private String assignmentNote;
     private Integer viewCount;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

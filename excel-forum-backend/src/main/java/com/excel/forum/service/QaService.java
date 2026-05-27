@@ -1,6 +1,12 @@
 package com.excel.forum.service;
 
 import com.excel.forum.entity.dto.PracticeQuestionWorkbookFile;
+import com.excel.forum.entity.dto.AdminQaAssignRequest;
+import com.excel.forum.entity.dto.AdminQaBatchAssignRequest;
+import com.excel.forum.entity.dto.AdminQaBatchReviewRequest;
+import com.excel.forum.entity.dto.AdminQaFeaturedShareRequest;
+import com.excel.forum.entity.dto.AdminQaFeedbackHandleRequest;
+import com.excel.forum.entity.dto.AdminQaReviewRequest;
 import com.excel.forum.entity.dto.ExcelWorkbookSnapshot;
 import com.excel.forum.entity.dto.QaAiDraftRequest;
 import com.excel.forum.entity.dto.QaCaseAcceptRequest;
@@ -73,9 +79,17 @@ public interface QaService {
 
     Map<String, Object> adminUpdateCase(Long caseId, QaCaseHelpRequest request);
 
+    Map<String, Object> adminAssignCase(Long caseId, Long adminUserId, AdminQaAssignRequest request);
+
+    Map<String, Object> adminBatchAssignCases(Long adminUserId, AdminQaBatchAssignRequest request);
+
     Map<String, Object> adminDeleteCase(Long caseId, Long deletedBy);
 
     Map<String, Object> adminListCaseAnswers(Long caseId, Integer page, Integer size);
+
+    Map<String, Object> adminReviewCaseAnswer(Long answerId, Long reviewerId, AdminQaReviewRequest request);
+
+    Map<String, Object> adminBatchReviewCaseAnswers(Long reviewerId, AdminQaBatchReviewRequest request);
 
     Map<String, Object> adminDeleteCaseAnswer(Long answerId, Long deletedBy);
 
@@ -86,4 +100,8 @@ public interface QaService {
     Map<String, Object> adminDeleteSolutionShare(Long shareId);
 
     Map<String, Object> adminListFeedback(Long caseId, Integer page, Integer size);
+
+    Map<String, Object> adminHandleFeedback(Long feedbackId, Long adminUserId, AdminQaFeedbackHandleRequest request);
+
+    Map<String, Object> adminCreateFeaturedShare(Long adminUserId, AdminQaFeaturedShareRequest request);
 }
