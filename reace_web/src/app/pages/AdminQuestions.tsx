@@ -1,15 +1,14 @@
-import { Suspense, lazy, useEffect, useRef, useState, type ClipboardEvent } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { AlertTriangle, CheckCircle2, Edit3, FileSpreadsheet, ImagePlus, LoaderCircle, MousePointer2, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { QUESTION_BANK_SERVICE_ENDPOINTS, QUESTION_BANK_TABS, QUESTION_EDITOR_STEPS, QUESTION_PUBLISH_CHECKS, buildQuestionBankStats, getQuestionRiskIcon, getQuestionStatusMeta, type QuestionBankTabKey } from "../admin/question-bank-view-model";
 import { api } from "../lib/api";
-import { buildWorkbookWithAnswerSnapshot, columnIndexToLabel, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef, toCellRef } from "../lib/excel";
-import { normalizeResourceUrl } from "../lib/mappers";
+import { buildWorkbookWithAnswerSnapshot, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef } from "../lib/excel";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { resolveInitialQuestionCategoryId } from "../admin/admin-question-url-state";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
@@ -158,7 +157,6 @@ export function AdminQuestions() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateLoadError, setTemplateLoadError] = useState("");
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
-  const [uploadingIdealAnswerImage, setUploadingIdealAnswerImage] = useState(false);
   const [isTemplateEditMode, setIsTemplateEditMode] = useState(true);
   const [isSelectingAnswerRange, setIsSelectingAnswerRange] = useState(false);
   const [formulaDetectionNotice, setFormulaDetectionNotice] = useState("");
@@ -795,45 +793,6 @@ export function AdminQuestions() {
     toast.success("当前模板已移除，可以重新上传");
   };
 
-  const uploadIdealAnswerImageFile = async (file: File) => {
-    const isSupportedImage = /^image\/(png|jpe?g|webp|gif)$/i.test(file.type) || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
-    if (!isSupportedImage) {
-      toast.error("参考图仅支持 png、jpg、jpeg、webp 或 gif");
-      return;
-    }
-    setUploadingIdealAnswerImage(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("scene", "question_reference_image");
-      const uploadResult = await api.post<{ url: string }>("/api/upload", formData);
-      if (!uploadResult?.url) {
-        throw new Error("参考图上传失败");
-      }
-      setForm((prev) => ({ ...prev, idealAnswerImageUrl: uploadResult.url }));
-      toast.success("理想答案参考图已上传");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "参考图上传失败");
-    } finally {
-      setUploadingIdealAnswerImage(false);
-    }
-  };
-
-  const handleIdealAnswerImageUpload = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    await uploadIdealAnswerImageFile(file);
-  };
-
-  const handleIdealAnswerImagePaste = (event: ClipboardEvent<HTMLDivElement>) => {
-    if (!isTemplateEditMode || uploadingIdealAnswerImage) return;
-    const imageItem = Array.from(event.clipboardData.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
-    const imageFile = imageItem?.getAsFile() || Array.from(event.clipboardData.files).find((file) => file.type.startsWith("image/"));
-    if (!imageFile) return;
-    event.preventDefault();
-    void uploadIdealAnswerImageFile(imageFile);
-  };
-
   const isDynamicArrayMode = form.gradingMode === "dynamic_array";
   const primaryDynamicRule = Array.isArray(form.dynamicArrayRules) && form.dynamicArrayRules.length > 0
     ? form.dynamicArrayRules[0]
@@ -861,16 +820,10 @@ export function AdminQuestions() {
       primarySheetName,
       previewRangeRef,
     );
-  const previewRange = previewRangeRef ? parseRangeRef(previewRangeRef) : null;
   const persistedRange = primaryRangeRef ? parseRangeRef(primaryRangeRef) : null;
   const persistedFocusRange = primarySheetName && persistedRange
     ? normalizeSelection(primarySheetName, persistedRange.startRow, persistedRange.startCol, persistedRange.endRow, persistedRange.endCol)
     : null;
-  const prevSelectionForSheet = (sheetName: string, rangeText: string) => {
-    const parsed = rangeText ? parseRangeRef(rangeText) : null;
-    if (!parsed || !sheetName) return null;
-    return normalizeSelection(sheetName, parsed.startRow, parsed.startCol, parsed.endRow, parsed.endCol);
-  };
   const answerPreviewText = answerPreview.values.flatMap((valueRow, rowIndex) =>
     valueRow.map((value, colIndex) => {
       const formula = answerPreview.formulas?.[rowIndex]?.[colIndex];
@@ -883,13 +836,6 @@ export function AdminQuestions() {
   );
   const missingFormulaCellRefs = !isDynamicArrayMode && Boolean(form.checkFormula)
     ? findMissingFormulaCellRefs(answerPreview, previewRangeRef)
-    : [];
-  const missingFormulaCellRefSet = new Set(missingFormulaCellRefs);
-  const previewColumnLabels = previewRange
-    ? Array.from({ length: previewRange.endCol - previewRange.startCol + 1 }, (_, index) => columnIndexToLabel(previewRange.startCol + index))
-    : [];
-  const previewRowLabels = previewRange
-    ? Array.from({ length: previewRange.endRow - previewRange.startRow + 1 }, (_, index) => previewRange.startRow + index)
     : [];
   const openAnswerRangeEditor = () => {
     if (!isTemplateEditMode) return;
@@ -1484,7 +1430,7 @@ export function AdminQuestions() {
         open={open}
         onOpenChange={setOpen}
         title={editing ? "编辑题目" : "新建题目"}
-        description="按基本信息、上传模板、答题区域、判题规则和预览发布完成配置。"
+        description="按基本信息、上传模板、答题与判题、预览发布完成配置。"
         submitLabel={editing ? "保存配置" : "创建题目"}
         contentClassName="w-[min(1280px,calc(100vw-2rem))]"
         bodyClassName="px-6 py-5 bg-white"
@@ -1510,189 +1456,527 @@ export function AdminQuestions() {
           })}
         </div>
 
-        {editorStep === 1 ? (
-          <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_minmax(380px,0.95fr)]">
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">模板上传</h3>
-              <label className={`mt-4 flex h-44 cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed border-[#8bb7ff] bg-[#f8fbff] text-center ${!isTemplateEditMode ? "pointer-events-none opacity-60" : ""}`}>
-                <UploadCloud size={38} className="text-[#1769ff]" />
-                <span className="mt-4 text-sm font-semibold text-[#475467]">点击选择文件上传</span>
-                <span className="mt-2 text-xs text-[#667085]">支持 .xlsx / .xls，文件不超过 20MB</span>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  disabled={!isTemplateEditMode}
-                  onChange={(event) => {
-                    void handleTemplateUpload(event.target.files);
-                    event.currentTarget.value = "";
-                  }}
+        {editorStep === 0 ? (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]">
+            <section className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+              <h3 className="mb-4 text-[20px] font-semibold text-[#101828]">基本信息</h3>
+              <div className="space-y-4">
+                <Field label="题目标题">
+                  <input
+                    value={form.title}
+                    onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+                    className={inputClassName()}
+                    placeholder="例如 SUMIF 条件求和"
+                  />
+                </Field>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="所属分类">
+                    <select value={String(form.questionCategoryId)} onChange={(event) => setForm((prev) => ({ ...prev, questionCategoryId: event.target.value }))} className={inputClassName()}>
+                      <option value="">请选择</option>
+                      {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="难度">
+                    <select
+                      value={String(normalizeQuestionDifficulty(form.difficulty))}
+                      onChange={(event) => setForm((prev) => applyQuestionDifficulty(prev, event.target.value))}
+                      className={inputClassName()}
+                    >
+                      {QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => (
+                        <option key={item.difficulty} value={item.difficulty}>
+                          难度 {item.difficulty} · {item.points} 积分
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="奖励积分">
+                    <input
+                      type="number"
+                      value={resolveQuestionPointsByDifficulty(form.difficulty)}
+                      readOnly
+                      className={`${inputClassName()} bg-slate-50 text-slate-500`}
+                    />
+                  </Field>
+                </div>
+                <Field label="题目说明">
+                  <textarea
+                    value={form.explanation}
+                    onChange={(event) => setForm((prev) => ({ ...prev, explanation: event.target.value }))}
+                    className={textareaClassName()}
+                    placeholder="请输入题目要求，避免泄露标准答案。"
+                  />
+                </Field>
+                <AdminFormSwitch
+                  label="启用（发布后学员可见）"
+                  checked={Boolean(form.enabled)}
+                  onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
                 />
-              </label>
-              <div className="mt-4 rounded-[8px] border border-[#d8e0ec] bg-white p-4">
-                <div className="flex items-center gap-3">
-                  <FileSpreadsheet size={34} className="text-[#16a34a]" />
+              </div>
+            </section>
+
+            <section className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+              <h3 className="mb-4 text-[20px] font-semibold text-[#101828]">前台练习展示预览</h3>
+              <div className="rounded-[8px] border border-[#dfe7f2] bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-[#101828]">{form.templateFileUrl ? form.templateFileUrl.split("/").pop() : "尚未上传模板"}</div>
-                    <div className="mt-1 text-xs text-[#667085]">{form.templateFileUrl ? "模板文件已关联" : "上传后自动解析工作表、公式与区域"}</div>
+                    <div className="line-clamp-1 text-[22px] font-semibold text-[#101828]">{form.title || "SUMIF 条件求和"}</div>
+                    <div className="mt-2 inline-flex rounded-[4px] bg-[#dcfce7] px-2 py-1 text-xs font-semibold text-[#16a34a]">基础</div>
                   </div>
+                  <div className="text-sm font-semibold text-[#16a34a]">奖励积分：{resolveQuestionPointsByDifficulty(form.difficulty)} 分</div>
                 </div>
-                {form.templateFileUrl ? <div className="mt-3 text-xs font-semibold text-[#16a34a]">上传成功</div> : null}
-              </div>
-            </div>
-
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">模板解析结果</h3>
-              <div className="mt-4 space-y-3">
-                {[
-                  ["工作表列表", `${Math.max(sheetOptions.length, 1)} 个工作表`, selectedSheetName || "练习表"],
-                  ["已识别区域", form.answerRange || "待确认", form.answerRange ? "识别成功" : "待选择"],
-                  ["公式单元格", formulaDetectionNotice || "保存时按模板快照校验", "识别成功"],
-                  ["动态数组区域", isDynamicArrayMode ? (primaryDynamicRule.spillRange || "待确认") : "未启用", isDynamicArrayMode ? "需验证" : "可选"],
-                ].map(([title, subtitle, badge]) => (
-                  <div key={title} className="flex items-center justify-between rounded-[8px] border border-[#e6edf7] bg-[#fbfdff] p-4">
-                    <div>
-                      <div className="font-semibold text-[#101828]">{title}</div>
-                      <div className="mt-1 text-sm text-[#667085]">{subtitle}</div>
+                <p className="mt-4 text-sm leading-6 text-[#344054]">
+                  {form.explanation || "在“练习表”中，使用函数统计各地区的销售额总和，并在右侧表格中填写结果。"}
+                </p>
+                <div className="mt-4 rounded-[8px] border border-[#e5eaf3] bg-[#fbfdff] p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="overflow-hidden rounded-[4px] border border-[#d8e0ec] bg-white text-center text-xs">
+                      <div className="bg-[#f3f6fb] py-2 font-semibold">练习表</div>
+                      {["地区", "华东", "华南", "华北", "..."].map((item) => (
+                        <div key={item} className="grid grid-cols-3 border-t border-[#edf1f7]">
+                          <span className="px-2 py-2">{item}</span>
+                          <span className="border-l border-[#edf1f7] px-2 py-2">产品</span>
+                          <span className="border-l border-[#edf1f7] px-2 py-2">销售额</span>
+                        </div>
+                      ))}
                     </div>
-                    <span className="rounded-[4px] bg-[#e8f2ff] px-2.5 py-1 text-xs font-semibold text-[#1769ff]">{badge}</span>
+                    <div className="overflow-hidden rounded-[4px] border border-[#d8e0ec] bg-white text-center text-xs">
+                      <div className="bg-[#f3f6fb] py-2 font-semibold">结果填写区</div>
+                      {["华东", "华南", "华北", "西南"].map((item, index) => (
+                        <div key={item} className="grid grid-cols-2 border-t border-[#edf1f7]">
+                          <span className={`px-2 py-2 ${index === 0 ? "border border-[#16a34a]" : ""}`}>{item}</span>
+                          <span className="border-l border-[#edf1f7] px-2 py-2" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                </div>
+                <p className="mt-4 text-sm text-[#667085]">请在结果填写区使用函数进行计算。</p>
               </div>
-              <div className="mt-4 rounded-[8px] border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-sm text-[#1d4ed8]">
-                解析结果仅供参考，请在下一步确认答题区域。
+            </section>
+          </div>
+        ) : null}
+
+        {editorStep === 1 ? (
+          <section className="space-y-4">
+            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-slate-900">Excel 模板</div>
+                  <div className="mt-1 truncate text-xs text-slate-500">{form.templateFileUrl || "尚未上传模板文件"}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {editing ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsTemplateEditMode((current) => !current)}
+                      className={secondaryButtonClassName()}
+                    >
+                      <Edit3 size={14} />
+                      {isTemplateEditMode ? "完成修改" : "修改模板"}
+                    </button>
+                  ) : null}
+                  {form.templateFileUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void removeCurrentTemplate()}
+                      disabled={!isTemplateEditMode}
+                      className={`${secondaryButtonClassName()} ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}
+                    >
+                      <X size={14} />
+                      移除模板
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={openAnswerRangeEditor}
+                    disabled={!isTemplateEditMode || !form.templateFileUrl}
+                    className={`${secondaryButtonClassName()} ${!isTemplateEditMode || !form.templateFileUrl ? "opacity-50 pointer-events-none" : ""}`}
+                  >
+                    <MousePointer2 size={14} />
+                    框选区域
+                  </button>
+                  <label className={`${primaryButtonClassName()} cursor-pointer ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}>
+                    {uploadingTemplate ? <LoaderCircle size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    上传模板
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      disabled={!isTemplateEditMode}
+                      onChange={(event) => {
+                        void handleTemplateUpload(event.target.files);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-[18px] font-semibold text-[#101828]">模板预览</h3>
-                <div className="flex gap-3 text-xs text-[#667085]">
-                  <span className="inline-flex items-center gap-1"><span className="h-3 w-3 border border-[#1769ff]" />识别区域</span>
-                  <span className="inline-flex items-center gap-1"><span className="h-3 w-3 border border-[#8b5cf6]" />公式单元格</span>
-                  <span className="inline-flex items-center gap-1"><span className="h-3 w-3 border border-[#fb923c]" />动态数组区域</span>
-                </div>
+            {formulaDetectionNotice ? (
+              <div className="rounded-[8px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700">
+                {formulaDetectionNotice}
               </div>
-              <div className="mt-4 overflow-hidden rounded-[8px] border border-[#d8e0ec] bg-white text-center text-xs">
-                <div className="grid grid-cols-7 bg-[#f3f6fb] font-semibold text-[#344054]">
-                  {["", "A", "B", "C", "D", "E", "F"].map((item) => <div key={`tpl-head-${item}`} className="border-r border-b border-[#d8e0ec] px-2 py-2">{item}</div>)}
-                </div>
-                {["日期", "2024/1/1", "2024/1/2", "2024/1/3", "合计", "平均金额", "商品数量排名"].map((row, rowIndex) => (
-                  <div key={`tpl-row-${row}`} className="grid grid-cols-7">
-                    <div className="border-r border-b border-[#d8e0ec] bg-[#f8fafc] px-2 py-2 font-semibold">{rowIndex + 1}</div>
-                    {Array.from({ length: 6 }).map((_, colIndex) => (
-                      <div key={`tpl-cell-${rowIndex}-${colIndex}`} className={`border-r border-b border-[#d8e0ec] px-2 py-2 ${
-                        rowIndex >= 1 && rowIndex <= 4 && colIndex >= 1 && colIndex <= 4 ? "bg-[#eaf2ff]" : ""
-                      } ${rowIndex === 5 && colIndex === 4 ? "ring-2 ring-[#8b5cf6]" : ""}`}>
-                        {colIndex === 0 ? row : colIndex === 1 ? "商品" : colIndex === 4 && rowIndex === 4 ? "199.00" : ""}
-                      </div>
-                    ))}
-                  </div>
-                ))}
+            ) : null}
+            {templateLoadError ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                <span>{templateLoadError}</span>
+                {form.templateFileUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
+                    className="inline-flex h-8 items-center justify-center rounded-[2px] border border-amber-300 bg-white px-3 text-xs font-bold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100"
+                  >
+                    重新加载
+                  </button>
+                ) : null}
               </div>
+            ) : null}
+
+            <div className="rounded-[8px] border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800">
+                <FileSpreadsheet size={16} />
+                模板编辑器
+              </div>
+              {templateLoading ? (
+                <div className="flex h-48 items-center justify-center text-sm text-slate-400">正在加载模板...</div>
+              ) : templateLoadError ? (
+                <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-[8px] border border-dashed border-amber-200 bg-amber-50 px-5 text-center text-sm text-amber-800">
+                  <div>{templateLoadError}</div>
+                  {form.templateFileUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
+                      className={secondaryButtonClassName()}
+                    >
+                      重新加载模板
+                    </button>
+                  ) : null}
+                </div>
+              ) : sheetOptions.length > 0 ? (
+                <ExcelEditorErrorBoundary
+                  resetKey={templateEditorResetKey}
+                  fallback={(
+                    <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-[8px] border border-dashed border-rose-200 bg-rose-50 px-5 text-center text-sm text-rose-700">
+                      <div>模板编辑器加载失败，请重新加载模板后再修改答案。</div>
+                      <button
+                        type="button"
+                        onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
+                        className={secondaryButtonClassName()}
+                      >
+                        重新加载模板
+                      </button>
+                    </div>
+                  )}
+                >
+                  <Suspense fallback={(
+                    <FastWorkbookFallbackEditor
+                      workbook={editorWorkbook}
+                      onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : () => undefined}
+                      selectedSheetName={selectedSheetName}
+                      onSelectedSheetNameChange={setSelectedSheetName}
+                      editableRange={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
+                      readOnly={!isTemplateEditMode}
+                      viewportClassName="h-[460px]"
+                    />
+                  )}>
+                    <ExcelWorkbookEditor
+                      workbook={editorWorkbook}
+                      onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : undefined}
+                      selectedSheetName={selectedSheetName}
+                      onSelectedSheetNameChange={(sheetName) => {
+                        setSelectedSheetName(sheetName);
+                        if (isTemplateEditMode) {
+                          setForm((prev) => ({ ...prev, answerSheet: sheetName }));
+                        }
+                      }}
+                      selection={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
+                      onSelectionChange={isTemplateEditMode && isSelectingAnswerRange ? ((nextSelection) => {
+                        setSelection(nextSelection);
+                      }) : undefined}
+                      editableRange={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
+                      selectionEnabled={isTemplateEditMode && isSelectingAnswerRange}
+                      focusRange={isSelectingAnswerRange ? selection : persistedFocusRange}
+                      focusRequestVersion={editorFullscreenVersion}
+                      requestFullscreenVersion={editorFullscreenVersion}
+                      showConfirmSelectionButton={isSelectingAnswerRange}
+                      confirmSelectionLabel="确认区域"
+                      onConfirmSelection={confirmAnswerRange}
+                      onSnapshotCaptureReady={(capture) => {
+                        editorSnapshotGetterRef.current = capture;
+                      }}
+                      preserveDynamicArraySpillChildren
+                    />
+                  </Suspense>
+                </ExcelEditorErrorBoundary>
+              ) : (
+                <div className="flex h-48 items-center justify-center rounded-[8px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+                  上传 Excel 模板后即可开始配置
+                </div>
+              )}
             </div>
           </section>
         ) : null}
 
         {editorStep === 2 ? (
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">工作表预览</h3>
-              <div className="mt-4 overflow-hidden rounded-[8px] border border-[#d8e0ec] bg-white text-center text-xs">
-                <div className="grid grid-cols-6 bg-[#f3f6fb] font-semibold">
-                  {["", "A", "B", "C", "D", "E"].map((item) => <div key={`answer-head-${item}`} className="border-r border-b border-[#d8e0ec] px-2 py-2">{item}</div>)}
-                </div>
-                {["销售数据分析表", "日期", "2024-01-01", "2024-01-02", "2024-01-03", "合计", "平均值", "最大值", "最小值"].map((row, rowIndex) => (
-                  <div key={`answer-row-${row}`} className="grid grid-cols-6">
-                    <div className="border-r border-b border-[#d8e0ec] bg-[#f8fafc] px-2 py-2 font-semibold">{rowIndex + 1}</div>
-                    {Array.from({ length: 5 }).map((_, colIndex) => (
-                      <div key={`answer-cell-${rowIndex}-${colIndex}`} className={`border-r border-b border-[#d8e0ec] px-2 py-2 ${
-                        rowIndex >= 1 && rowIndex <= 7 && colIndex >= 1 ? "bg-[#eaf2ff]" : ""
-                      } ${rowIndex >= 5 && colIndex === 1 ? "ring-1 ring-[#16a34a]" : ""}`}>
-                        {colIndex === 0 ? row : colIndex === 1 ? "产品A" : colIndex === 2 ? "120" : colIndex === 4 ? "¥6,000" : ""}
-                      </div>
-                    ))}
+          <section className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
+              <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+                <h3 className="text-[18px] font-semibold text-[#101828]">工作表预览</h3>
+                <div className="mt-4 overflow-hidden rounded-[8px] border border-[#d8e0ec] bg-white text-center text-xs">
+                  <div className="grid grid-cols-6 bg-[#f3f6fb] font-semibold">
+                    {["", "A", "B", "C", "D", "E"].map((item) => <div key={`answer-head-${item}`} className="border-r border-b border-[#d8e0ec] px-2 py-2">{item}</div>)}
                   </div>
-                ))}
+                  {["销售数据分析表", "日期", "2024-01-01", "2024-01-02", "2024-01-03", "合计", "平均值", "最大值", "最小值"].map((row, rowIndex) => (
+                    <div key={`answer-row-${row}`} className="grid grid-cols-6">
+                      <div className="border-r border-b border-[#d8e0ec] bg-[#f8fafc] px-2 py-2 font-semibold">{rowIndex + 1}</div>
+                      {Array.from({ length: 5 }).map((_, colIndex) => (
+                        <div key={`answer-cell-${rowIndex}-${colIndex}`} className={`border-r border-b border-[#d8e0ec] px-2 py-2 ${
+                          rowIndex >= 1 && rowIndex <= 7 && colIndex >= 1 ? "bg-[#eaf2ff]" : ""
+                        } ${rowIndex >= 5 && colIndex === 1 ? "ring-1 ring-[#16a34a]" : ""}`}>
+                          {colIndex === 0 ? row : colIndex === 1 ? "产品A" : colIndex === 2 ? "120" : colIndex === 4 ? "¥6,000" : ""}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4 text-sm text-[#475467]">
+                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 border border-[#1769ff] bg-[#eaf2ff]" />答题区域 ({form.answerRange || "待选择"})</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 border border-[#16a34a]" />标准答案区域 ({previewRangeRef || "待生成"})</span>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-4 text-sm text-[#475467]">
-                <span className="inline-flex items-center gap-2"><span className="h-3 w-3 border border-[#1769ff] bg-[#eaf2ff]" />答题区域 ({form.answerRange || "待选择"})</span>
-                <span className="inline-flex items-center gap-2"><span className="h-3 w-3 border border-[#16a34a]" />标准答案区域</span>
+
+              <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+                <h3 className="text-[18px] font-semibold text-[#101828]">区域与判题配置</h3>
+                <div className="mt-4 space-y-4">
+                  <Field label="答题工作表">
+                    {sheetOptions.length > 0 ? (
+                      <select
+                        value={primarySheetName}
+                        onChange={(event) => {
+                          const nextSheetName = event.target.value;
+                          setSelectedSheetName(nextSheetName);
+                          setForm((prev) => ({
+                            ...prev,
+                            answerSheet: nextSheetName,
+                            dynamicArrayRules: prev.gradingMode === "dynamic_array"
+                              ? (prev.dynamicArrayRules || []).map((item, index) => (index === 0 ? { ...item, sheet: nextSheetName } : item))
+                              : prev.dynamicArrayRules,
+                          }));
+                        }}
+                        className={inputClassName()}
+                      >
+                        <option value="">请选择</option>
+                        {sheetOptions.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
+                      </select>
+                    ) : (
+                      <input value={form.answerSheet || selectedSheetName} onChange={(event) => setForm((prev) => ({ ...prev, answerSheet: event.target.value }))} className={inputClassName()} placeholder="练习表" />
+                    )}
+                  </Field>
+                  <Field label="答题区域">
+                    <div className="flex gap-2">
+                      <input value={form.answerRange || currentSelectionText} onChange={(event) => setForm((prev) => ({ ...prev, answerRange: event.target.value.toUpperCase() }))} className={inputClassName()} placeholder="B2:F20" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditorStep(1);
+                          openAnswerRangeEditor();
+                        }}
+                        disabled={!form.templateFileUrl}
+                        className={`${answerRangeButtonClassName()} ${!form.templateFileUrl ? "opacity-50 pointer-events-none" : ""}`}
+                      >
+                        <MousePointer2 size={14} />
+                        打开框选
+                      </button>
+                    </div>
+                  </Field>
+                  <Field label="标准答案区域">
+                    <input value={previewRangeRef || ""} readOnly className={`${inputClassName()} bg-slate-50 text-slate-500`} placeholder="选择答题区域后生成" />
+                  </Field>
+                  <div className="space-y-2 text-sm text-[#344054]">
+                    <div className="font-semibold">判题方式</div>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="inline-flex items-center gap-2"><input type="radio" checked={Boolean(form.checkFormula) && !isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "simple", checkFormula: true }))} />公式校验</label>
+                      <label className="inline-flex items-center gap-2"><input type="radio" checked={!form.checkFormula && !isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "simple", checkFormula: false }))} />结果快照</label>
+                      <label className="inline-flex items-center gap-2"><input type="radio" checked={isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "dynamic_array" }))} />公式+快照</label>
+                    </div>
+                  </div>
+                  {answerPreviewHasEmptyCell ? <div className="rounded-[8px] bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">答题区域中存在空白单元格，保存前请补全标准答案。</div> : null}
+                  {missingFormulaCellRefs.length > 0 ? (
+                    <div className="rounded-[8px] bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                      检测函数公式已开启，{missingFormulaCellRefs.slice(0, 6).join("、")}{missingFormulaCellRefs.length > 6 ? ` 等 ${missingFormulaCellRefs.length} 个单元格` : ""} 不是公式。
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">区域与判题配置</h3>
-              <div className="mt-4 space-y-4">
-                <Field label="答题区域">
-                  <input value={form.answerRange || currentSelectionText} onChange={(event) => setForm((prev) => ({ ...prev, answerRange: event.target.value.toUpperCase() }))} className={inputClassName()} placeholder="B2:F20" />
-                </Field>
-                <Field label="标准答案区域">
-                  <input value={previewRangeRef || ""} readOnly className={`${inputClassName()} bg-slate-50 text-slate-500`} placeholder="选择答题区域后生成" />
-                </Field>
-                <div className="space-y-2 text-sm text-[#344054]">
-                  <div className="font-semibold">判题方式</div>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="inline-flex items-center gap-2"><input type="radio" checked={Boolean(form.checkFormula) && !isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "simple", checkFormula: true }))} />公式校验</label>
-                    <label className="inline-flex items-center gap-2"><input type="radio" checked={!form.checkFormula && !isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "simple", checkFormula: false }))} />结果快照</label>
-                    <label className="inline-flex items-center gap-2"><input type="radio" checked={isDynamicArrayMode} onChange={() => setForm((prev) => ({ ...prev, gradingMode: "dynamic_array" }))} />公式+快照</label>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-[18px] font-semibold text-[#101828]">判题规则</h3>
+                  {isDynamicArrayMode ? (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        dynamicArrayRules: [...(prev.dynamicArrayRules || []), defaultDynamicArrayRule(primarySheetName)],
+                      }))}
+                      className={secondaryButtonClassName()}
+                    >
+                      <Plus size={14} />
+                      新增规则
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-4 space-y-3 text-sm text-[#344054]">
+                  <div className="rounded-[8px] bg-[#f8fbff] p-3">当前模式：{isDynamicArrayMode ? "动态数组判题" : form.checkFormula ? "公式校验" : "结果快照"}</div>
+                  <div className="rounded-[8px] bg-[#f8fbff] p-3">答题区域：{form.answerRange || "待选择"}</div>
+                  {isDynamicArrayMode ? (
+                    <div className="space-y-3">
+                      {(form.dynamicArrayRules || []).map((rule, index) => (
+                        <div key={`dynamic-rule-${index}`} className="rounded-[8px] border border-slate-200 bg-slate-50 p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-sm font-black text-slate-800">规则 {index + 1}</div>
+                            <button
+                              type="button"
+                              onClick={() => setForm((prev) => {
+                                const nextRules = (prev.dynamicArrayRules || []).filter((_, ruleIndex) => ruleIndex !== index);
+                                return { ...prev, dynamicArrayRules: nextRules.length > 0 ? nextRules : [defaultDynamicArrayRule(primarySheetName)] };
+                              })}
+                              className={secondaryButtonClassName()}
+                              disabled={(form.dynamicArrayRules || []).length <= 1}
+                            >
+                              <Trash2 size={14} />
+                              删除
+                            </button>
+                          </div>
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <Field label="锚点单元格">
+                              <input
+                                value={rule.anchorCell}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, anchorCell: event.target.value.toUpperCase() } : item)),
+                                }))}
+                                className={inputClassName()}
+                                placeholder="例如 F2"
+                              />
+                            </Field>
+                            <Field label="溢出区域">
+                              <input
+                                value={rule.spillRange}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, spillRange: event.target.value.toUpperCase() } : item)),
+                                }))}
+                                className={inputClassName()}
+                                placeholder="例如 F2:G6"
+                              />
+                            </Field>
+                            <Field label="分值">
+                              <input
+                                type="number"
+                                min="1"
+                                value={rule.score}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, score: event.target.value } : item)),
+                                }))}
+                                className={inputClassName()}
+                              />
+                            </Field>
+                          </div>
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <Field label="规则名称">
+                              <input
+                                value={rule.label}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, label: event.target.value } : item)),
+                                }))}
+                                className={inputClassName()}
+                                placeholder="例如 按条件筛选结果"
+                              />
+                            </Field>
+                            <Field label="公式关键字">
+                              <input
+                                value={rule.formulaKeywordsText}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, formulaKeywordsText: event.target.value } : item)),
+                                }))}
+                                className={inputClassName()}
+                                placeholder="例如 FILTER, SORT"
+                              />
+                            </Field>
+                          </div>
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <AdminFormSwitch
+                              label="首格必须包含公式"
+                              checked={Boolean(rule.requireAnchorFormula)}
+                              onCheckedChange={(next) => setForm((prev) => ({
+                                ...prev,
+                                dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, requireAnchorFormula: next } : item)),
+                              }))}
+                            />
+                            <AdminFormSwitch
+                              label="溢出子单元格不允许手填公式"
+                              checked={Boolean(rule.requireSpillCellsWithoutFormula)}
+                              onCheckedChange={(next) => setForm((prev) => ({
+                                ...prev,
+                                dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index ? { ...item, requireSpillCellsWithoutFormula: next } : item)),
+                              }))}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-[8px] bg-[#f8fbff] p-3">公式校验：{form.checkFormula ? "启用" : "关闭"}</div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-[18px] font-semibold text-[#101828]">测试结果</h3>
+                  <button type="button" onClick={() => void runEditorPublishTest()} className={primaryButtonClassName()}>
+                    一键测试提交
+                  </button>
+                </div>
+                <div className={`mt-4 rounded-[8px] border px-4 py-3 text-sm font-semibold ${
+                  lastPublishRecord?.passed ? "border-[#bbf7d0] bg-[#f0fdf4] text-[#16a34a]" : "border-[#dbeafe] bg-[#f8fbff] text-[#344054]"
+                }`}>
+                  {lastPublishRecord
+                    ? `最近测试：${lastPublishRecord.passed ? "通过" : "未通过"}，得分 ${lastPublishRecord.score ?? 0}/${lastPublishRecord.totalScore ?? 0}`
+                    : "保存题目后可执行服务端一键测试，系统会用标准答案快照生成测试提交并调用判题规则。"}
+                </div>
+                <div className="mt-4 overflow-x-auto">
+                  <div className="grid min-w-[720px] grid-cols-[140px_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-x-3 gap-y-2 text-sm">
+                    {["校验项", "预期值", "实际值", "误差"].map((item) => (
+                      <div key={item} className="min-w-0 font-semibold text-[#475467]">{item}</div>
+                    ))}
+                    {[
+                      lastPublishRecord?.title || "总销售额合计",
+                      String(lastPublishRecord?.totalScore ?? (answerPreviewText || "-")),
+                      String(lastPublishRecord?.score ?? (answerPreviewText || "-")),
+                      lastPublishRecord ? (lastPublishRecord.passed ? "0%" : "待修正") : "0%",
+                    ].map((item, index) => (
+                      <div
+                        key={`${item}-${index}`}
+                        className="min-w-0 max-h-[320px] overflow-auto whitespace-pre-wrap break-words leading-6 text-[#101828] [overflow-wrap:anywhere]"
+                      >
+                        {item}
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <Field label="动态数组 spillRange">
-                  <input value={primaryDynamicRule.spillRange || ""} onChange={(event) => setForm((prev) => ({ ...prev, dynamicArrayRules: (prev.dynamicArrayRules || [defaultDynamicArrayRule(primarySheetName)]).map((item, index) => index === 0 ? { ...item, spillRange: event.target.value.toUpperCase() } : item) }))} className={inputClassName()} placeholder="B2#" />
-                </Field>
-                <button type="button" onClick={() => void runEditorPublishTest()} className={primaryButtonClassName()}>
-                  一键测试提交
-                </button>
               </div>
             </div>
           </section>
         ) : null}
 
         {editorStep === 3 ? (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">判题规则</h3>
-              <div className="mt-4 space-y-3 text-sm text-[#344054]">
-                <div className="rounded-[8px] bg-[#f8fbff] p-3">当前模式：{isDynamicArrayMode ? "动态数组判题" : form.checkFormula ? "公式校验" : "结果快照"}</div>
-                <div className="rounded-[8px] bg-[#f8fbff] p-3">答题区域：{form.answerRange || "待选择"}</div>
-                <div className="rounded-[8px] bg-[#f8fbff] p-3">动态数组规则：{(form.dynamicArrayRules || []).length} 条</div>
-              </div>
-            </div>
-            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-              <h3 className="text-[18px] font-semibold text-[#101828]">测试结果</h3>
-              <div className={`mt-4 rounded-[8px] border px-4 py-3 text-sm font-semibold ${
-                lastPublishRecord?.passed ? "border-[#bbf7d0] bg-[#f0fdf4] text-[#16a34a]" : "border-[#dbeafe] bg-[#f8fbff] text-[#344054]"
-              }`}>
-                {lastPublishRecord
-                  ? `最近测试：${lastPublishRecord.passed ? "通过" : "未通过"}，得分 ${lastPublishRecord.score ?? 0}/${lastPublishRecord.totalScore ?? 0}`
-                  : "保存题目后可执行服务端一键测试，系统会用标准答案快照生成测试提交并调用判题规则。"}
-              </div>
-              <div className="mt-4 overflow-x-auto">
-                <div className="grid min-w-[720px] grid-cols-[140px_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-x-3 gap-y-2 text-sm">
-                  {["校验项", "预期值", "实际值", "误差"].map((item) => (
-                    <div key={item} className="min-w-0 font-semibold text-[#475467]">{item}</div>
-                  ))}
-                  {[
-                    lastPublishRecord?.title || "总销售额合计",
-                    String(lastPublishRecord?.totalScore ?? (answerPreviewText || "-")),
-                    String(lastPublishRecord?.score ?? (answerPreviewText || "-")),
-                    lastPublishRecord ? (lastPublishRecord.passed ? "0%" : "待修正") : "0%",
-                  ].map((item, index) => (
-                    <div
-                      key={`${item}-${index}`}
-                      className="min-w-0 max-h-[320px] overflow-auto whitespace-pre-wrap break-words leading-6 text-[#101828] [overflow-wrap:anywhere]"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {editorStep === 4 ? (
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
               <h3 className="text-[18px] font-semibold text-[#101828]">预览发布</h3>
@@ -1703,6 +1987,92 @@ export function AdminQuestions() {
                     <p className="mt-3 text-sm leading-6 text-[#475467]">{form.explanation || "发布前请确认题目说明、模板、答题区域和判题规则。"}</p>
                   </div>
                   <span className="rounded-[4px] bg-[#dcfce7] px-2 py-1 text-xs font-semibold text-[#16a34a]">{form.enabled ? "启用" : "草稿"}</span>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm text-[#475467] md:grid-cols-3">
+                  <div>分类：{questionCategories.find((item) => String(item.id) === String(form.questionCategoryId))?.name || "未选择"}</div>
+                  <div>奖励：{resolveQuestionPointsByDifficulty(form.difficulty)} 分</div>
+                  <div>区域：{form.answerSheet || selectedSheetName || "-"} / {form.answerRange || "-"}</div>
+                </div>
+              </div>
+              <div className="mt-5 rounded-[8px] border border-[#e5eaf3] bg-white p-4">
+                <h4 className="text-sm font-black text-slate-900">发布内容修改</h4>
+                <div className="mt-4 space-y-4">
+                  <Field label="题目标题">
+                    <input value={form.title} onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))} className={inputClassName()} />
+                  </Field>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="所属分类">
+                      <select value={String(form.questionCategoryId)} onChange={(event) => setForm((prev) => ({ ...prev, questionCategoryId: event.target.value }))} className={inputClassName()}>
+                        <option value="">请选择</option>
+                        {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="难度">
+                      <select
+                        value={String(normalizeQuestionDifficulty(form.difficulty))}
+                        onChange={(event) => setForm((prev) => applyQuestionDifficulty(prev, event.target.value))}
+                        className={inputClassName()}
+                      >
+                        {QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => (
+                          <option key={item.difficulty} value={item.difficulty}>
+                            难度 {item.difficulty} · {item.points} 积分
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="题目说明">
+                    <textarea value={form.explanation} onChange={(event) => setForm((prev) => ({ ...prev, explanation: event.target.value }))} className={textareaClassName()} />
+                  </Field>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="答题工作表">
+                      <input value={form.answerSheet || selectedSheetName} onChange={(event) => setForm((prev) => ({ ...prev, answerSheet: event.target.value }))} className={inputClassName()} />
+                    </Field>
+                    <Field label="答题区域">
+                      <input value={form.answerRange} onChange={(event) => setForm((prev) => ({ ...prev, answerRange: event.target.value.toUpperCase() }))} className={inputClassName()} placeholder="B2:F20" />
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="判题模式">
+                      <select
+                        value={form.gradingMode}
+                        onChange={(event) => setForm((prev) => ({
+                          ...prev,
+                          gradingMode: event.target.value as QuestionGradingMode,
+                          dynamicArrayRules: event.target.value === "dynamic_array"
+                            ? ((prev.dynamicArrayRules?.length && prev.dynamicArrayRules.some((item) => item.anchorCell || item.spillRange))
+                              ? prev.dynamicArrayRules
+                              : [{
+                                ...defaultDynamicArrayRule(prev.answerSheet || selectedSheetName),
+                                sheet: prev.answerSheet || selectedSheetName || "",
+                                spillRange: prev.answerRange || "",
+                                requireAnchorFormula: prev.checkFormula !== false,
+                              }])
+                            : prev.dynamicArrayRules,
+                        }))}
+                        className={inputClassName()}
+                      >
+                        <option value="simple">普通区域判题</option>
+                        <option value="dynamic_array">动态数组判题</option>
+                      </select>
+                    </Field>
+                    <label className="flex items-end">
+                      <span className="inline-flex h-9 items-center gap-2 rounded-[2px] border border-[#d9d9d9] bg-white px-3 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.checkFormula)}
+                          onChange={(event) => setForm((prev) => ({ ...prev, checkFormula: event.target.checked }))}
+                          disabled={isDynamicArrayMode}
+                        />
+                        检测函数公式
+                      </span>
+                    </label>
+                  </div>
+                  <AdminFormSwitch
+                    label="启用（发布后学员可见）"
+                    checked={Boolean(form.enabled)}
+                    onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
+                  />
                 </div>
               </div>
             </div>
@@ -1715,656 +2085,6 @@ export function AdminQuestions() {
           </section>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]">
-          <section className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-            <h3 className="mb-4 text-[20px] font-semibold text-[#101828]">基本信息</h3>
-            <div className="space-y-4">
-              <Field label="题目标题">
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  className={inputClassName()}
-                  placeholder="例如 SUMIF 条件求和"
-                />
-              </Field>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="所属分类">
-                  <select value={String(form.questionCategoryId)} onChange={(e) => setForm((prev) => ({ ...prev, questionCategoryId: e.target.value }))} className={inputClassName()}>
-                    <option value="">请选择</option>
-                    {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="难度">
-                  <select
-                    value={String(normalizeQuestionDifficulty(form.difficulty))}
-                    onChange={(e) => setForm((prev) => applyQuestionDifficulty(prev, e.target.value))}
-                    className={inputClassName()}
-                  >
-                    {QUESTION_DIFFICULTY_POINT_OPTIONS.map((item) => (
-                      <option key={item.difficulty} value={item.difficulty}>
-                        难度 {item.difficulty} · {item.points} 积分
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="奖励积分">
-                  <input
-                    type="number"
-                    value={resolveQuestionPointsByDifficulty(form.difficulty)}
-                    readOnly
-                    className={`${inputClassName()} bg-slate-50 text-slate-500`}
-                  />
-                </Field>
-                <Field label="工作表名称">
-                  <input
-                    value={form.answerSheet || selectedSheetName}
-                    onChange={(e) => setForm((prev) => ({ ...prev, answerSheet: e.target.value }))}
-                    className={inputClassName()}
-                    placeholder="练习表"
-                  />
-                </Field>
-              </div>
-              <Field label="题目说明">
-                <textarea
-                  value={form.explanation}
-                  onChange={(e) => setForm((prev) => ({ ...prev, explanation: e.target.value }))}
-                  className={textareaClassName()}
-                  placeholder="请输入题目要求，避免泄露标准答案。"
-                />
-              </Field>
-              <div className="grid gap-4 md:grid-cols-[220px,1fr]">
-                <Field label="判题模式">
-                  <select
-                    value={form.gradingMode}
-                    onChange={(e) => setForm((prev) => ({
-                      ...prev,
-                      gradingMode: e.target.value as QuestionGradingMode,
-                      dynamicArrayRules: e.target.value === "dynamic_array"
-                        ? ((prev.dynamicArrayRules?.length && prev.dynamicArrayRules.some((item) => item.anchorCell || item.spillRange))
-                          ? prev.dynamicArrayRules
-                          : [{
-                            ...defaultDynamicArrayRule(prev.answerSheet || selectedSheetName),
-                            sheet: prev.answerSheet || selectedSheetName || "",
-                            spillRange: prev.answerRange || "",
-                            requireAnchorFormula: prev.checkFormula !== false,
-                          }])
-                        : prev.dynamicArrayRules,
-                    }))}
-                    className={inputClassName()}
-                  >
-                    <option value="simple">普通区域判题</option>
-                    <option value="dynamic_array">动态数组判题</option>
-                  </select>
-                </Field>
-                <div className="rounded-[8px] border border-[#dbeafe] bg-[#f8fbff] px-4 py-3 text-sm leading-6 text-[#475467]">
-                  {form.gradingMode === "dynamic_array"
-                    ? "动态数组模式会同时校验溢出结果、锚点公式以及扩展区域是否被手工改写。"
-                    : "普通区域模式会按答题区域逐格比对值，勾选后会额外校验函数公式。"}
-                </div>
-              </div>
-              <AdminFormSwitch
-                label="启用（发布后学员可见）"
-                checked={Boolean(form.enabled)}
-                onCheckedChange={(next) => setForm((prev) => ({ ...prev, enabled: next }))}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
-            <h3 className="mb-4 text-[20px] font-semibold text-[#101828]">前台练习展示预览</h3>
-            <div className="rounded-[8px] border border-[#dfe7f2] bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="line-clamp-1 text-[22px] font-semibold text-[#101828]">{form.title || "SUMIF 条件求和"}</div>
-                  <div className="mt-2 inline-flex rounded-[4px] bg-[#dcfce7] px-2 py-1 text-xs font-semibold text-[#16a34a]">基础</div>
-                </div>
-                <div className="text-sm font-semibold text-[#16a34a]">奖励积分：{resolveQuestionPointsByDifficulty(form.difficulty)} 分</div>
-              </div>
-              <p className="mt-4 text-sm leading-6 text-[#344054]">
-                {form.explanation || "在“练习表”中，使用函数统计各地区的销售额总和，并在右侧表格中填写结果。"}
-              </p>
-              <div className="mt-4 rounded-[8px] border border-[#e5eaf3] bg-[#fbfdff] p-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="overflow-hidden rounded-[4px] border border-[#d8e0ec] bg-white text-center text-xs">
-                    <div className="bg-[#f3f6fb] py-2 font-semibold">练习表</div>
-                    {["地区", "华东", "华南", "华北", "..."].map((item) => (
-                      <div key={item} className="grid grid-cols-3 border-t border-[#edf1f7]">
-                        <span className="px-2 py-2">{item}</span>
-                        <span className="border-l border-[#edf1f7] px-2 py-2">产品</span>
-                        <span className="border-l border-[#edf1f7] px-2 py-2">销售额</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="overflow-hidden rounded-[4px] border border-[#d8e0ec] bg-white text-center text-xs">
-                    <div className="bg-[#f3f6fb] py-2 font-semibold">结果填写区</div>
-                    {["华东", "华南", "华北", "西南"].map((item, index) => (
-                      <div key={item} className="grid grid-cols-2 border-t border-[#edf1f7]">
-                        <span className={`px-2 py-2 ${index === 0 ? "border border-[#16a34a]" : ""}`}>{item}</span>
-                        <span className="border-l border-[#edf1f7] px-2 py-2" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <p className="mt-4 text-sm text-[#667085]">请在结果填写区使用函数进行计算。</p>
-            </div>
-          </section>
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-black text-slate-900">Excel 模板</div>
-              <div className="mt-1 text-xs text-slate-500">{form.templateFileUrl || "尚未上传模板文件"}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {editing && (
-                <button
-                  type="button"
-                  onClick={() => setIsTemplateEditMode((current) => !current)}
-                  className={secondaryButtonClassName()}
-                >
-                  <Edit3 size={14} />
-                  {isTemplateEditMode ? "完成修改" : "修改规则"}
-                </button>
-              )}
-              {form.templateFileUrl ? (
-                <button
-                  type="button"
-                  onClick={() => void removeCurrentTemplate()}
-                  disabled={!isTemplateEditMode}
-                  className={`${secondaryButtonClassName()} ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}
-                >
-                  <X size={14} />
-                  移除模板
-                </button>
-              ) : null}
-              <label className={`${primaryButtonClassName()} cursor-pointer ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}>
-                {uploadingTemplate ? <LoaderCircle size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                上传模板
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  disabled={!isTemplateEditMode}
-                  onChange={(e) => {
-                    void handleTemplateUpload(e.target.files);
-                    e.currentTarget.value = "";
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-          {formulaDetectionNotice && (
-            <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-700">
-              {formulaDetectionNotice}
-            </div>
-          )}
-          {templateLoadError && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-              <span>{templateLoadError}</span>
-              {form.templateFileUrl ? (
-                <button
-                  type="button"
-                  onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
-                  className="inline-flex h-8 items-center justify-center rounded-[2px] border border-amber-300 bg-white px-3 text-xs font-bold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100"
-                >
-                  重新加载
-                </button>
-              ) : null}
-            </div>
-          )}
-          <div
-            className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 outline-none transition focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100"
-            tabIndex={isTemplateEditMode ? 0 : -1}
-            onPaste={handleIdealAnswerImagePaste}
-          >
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-black text-slate-900">理想答案参考图</div>
-                <div className="mt-1 text-xs text-slate-500">可选。支持上传或点击此区域后 Ctrl+V 粘贴图片，用户仍需在表格中用公式实现。</div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {form.idealAnswerImageUrl ? (
-                  <button
-                    type="button"
-                    disabled={!isTemplateEditMode}
-                    onClick={() => setForm((prev) => ({ ...prev, idealAnswerImageUrl: "" }))}
-                    className={secondaryButtonClassName()}
-                  >
-                    <X size={14} />
-                    移除
-                  </button>
-                ) : null}
-                <label className={`${secondaryButtonClassName()} cursor-pointer ${!isTemplateEditMode ? "opacity-50 pointer-events-none" : ""}`}>
-                  {uploadingIdealAnswerImage ? <LoaderCircle size={14} className="animate-spin" /> : <ImagePlus size={14} />}
-                  上传参考图
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    className="hidden"
-                    disabled={!isTemplateEditMode || uploadingIdealAnswerImage}
-                    onChange={(e) => void handleIdealAnswerImageUpload(e.target.files)}
-                  />
-                </label>
-              </div>
-            </div>
-            {form.idealAnswerImageUrl ? (
-              <div className="grid gap-3 md:grid-cols-[180px,1fr]">
-                <img
-                  src={normalizeResourceUrl(form.idealAnswerImageUrl)}
-                  alt="理想答案参考图"
-                  className="h-28 w-full rounded-xl border border-slate-200 object-contain bg-slate-50"
-                />
-                <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
-                  <div className="mb-1 text-slate-700">图片地址</div>
-                  <div className="break-all">{form.idealAnswerImageUrl}</div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-400">
-                暂未上传参考图
-              </div>
-            )}
-          </div>
-          {sheetOptions.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-4">
-              <Field label={isDynamicArrayMode ? "首条规则工作表" : "答题工作表"}>
-                <select
-                  value={primarySheetName}
-                  disabled={!isTemplateEditMode}
-                  onChange={(e) => {
-                    const nextSheetName = e.target.value;
-                    setSelectedSheetName(nextSheetName);
-                    setForm((prev) => ({
-                      ...prev,
-                      answerSheet: nextSheetName,
-                      dynamicArrayRules: prev.gradingMode === "dynamic_array"
-                        ? (prev.dynamicArrayRules || []).map((item, index) => (index === 0 ? { ...item, sheet: nextSheetName } : item))
-                        : prev.dynamicArrayRules,
-                    }));
-                    const persistedForSheet = prevSelectionForSheet(nextSheetName, primaryRangeRef);
-                    setSelection(persistedForSheet);
-                  }}
-                  className={inputClassName()}
-                >
-                  <option value="">请选择</option>
-                  {sheetOptions.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
-                </select>
-              </Field>
-              <Field label={isDynamicArrayMode ? "首条规则溢出区域" : "答题区域"}>
-                <div className="flex gap-2">
-                  <input value={currentSelectionText} readOnly className={inputClassName()} />
-                  <button
-                    type="button"
-                    onClick={openAnswerRangeEditor}
-                    disabled={!isTemplateEditMode}
-                    className={answerRangeButtonClassName()}
-                  >
-                    <MousePointer2 size={14} />
-                    选择区域
-                  </button>
-                </div>
-              </Field>
-              <Field label="标准答案">
-                <div className="space-y-2">
-                  <input
-                    value={answerPreviewText || "未填写"}
-                    readOnly
-                    className={inputClassName()}
-                  />
-                  {answerPreviewHasEmptyCell && (
-                    <div className="text-xs font-medium text-amber-600">答题区域中存在空白单元格，保存前请补全标准答案。</div>
-                  )}
-                  {missingFormulaCellRefs.length > 0 && (
-                    <div className="text-xs font-medium text-rose-600">
-                      检测函数公式已开启，{missingFormulaCellRefs.slice(0, 6).join("、")}{missingFormulaCellRefs.length > 6 ? ` 等 ${missingFormulaCellRefs.length} 个单元格` : ""} 不是公式。
-                    </div>
-                  )}
-                </div>
-              </Field>
-              {isDynamicArrayMode ? (
-                <Field label="首条规则锚点">
-                  <input
-                    value={primaryDynamicRule.anchorCell}
-                    disabled={!isTemplateEditMode}
-                    onChange={(e) => setForm((prev) => ({
-                      ...prev,
-                      dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, index) => (index === 0
-                        ? { ...item, anchorCell: e.target.value.toUpperCase() }
-                        : item)),
-                    }))}
-                    className={inputClassName()}
-                    placeholder="例如 F2"
-                  />
-                </Field>
-              ) : (
-                <label className="flex items-end">
-                  <span className={`inline-flex h-9 items-center gap-2 rounded-[2px] border border-[#d9d9d9] bg-white px-3 text-sm font-medium text-slate-700 ${!isTemplateEditMode ? "opacity-60" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(form.checkFormula)}
-                      disabled={!isTemplateEditMode}
-                      onChange={(e) => setForm((prev) => ({ ...prev, checkFormula: e.target.checked }))}
-                    />
-                    检测函数公式
-                  </span>
-                </label>
-              )}
-            </div>
-          )}
-          {isDynamicArrayMode && (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-slate-900">动态数组规则</div>
-                  <div className="mt-1 text-xs text-slate-500">支持多条规则统一判题，首条规则会同步到模板编辑器预览。</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm((prev) => ({
-                    ...prev,
-                    dynamicArrayRules: [...(prev.dynamicArrayRules || []), defaultDynamicArrayRule(primarySheetName)],
-                  }))}
-                  className={secondaryButtonClassName()}
-                >
-                  <Plus size={14} />
-                  新增规则
-                </button>
-              </div>
-              <div className="space-y-4">
-                {(form.dynamicArrayRules || []).map((rule, index) => (
-                  <div key={`dynamic-rule-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div className="text-sm font-black text-slate-800">规则 {index + 1}</div>
-                      <button
-                        type="button"
-                        onClick={() => setForm((prev) => {
-                          const nextRules = (prev.dynamicArrayRules || []).filter((_, ruleIndex) => ruleIndex !== index);
-                          return { ...prev, dynamicArrayRules: nextRules.length > 0 ? nextRules : [defaultDynamicArrayRule(primarySheetName)] };
-                        })}
-                        className={secondaryButtonClassName()}
-                        disabled={(form.dynamicArrayRules || []).length <= 1}
-                      >
-                        <Trash2 size={14} />
-                        删除
-                      </button>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-4">
-                      <Field label="工作表">
-                        <select
-                          value={rule.sheet}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, sheet: e.target.value }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                        >
-                          <option value="">请选择</option>
-                          {sheetOptions.map((item) => <option key={`dynamic-sheet-${index}-${item.name}`} value={item.name}>{item.name}</option>)}
-                        </select>
-                      </Field>
-                      <Field label="锚点单元格">
-                        <input
-                          value={rule.anchorCell}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, anchorCell: e.target.value.toUpperCase() }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                          placeholder="例如 F2"
-                        />
-                      </Field>
-                      <Field label="溢出区域">
-                        <input
-                          value={rule.spillRange}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, spillRange: e.target.value.toUpperCase() }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                          placeholder="例如 F2:G6"
-                        />
-                      </Field>
-                      <Field label="分值">
-                        <input
-                          type="number"
-                          min="1"
-                          value={rule.score}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, score: e.target.value }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                        />
-                      </Field>
-                    </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <Field label="规则名称">
-                        <input
-                          value={rule.label}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, label: e.target.value }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                          placeholder="例如 按条件筛选结果"
-                        />
-                      </Field>
-                      <Field label="公式关键字">
-                        <input
-                          value={rule.formulaKeywordsText}
-                          onChange={(e) => setForm((prev) => ({
-                            ...prev,
-                            dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                              ? { ...item, formulaKeywordsText: e.target.value }
-                              : item)),
-                          }))}
-                          className={inputClassName()}
-                          placeholder="例如 FILTER, SORT"
-                        />
-                      </Field>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <AdminFormSwitch
-                        label="首格必须包含公式"
-                        checked={Boolean(rule.requireAnchorFormula)}
-                        onCheckedChange={(next) => setForm((prev) => ({
-                          ...prev,
-                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                            ? { ...item, requireAnchorFormula: next }
-                            : item)),
-                        }))}
-                      />
-                      <AdminFormSwitch
-                        label="溢出子单元格不允许手填公式"
-                        checked={Boolean(rule.requireSpillCellsWithoutFormula)}
-                        onCheckedChange={(next) => setForm((prev) => ({
-                          ...prev,
-                          dynamicArrayRules: (prev.dynamicArrayRules || []).map((item, ruleIndex) => (ruleIndex === index
-                            ? { ...item, requireSpillCellsWithoutFormula: next }
-                            : item)),
-                        }))}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="mt-4 text-xs text-slate-500">
-            {isTemplateEditMode
-              ? (isDynamicArrayMode
-                ? "先维护动态数组规则，首条规则可借助模板编辑器框选溢出区域；框选后请补充锚点单元格与公式关键字。"
-                : "先选工作表，再在表格里拖拽框选答题区域；框选完成后，在表格中直接填写标准答案或公式。")
-              : "当前为查看态。点击“修改规则”后才允许调整工作表、判题区域和标准答案。"}
-          </div>
-          {previewRange && (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-slate-900">标准答案预览</div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {primarySheetName || "-"} / {previewRangeRef || "-"}
-                  </div>
-                </div>
-                {answerPreviewHasEmptyCell ? (
-                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">存在空白单元格</span>
-                ) : (
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">答案已完整</span>
-                )}
-              </div>
-              <div className="overflow-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full border-separate border-spacing-0 text-sm">
-                  <thead>
-                    <tr>
-                      <th className="sticky left-0 top-0 z-20 min-w-14 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                        #
-                      </th>
-                      {previewColumnLabels.map((label) => (
-                        <th
-                          key={`preview-col-${label}`}
-                          className="min-w-[120px] border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-500"
-                        >
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {answerPreview.values.map((row, rowIndex) => (
-                      <tr key={`preview-row-${previewRowLabels[rowIndex] || rowIndex}`}>
-                        <th className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-center text-xs font-black text-slate-500">
-                          {previewRowLabels[rowIndex] || rowIndex + 1}
-                        </th>
-                        {row.map((value, colIndex) => {
-                          const formula = answerPreview.formulas?.[rowIndex]?.[colIndex];
-                          const display = answerPreview.displays?.[rowIndex]?.[colIndex];
-                          const cellRef = previewRange ? toCellRef(previewRange.startRow + rowIndex, previewRange.startCol + colIndex) : "";
-                          const missingFormula = missingFormulaCellRefSet.has(cellRef);
-                          const displayValue = formatAnswerPreviewCellDisplay(value, formula, display);
-                          return (
-                            <td
-                              key={`preview-cell-${rowIndex}-${colIndex}`}
-                              className={`border-b border-r border-slate-200 px-3 py-2 align-top ${!displayValue.trim() ? "bg-amber-50/70" : missingFormula ? "bg-rose-50/70" : "bg-white"}`}
-                            >
-                              <div className="flex flex-col gap-1">
-                                {formula && (
-                                  <span className="inline-flex w-fit rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-white">
-                                    fx
-                                  </span>
-                                )}
-                                {missingFormula && (
-                                  <span className="inline-flex w-fit rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-black text-white">
-                                    缺少公式
-                                  </span>
-                                )}
-                                <span className={`break-all font-medium ${formula ? "text-cyan-700" : missingFormula ? "text-rose-700" : "text-slate-700"} ${!displayValue.trim() ? "text-amber-700" : ""}`}>
-                                  {displayValue || "空"}
-                                </span>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="rounded-3xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-black text-slate-800">
-            <FileSpreadsheet size={16} />
-            模板编辑器
-          </div>
-          {templateLoading ? (
-            <div className="flex h-48 items-center justify-center text-sm text-slate-400">正在加载模板...</div>
-          ) : templateLoadError ? (
-            <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-amber-200 bg-amber-50 px-5 text-center text-sm text-amber-800">
-              <div>{templateLoadError}</div>
-              {form.templateFileUrl ? (
-                <button
-                  type="button"
-                  onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
-                  className={secondaryButtonClassName()}
-                >
-                  重新加载模板
-                </button>
-              ) : null}
-            </div>
-          ) : sheetOptions.length > 0 ? (
-            <ExcelEditorErrorBoundary
-              resetKey={templateEditorResetKey}
-              fallback={(
-                <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-rose-200 bg-rose-50 px-5 text-center text-sm text-rose-700">
-                  <div>模板编辑器加载失败，请重新加载模板后再修改答案。</div>
-                  <button
-                    type="button"
-                    onClick={() => void loadTemplateWorkbook(form.templateFileUrl, form.answerSheet, form.answerRange, form.answerSnapshotJson, form.dynamicArrayRules)}
-                    className={secondaryButtonClassName()}
-                  >
-                    重新加载模板
-                  </button>
-                </div>
-              )}
-            >
-              <Suspense fallback={(
-                <FastWorkbookFallbackEditor
-                  workbook={editorWorkbook}
-                  onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : () => undefined}
-                  selectedSheetName={selectedSheetName}
-                  onSelectedSheetNameChange={setSelectedSheetName}
-                  editableRange={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
-                  readOnly={!isTemplateEditMode}
-                  viewportClassName="h-[460px]"
-                />
-              )}>
-                <ExcelWorkbookEditor
-                  workbook={editorWorkbook}
-                  onWorkbookChange={isTemplateEditMode ? setEditorWorkbook : undefined}
-                  selectedSheetName={selectedSheetName}
-                  onSelectedSheetNameChange={(sheetName) => {
-                    setSelectedSheetName(sheetName);
-                    if (isTemplateEditMode) {
-                      setForm((prev) => ({ ...prev, answerSheet: sheetName }));
-                    }
-                  }}
-                  selection={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
-                  onSelectionChange={isTemplateEditMode && isSelectingAnswerRange ? ((nextSelection) => {
-                    setSelection(nextSelection);
-                  }) : undefined}
-                  editableRange={isTemplateEditMode && isSelectingAnswerRange ? selection : undefined}
-                  selectionEnabled={isTemplateEditMode && isSelectingAnswerRange}
-                  focusRange={isSelectingAnswerRange ? selection : persistedFocusRange}
-                  focusRequestVersion={editorFullscreenVersion}
-                  requestFullscreenVersion={editorFullscreenVersion}
-                  showConfirmSelectionButton={isSelectingAnswerRange}
-                  confirmSelectionLabel="确认区域"
-                  onConfirmSelection={confirmAnswerRange}
-                  onSnapshotCaptureReady={(capture) => {
-                    editorSnapshotGetterRef.current = capture;
-                  }}
-                  preserveDynamicArraySpillChildren
-                />
-              </Suspense>
-            </ExcelEditorErrorBoundary>
-          ) : (
-            <div className="flex h-48 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
-              上传 Excel 模板后即可开始配置
-            </div>
-          )}
-        </div>
       </FormDialog>
 
       <FormDialog

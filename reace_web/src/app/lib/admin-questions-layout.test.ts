@@ -31,14 +31,70 @@ describe("admin questions layout", () => {
     expect(source).toContain("前台练习展示预览");
   });
 
-  it("supports uploading an ideal answer reference image", () => {
+  it("keeps the basic information step free of template upload and editor controls", () => {
     const source = adminQuestionsSource();
+    const basicStepStart = source.indexOf("editorStep === 0");
+    const basicStepBlock = source.slice(
+      basicStepStart,
+      source.indexOf("editorStep === 1", basicStepStart),
+    );
 
-    expect(source).toContain("idealAnswerImageUrl");
-    expect(source).toContain("理想答案参考图");
-    expect(source).toContain("handleIdealAnswerImageUpload");
-    expect(source).toContain("handleIdealAnswerImagePaste");
-    expect(source).toContain("Ctrl+V 粘贴图片");
+    expect(basicStepStart).toBeGreaterThan(-1);
+    expect(basicStepBlock).toContain("基本信息");
+    expect(basicStepBlock).toContain("前台练习展示预览");
+    expect(basicStepBlock).not.toContain("Excel 模板");
+    expect(basicStepBlock).not.toContain("模板编辑器");
+    expect(basicStepBlock).not.toContain("handleTemplateUpload");
+  });
+
+  it("limits the upload-template step to template upload and editor operations", () => {
+    const source = adminQuestionsSource();
+    const uploadStepStart = source.indexOf("editorStep === 1");
+    const uploadStepBlock = source.slice(
+      uploadStepStart,
+      source.indexOf("editorStep === 2", uploadStepStart),
+    );
+
+    expect(uploadStepStart).toBeGreaterThan(-1);
+    expect(uploadStepBlock).toContain("Excel 模板");
+    expect(uploadStepBlock).toContain("上传模板");
+    expect(uploadStepBlock).toContain("模板编辑器");
+    expect(uploadStepBlock).not.toContain("理想答案参考图");
+    expect(uploadStepBlock).not.toContain("前台练习展示预览");
+    expect(uploadStepBlock).not.toContain("工作表预览");
+    expect(uploadStepBlock).not.toContain("区域与判题配置");
+  });
+
+  it("merges the answer-area and grading-rule configuration into one step", () => {
+    const source = adminQuestionsSource();
+    const answerStepStart = source.indexOf("editorStep === 2");
+    const answerStepBlock = source.slice(
+      answerStepStart,
+      source.indexOf("editorStep === 3", answerStepStart),
+    );
+
+    expect(answerStepStart).toBeGreaterThan(-1);
+    expect(answerStepBlock).toContain("工作表预览");
+    expect(answerStepBlock).toContain("区域与判题配置");
+    expect(answerStepBlock).toContain("判题规则");
+    expect(answerStepBlock).toContain("测试结果");
+    expect(source).not.toContain("editorStep === 4");
+  });
+
+  it("lets preview-publish edits write back to the same form state", () => {
+    const source = adminQuestionsSource();
+    const previewStepStart = source.indexOf("editorStep === 3");
+    const previewStepBlock = source.slice(
+      previewStepStart,
+      source.indexOf("</FormDialog>", previewStepStart),
+    );
+
+    expect(previewStepStart).toBeGreaterThan(-1);
+    expect(previewStepBlock).toContain("预览发布");
+    expect(previewStepBlock).toContain("发布内容修改");
+    expect(previewStepBlock).toMatch(/title:\s*event\.target\.value/);
+    expect(previewStepBlock).toMatch(/explanation:\s*event\.target\.value/);
+    expect(previewStepBlock).toMatch(/answerRange:\s*event\.target\.value\.toUpperCase\(\)/);
   });
 
   it("allows removing the current Excel template before uploading a replacement", () => {
@@ -106,7 +162,7 @@ describe("admin questions layout", () => {
     const testResultStart = source.indexOf("测试结果");
     const testResultBlock = source.slice(
       testResultStart,
-      source.indexOf("editorStep === 4", testResultStart),
+      source.indexOf("预览发布", testResultStart),
     );
 
     expect(testResultBlock).toContain("min-w-0");
