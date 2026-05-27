@@ -45,6 +45,7 @@ class AdminNotificationControllerTest {
     @Test
     void createScheduledNotificationDoesNotSendImmediately() throws Exception {
         when(siteNotificationService.save(any(SiteNotification.class))).thenReturn(true);
+        LocalDateTime scheduledTime = LocalDateTime.now().plusDays(1).withNano(0);
 
         mockMvc.perform(post("/api/admin/notifications")
                         .requestAttr("userId", 7L)
@@ -56,10 +57,10 @@ class AdminNotificationControllerTest {
                                   "type":"system",
                                   "status":"scheduled",
                                   "targetType":"all",
-                                  "scheduledTime":"2026-05-27T10:00:00",
+                                  "scheduledTime":"%s",
                                   "pinned":true
                                 }
-                                """))
+                                """.formatted(scheduledTime)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("scheduled"))
                 .andExpect(jsonPath("$.pinned").value(true));
@@ -67,7 +68,7 @@ class AdminNotificationControllerTest {
         ArgumentCaptor<SiteNotification> captor = ArgumentCaptor.forClass(SiteNotification.class);
         verify(siteNotificationService).save(captor.capture());
         SiteNotification notification = captor.getValue();
-        assertThat(notification.getScheduledTime()).isEqualTo(LocalDateTime.parse("2026-05-27T10:00:00"));
+        assertThat(notification.getScheduledTime()).isEqualTo(scheduledTime);
         assertThat(notification.getPinned()).isTrue();
         assertThat(notification.getPinnedUntil()).isNotNull();
         verify(siteNotificationService, never()).sendNotification(anyLong());
