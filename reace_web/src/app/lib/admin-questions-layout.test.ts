@@ -47,7 +47,7 @@ describe("admin questions layout", () => {
     expect(basicStepBlock).not.toContain("handleTemplateUpload");
   });
 
-  it("limits the upload-template step to template upload and editor operations", () => {
+  it("keeps answer reference image upload in the upload-template step", () => {
     const source = adminQuestionsSource();
     const uploadStepStart = source.indexOf("editorStep === 1");
     const uploadStepBlock = source.slice(
@@ -58,8 +58,11 @@ describe("admin questions layout", () => {
     expect(uploadStepStart).toBeGreaterThan(-1);
     expect(uploadStepBlock).toContain("Excel 模板");
     expect(uploadStepBlock).toContain("上传模板");
+    expect(uploadStepBlock).toContain("理想答案参考图");
+    expect(uploadStepBlock).toContain("上传答案照片");
+    expect(uploadStepBlock).toContain("idealAnswerImageUrl");
+    expect(source).toContain("uploadIdealAnswerImageFile");
     expect(uploadStepBlock).toContain("模板编辑器");
-    expect(uploadStepBlock).not.toContain("理想答案参考图");
     expect(uploadStepBlock).not.toContain("前台练习展示预览");
     expect(uploadStepBlock).not.toContain("工作表预览");
     expect(uploadStepBlock).not.toContain("区域与判题配置");

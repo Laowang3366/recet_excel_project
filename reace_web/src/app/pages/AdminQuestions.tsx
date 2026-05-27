@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, type ClipboardEvent, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
-import { AlertTriangle, CheckCircle2, Edit3, FileSpreadsheet, LoaderCircle, MousePointer2, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Edit3, FileSpreadsheet, Image as ImageIcon, LoaderCircle, MousePointer2, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
@@ -9,6 +9,7 @@ import { useAdminBulkSelection } from "../admin/bulk-selection";
 import { QUESTION_BANK_SERVICE_ENDPOINTS, QUESTION_BANK_TABS, QUESTION_EDITOR_STEPS, QUESTION_PUBLISH_CHECKS, buildQuestionBankStats, getQuestionRiskIcon, getQuestionStatusMeta, type QuestionBankTabKey } from "../admin/question-bank-view-model";
 import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef } from "../lib/excel";
+import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { resolveInitialQuestionCategoryId } from "../admin/admin-question-url-state";
 import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
@@ -157,6 +158,7 @@ export function AdminQuestions() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateLoadError, setTemplateLoadError] = useState("");
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const [uploadingIdealAnswerImage, setUploadingIdealAnswerImage] = useState(false);
   const [isTemplateEditMode, setIsTemplateEditMode] = useState(true);
   const [isSelectingAnswerRange, setIsSelectingAnswerRange] = useState(false);
   const [formulaDetectionNotice, setFormulaDetectionNotice] = useState("");
@@ -791,6 +793,43 @@ export function AdminQuestions() {
     }));
     setIsTemplateEditMode(true);
     toast.success("当前模板已移除，可以重新上传");
+  };
+
+  const uploadIdealAnswerImageFile = async (files: FileList | File[] | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const supportedImage = /^image\/(png|jpe?g|webp)$/i.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+    if (!supportedImage) {
+      toast.error("答案照片仅支持 PNG、JPG、JPEG、WEBP 格式");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("答案照片不能超过 8MB");
+      return;
+    }
+    setUploadingIdealAnswerImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadResult = await api.post<{ url: string }>("/api/upload", formData);
+      setForm((prev) => ({ ...prev, idealAnswerImageUrl: uploadResult.url }));
+      toast.success("答案照片已上传");
+    } finally {
+      setUploadingIdealAnswerImage(false);
+    }
+  };
+
+  const removeIdealAnswerImage = () => {
+    if (!form.idealAnswerImageUrl) return;
+    setForm((prev) => ({ ...prev, idealAnswerImageUrl: "" }));
+    toast.success("答案照片已移除");
+  };
+
+  const handleIdealAnswerImagePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const imageFile = Array.from(event.clipboardData.files || []).find((item) => item.type.startsWith("image/"));
+    if (!imageFile) return;
+    event.preventDefault();
+    void uploadIdealAnswerImageFile([imageFile]);
   };
 
   const isDynamicArrayMode = form.gradingMode === "dynamic_array";
@@ -1610,6 +1649,61 @@ export function AdminQuestions() {
                     />
                   </label>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                    <ImageIcon size={16} />
+                    理想答案参考图
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    可选。上传后，前台答题页会显示“查看参考答案”按钮。
+                  </p>
+                  <div className="mt-2 truncate text-xs text-slate-500">{form.idealAnswerImageUrl || "尚未上传答案照片"}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {form.idealAnswerImageUrl ? (
+                    <button type="button" onClick={removeIdealAnswerImage} className={secondaryButtonClassName()}>
+                      <X size={14} />
+                      移除
+                    </button>
+                  ) : null}
+                  <label className={`${primaryButtonClassName()} cursor-pointer`}>
+                    {uploadingIdealAnswerImage ? <LoaderCircle size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    上传答案照片
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      disabled={uploadingIdealAnswerImage}
+                      onChange={(event) => {
+                        void uploadIdealAnswerImageFile(event.target.files);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div
+                tabIndex={0}
+                onPaste={handleIdealAnswerImagePaste}
+                className="mt-4 flex min-h-[150px] items-center justify-center rounded-[8px] border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-400 outline-none transition focus:border-[#1769ff] focus:bg-[#f8fbff]"
+              >
+                {form.idealAnswerImageUrl ? (
+                  <img
+                    src={normalizeResourceUrl(form.idealAnswerImageUrl)}
+                    alt="理想答案参考图"
+                    className="max-h-[260px] max-w-full rounded-[6px] border border-slate-200 bg-white object-contain"
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="font-semibold text-slate-500">使用上方按钮上传，或 Ctrl+V 粘贴答案截图</div>
+                    <div className="text-xs text-slate-400">支持 PNG、JPG、JPEG、WEBP，单张不超过 8MB</div>
+                  </div>
+                )}
               </div>
             </div>
 
