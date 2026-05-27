@@ -21,6 +21,16 @@ describe("admin questions layout", () => {
     expect(source).toContain("difficultyFilter");
   });
 
+  it("renders the redesigned question-bank shell from the design references", () => {
+    const source = adminQuestionsSource();
+
+    expect(source).toContain("QUESTION_BANK_TABS");
+    expect(source).toContain("QUESTION_EDITOR_STEPS");
+    expect(source).toContain("题目编辑向导");
+    expect(source).toContain("发布前检查");
+    expect(source).toContain("前台练习展示预览");
+  });
+
   it("supports uploading an ideal answer reference image", () => {
     const source = adminQuestionsSource();
 
@@ -77,5 +87,17 @@ describe("admin questions layout", () => {
     expect(submitBlock).toContain("shouldReuseStoredAnswerSnapshot");
     expect(submitBlock).toContain("form.answerSnapshotJson");
     expect(submitBlock).toContain("answerSnapshotJson: resolvedAnswerSnapshotJson");
+  });
+
+  it("wires redesigned question-bank gaps to server-backed endpoints", () => {
+    const source = adminQuestionsSource();
+
+    expect(source).toContain("QUESTION_BANK_SERVICE_ENDPOINTS.batchImport");
+    expect(source).toContain("QUESTION_BANK_SERVICE_ENDPOINTS.templateSnapshotChecks");
+    expect(source).toContain("QUESTION_BANK_SERVICE_ENDPOINTS.exceptions");
+    expect(source).toContain("QUESTION_BANK_SERVICE_ENDPOINTS.publishTests");
+    expect(source).toContain("QUESTION_BANK_SERVICE_ENDPOINTS.publishTest(item.id)");
+    expect(source).not.toContain("需要后端接口支持");
+    expect(source).not.toContain("需等待后端任务接口");
   });
 });
