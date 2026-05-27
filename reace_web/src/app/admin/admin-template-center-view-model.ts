@@ -68,6 +68,17 @@ export type AdminTemplateHealthItem = {
   actionLabel: string;
 };
 
+export type AdminTemplateStatusAction = {
+  label: "下架" | "发布";
+  nextEnabled: boolean;
+  active: boolean;
+};
+
+export type AdminTemplateRefreshAction = {
+  label: "刷新" | "刷新中";
+  disabled: boolean;
+};
+
 export function filterAdminTemplates<T extends AdminTemplateRecord>(records: T[], filters: AdminTemplateFilters) {
   const category = normalize(filters.industryCategory);
   const scenario = normalize(filters.useScenario);
@@ -147,6 +158,22 @@ export function buildTemplateHealthItems(records: AdminTemplateRecord[]): AdminT
       actionLabel: "处理",
     },
   ];
+}
+
+export function getTemplateStatusAction(enabled?: boolean | null): AdminTemplateStatusAction {
+  const isEnabled = Boolean(enabled);
+  return {
+    label: isEnabled ? "下架" : "发布",
+    nextEnabled: !isEnabled,
+    active: !isEnabled,
+  };
+}
+
+export function getTemplateHealthRefreshAction(refreshing: boolean): AdminTemplateRefreshAction {
+  return {
+    label: refreshing ? "刷新中" : "刷新",
+    disabled: refreshing,
+  };
 }
 
 export function buildTemplatePayload(form: AdminTemplateFormState) {

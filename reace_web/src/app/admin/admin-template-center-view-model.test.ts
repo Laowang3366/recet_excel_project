@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildTemplateHealthItems,
   buildTemplatePayload,
+  getTemplateHealthRefreshAction,
+  getTemplateStatusAction,
   buildTemplateStats,
   filterAdminTemplates,
   paginateAdminTemplates,
@@ -97,6 +99,30 @@ describe("admin template center view model", () => {
       { key: "missingMetadata", label: "未填写行业/场景", count: 1, statusLabel: "", actionLabel: "去补全" },
       { key: "drafts", label: "草稿未发布", count: 1, statusLabel: "", actionLabel: "处理" },
     ]);
+  });
+
+  it("labels the template status action by the next explicit state", () => {
+    expect(getTemplateStatusAction(true)).toEqual({
+      label: "下架",
+      nextEnabled: false,
+      active: false,
+    });
+    expect(getTemplateStatusAction(false)).toEqual({
+      label: "发布",
+      nextEnabled: true,
+      active: true,
+    });
+  });
+
+  it("describes the file health refresh button while refreshing", () => {
+    expect(getTemplateHealthRefreshAction(false)).toEqual({
+      label: "刷新",
+      disabled: false,
+    });
+    expect(getTemplateHealthRefreshAction(true)).toEqual({
+      label: "刷新中",
+      disabled: true,
+    });
   });
 
   it("paginates visible template cards", () => {

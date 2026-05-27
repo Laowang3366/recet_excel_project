@@ -42,6 +42,8 @@ import {
   buildTemplateHealthItems,
   buildTemplatePayload,
   buildTemplateStats,
+  getTemplateHealthRefreshAction,
+  getTemplateStatusAction,
   type AdminTemplateFormState,
   type AdminTemplateHealthItem,
   type AdminTemplateRecord,
@@ -132,6 +134,7 @@ export function AdminTemplateCenter() {
   const [uploadingBatch, setUploadingBatch] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [healthRefreshing, setHealthRefreshing] = useState(false);
 
   const templatesQuery = useQuery({
     queryKey: adminKeys.templates({ ...filters, page, pageSize }),
@@ -184,6 +187,19 @@ export function AdminTemplateCenter() {
 
   const refreshAll = async () => {
     await queryClient.invalidateQueries({ queryKey: ["admin", "templates"] });
+  };
+
+  const refreshHealth = async () => {
+    if (healthRefreshing) return;
+    setHealthRefreshing(true);
+    try {
+      await refreshAll();
+      toast.success("文件健康检查已刷新");
+    } catch (error) {
+      handleAdminError(error, navigate);
+    } finally {
+      setHealthRefreshing(false);
+    }
   };
 
   const updateFilters = (patch: Partial<typeof filters>) => {
@@ -369,7 +385,7 @@ export function AdminTemplateCenter() {
                     item={item}
                     onEdit={() => openEdit(item)}
                     onPreview={() => setPreviewItem(item)}
-                    onToggleStatus={() => void updateTemplateStatus(item, !item.enabled)}
+                    onToggleStatus={() => void updateTemplateStatus(item, getTemplateStatusAction(item.enabled).nextEnabled)}
                   />
                 ))}
               </div>
@@ -392,7 +408,8 @@ export function AdminTemplateCenter() {
         <aside className="space-y-4">
           <TemplateHealthPanel
             items={healthItems}
-            onRefresh={() => void refreshAll()}
+            refreshing={healthRefreshing || templatesQuery.isFetching}
+            onRefresh={() => void refreshHealth()}
             onAction={(key) => {
               if (key === "missingFiles") updateFilters({ status: "" });
               if (key === "missingMetadata") updateFilters({ keyword: "" });
@@ -616,6 +633,7 @@ function TemplateCard({
   onToggleStatus: () => void;
 }) {
   const difficultyTone = getDifficultyTone(item.difficultyLevel);
+  const statusAction = getTemplateStatusAction(item.enabled);
 
   return (
     <article className="rounded-[8px] border border-[#dfe7f3] bg-white p-4 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
@@ -638,7 +656,7 @@ function TemplateCard({
       <div className="mt-4 grid grid-cols-3 gap-2">
         <CardActionButton icon={Pencil} label="编辑" onClick={onEdit} />
         <CardActionButton icon={Eye} label="预览" onClick={onPreview} />
-        <CardActionButton icon={item.enabled ? Upload : Send} label={item.enabled ? "上下架" : "发布"} onClick={onToggleStatus} active={!item.enabled} />
+        <CardActionButton icon={item.enabled ? Download : Send} label={statusAction.label} onClick={onToggleStatus} active={statusAction.active} />
       </div>
     </article>
   );
@@ -777,13 +795,16 @@ function PageButton({ active, disabled, onClick, children }: { active?: boolean;
 
 function TemplateHealthPanel({
   items,
+  refreshing,
   onRefresh,
   onAction,
 }: {
   items: ReturnType<typeof buildTemplateHealthItems>;
+  refreshing?: boolean;
   onRefresh: () => void;
   onAction: (key: ReturnType<typeof buildTemplateHealthItems>[number]["key"]) => void;
 }) {
+  const refreshAction = getTemplateHealthRefreshAction(Boolean(refreshing));
   const icons: Record<string, { icon: LucideIcon; bg: string; text: string }> = {
     missingFiles: { icon: CheckCircle2, bg: "bg-[#dcfce7]", text: "text-[#039855]" },
     missingMetadata: { icon: FileSpreadsheet, bg: "bg-[#fff4db]", text: "text-[#fa8c16]" },
@@ -797,9 +818,15 @@ function TemplateHealthPanel({
           文件健康检查
           <Info size={16} className="text-[#667085]" />
         </div>
-        <button type="button" onClick={onRefresh} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1677ff]">
-          <RefreshCw size={15} />
-          刷新
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={refreshAction.disabled}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1677ff] transition disabled:cursor-wait disabled:text-[#98a2b3]"
+          aria-busy={refreshAction.disabled}
+        >
+          <RefreshCw size={15} className={refreshAction.disabled ? "animate-spin" : ""} />
+          {refreshAction.label}
         </button>
       </div>
       <div className="divide-y divide-[#eef2f6]">
@@ -1021,8 +1048,11 @@ function CreateTemplateDrawer({
   const update = (patch: Partial<AdminTemplateFormState>) => onChange({ ...form, ...patch });
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/45">
-      <aside className="ml-auto flex h-full w-[min(980px,calc(100vw-1rem))] flex-col bg-white shadow-[-16px_0_40px_rgba(15,23,42,0.18)]">
+    <div className="fixed inset-0 z-50 bg-slate-950/45" onClick={onClose}>
+      <aside
+        className="ml-auto flex h-full w-[min(980px,calc(100vw-1rem))] flex-col bg-white shadow-[-16px_0_40px_rgba(15,23,42,0.18)]"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex h-[68px] items-center justify-between border-b border-[#e5eaf3] px-7">
           <div className="text-[20px] font-semibold text-[#101828]">新增模板</div>
           <button type="button" onClick={onClose} className="text-[#344054] hover:text-[#1677ff]">
@@ -1128,9 +1158,29 @@ function CreateTemplateDrawer({
 }
 
 function TemplatePreviewDialog({ item, onClose }: { item: TemplateRecord | null; onClose: () => void }) {
+  const closeAfterOutsideClick = () => {
+    const blockOutsideClick = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+
+    window.addEventListener("click", blockOutsideClick, { capture: true, once: true });
+    window.setTimeout(() => {
+      window.removeEventListener("click", blockOutsideClick, true);
+    }, 1000);
+  };
+
   return (
     <Dialog open={Boolean(item)} onOpenChange={(next) => (!next ? onClose() : null)}>
-      <DialogContent className="w-[min(760px,calc(100vw-2rem))] overflow-hidden rounded-[8px] bg-white p-0 sm:max-w-none">
+      <DialogContent
+        className="w-[min(760px,calc(100vw-2rem))] overflow-hidden rounded-[8px] bg-white p-0 sm:max-w-none"
+        onPointerDownOutside={(event) => {
+          event.preventDefault();
+          closeAfterOutsideClick();
+        }}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader className="border-b border-[#e5eaf3] px-6 py-5">
           <DialogTitle>{item?.title || "模板预览"}</DialogTitle>
           <DialogDescription className="sr-only">预览模板封面、说明、行业场景、积分和下载状态。</DialogDescription>
