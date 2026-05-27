@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   QUESTION_CATEGORY_PERSISTED_DESIGN_FIELDS,
+  buildCategoryQuestionListQuery,
+  buildQuestionCategoryQuickToggleLabel,
   buildQuestionCategoryMutationPayload,
   buildQuestionCategoryStats,
+  buildQuestionCategoryTogglePayload,
   buildSortableCategoryRows,
   moveSortableCategoryRow,
+  normalizeCategoryQuestionPreviewRows,
   normalizeQuestionCategoryCards,
 } from "./question-categories-view-model";
 
@@ -111,5 +115,46 @@ describe("question category view model", () => {
       "iconKey",
       "recommendedDifficulty",
     ]);
+  });
+
+  it("builds a local question-list query for a category preview dialog", () => {
+    expect(buildCategoryQuestionListQuery({ categoryId: 7, page: 2, size: 6 })).toBe(
+      "page=2&size=6&type=excel_template&questionCategoryId=7",
+    );
+  });
+
+  it("normalizes question preview rows for the category dialog cards", () => {
+    expect(normalizeCategoryQuestionPreviewRows([
+      { id: 5, title: " SUMIF 条件汇总 ", difficulty: 3, enabled: true, points: 15 },
+      { id: 6, title: "", difficulty: "1", enabled: false, points: 5 },
+    ])).toEqual([
+      { id: 5, title: "SUMIF 条件汇总", difficultyLabel: "中等", statusLabel: "启用", pointsLabel: "15 分" },
+      { id: 6, title: "题目 6", difficultyLabel: "基础", statusLabel: "停用", pointsLabel: "5 分" },
+    ]);
+  });
+
+  it("returns clear quick-toggle copy for category list cards", () => {
+    expect(buildQuestionCategoryQuickToggleLabel(true)).toEqual({ label: "停用", nextEnabled: false });
+    expect(buildQuestionCategoryQuickToggleLabel(false)).toEqual({ label: "启用", nextEnabled: true });
+  });
+
+  it("builds quick-toggle payload while preserving design fields", () => {
+    expect(buildQuestionCategoryTogglePayload({
+      id: 1,
+      name: "函数基础",
+      description: "基础函数",
+      groupName: "函数训练",
+      frontDisplayName: "函数入门",
+      iconKey: "sigma",
+      recommendedDifficulty: "easy",
+      sortOrder: 3,
+      enabled: true,
+    }, false)).toMatchObject({
+      name: "函数基础",
+      frontDisplayName: "函数入门",
+      iconKey: "sigma",
+      recommendedDifficulty: "easy",
+      enabled: false,
+    });
   });
 });

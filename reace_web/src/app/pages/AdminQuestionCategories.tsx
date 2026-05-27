@@ -4,7 +4,6 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   BarChart3,
-  ChevronRight,
   CircleAlert,
   ClipboardList,
   Edit3,
@@ -17,6 +16,8 @@ import {
   Link2,
   ListChecks,
   MoreHorizontal,
+  Power,
+  PowerOff,
   PlusCircle,
   RefreshCw,
   Rows3,
@@ -24,6 +25,7 @@ import {
   Sigma,
   SlidersHorizontal,
   Table2,
+  Trash2,
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -32,16 +34,21 @@ import {
   DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS,
   QuestionCategoryDesignFields,
   SortableQuestionCategoryRow,
+  buildCategoryQuestionListQuery,
+  buildQuestionCategoryQuickToggleLabel,
   buildQuestionCategoryMutationPayload,
   buildQuestionCategoryStats,
+  buildQuestionCategoryTogglePayload,
   buildSortableCategoryRows,
   moveSortableCategoryRow,
+  normalizeCategoryQuestionPreviewRows,
   normalizeQuestionCategoryCards,
 } from "../admin/question-categories-view-model";
 import { api } from "../lib/api";
 import { adminKeys } from "../lib/query-keys";
 import { AdminEmptyState, AdminPageShell, inputClassName, primaryButtonClassName, secondaryButtonClassName, textareaClassName } from "../admin/shared";
 import {
+  AdminQuestionsResponse,
   QuestionCategoryForm,
   QuestionCategoryRecord,
   adminRequest,
@@ -52,6 +59,8 @@ import {
   showAdminSuccess,
   useAdminRole,
 } from "./AdminConsoleShared";
+
+const QUESTION_PREVIEW_PAGE_SIZE = 6;
 
 const iconOptions = [
   { key: "folder", label: "文件夹", icon: Folder },
@@ -80,6 +89,8 @@ export function AdminQuestionCategories() {
   const [open, setOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [editing, setEditing] = useState<QuestionCategoryRecord | null>(null);
+  const [questionListCategory, setQuestionListCategory] = useState<QuestionCategoryRecord | null>(null);
+  const [questionPreviewPage, setQuestionPreviewPage] = useState(1);
   const [form, setForm] = useState<QuestionCategoryForm>(defaultQuestionCategoryForm());
   const [designFields, setDesignFields] = useState<QuestionCategoryDesignFields>(DEFAULT_QUESTION_CATEGORY_DESIGN_FIELDS);
   const [sortRows, setSortRows] = useState<SortableQuestionCategoryRow[]>([]);
@@ -91,6 +102,26 @@ export function AdminQuestionCategories() {
     queryFn: async () => {
       const result = await adminRequest<QuestionCategoryRecord[]>(api.get("/api/admin/question-categories", { silent: true }), navigate, role);
       return result || [];
+    },
+  });
+
+  const questionPreviewQuery = useQuery({
+    queryKey: adminKeys.questions({
+      source: "category-preview",
+      categoryId: questionListCategory?.id ?? "",
+      page: questionPreviewPage,
+      size: QUESTION_PREVIEW_PAGE_SIZE,
+    }),
+    enabled: Boolean(role && questionListCategory?.id),
+    queryFn: async () => {
+      if (!questionListCategory?.id) return { questions: [], total: 0 };
+      const queryString = buildCategoryQuestionListQuery({
+        categoryId: questionListCategory.id,
+        page: questionPreviewPage,
+        size: QUESTION_PREVIEW_PAGE_SIZE,
+      });
+      const result = await adminRequest<AdminQuestionsResponse>(api.get(`/api/admin/questions?${queryString}`, { silent: true }), navigate, role);
+      return result || { questions: [], total: 0 };
     },
   });
 
@@ -144,13 +175,7 @@ export function AdminQuestionCategories() {
   };
 
   const toggleEnabled = async (item: QuestionCategoryRecord, nextEnabled: boolean) => {
-    const payload = buildQuestionCategoryMutationPayload({
-      name: item.name || "",
-      description: item.description || "",
-      groupName: item.groupName || "",
-      sortOrder: Number(item.sortOrder || 0),
-      enabled: nextEnabled,
-    }, getDesignFieldsFromRecord(item));
+    const payload = buildQuestionCategoryTogglePayload(item, nextEnabled);
     const result = await adminRequest(
       api.put(`/api/admin/question-categories/${item.id}`, payload),
       navigate,
@@ -206,6 +231,11 @@ export function AdminQuestionCategories() {
 
   const moveSortRow = (fromIndex: number, toIndex: number) => {
     setSortRows((current) => moveSortableCategoryRow(current, fromIndex, toIndex));
+  };
+
+  const openQuestionList = (item: QuestionCategoryRecord) => {
+    setQuestionPreviewPage(1);
+    setQuestionListCategory(item);
   };
 
   return (
@@ -269,7 +299,7 @@ export function AdminQuestionCategories() {
                   onDelete={remove}
                   onToggle={toggleEnabled}
                   onSort={openSort}
-                  onViewQuestions={() => navigate(`/admin/questions?questionCategoryId=${item.id}`)}
+                  onViewQuestions={openQuestionList}
                 />
               ))}
             </div>
@@ -309,6 +339,20 @@ export function AdminQuestionCategories() {
         onDragStart={setDraggingIndex}
         onDragEnd={() => setDraggingIndex(null)}
         onMove={moveSortRow}
+      />
+
+      <QuestionListDialog
+        open={Boolean(questionListCategory)}
+        category={questionListCategory}
+        questions={questionPreviewQuery.data?.questions || []}
+        total={questionPreviewQuery.data?.total || 0}
+        page={questionPreviewPage}
+        pageSize={QUESTION_PREVIEW_PAGE_SIZE}
+        loading={questionPreviewQuery.isLoading || questionPreviewQuery.isFetching}
+        onOpenChange={(next) => {
+          if (!next) setQuestionListCategory(null);
+        }}
+        onPageChange={setQuestionPreviewPage}
       />
     </AdminPageShell>
   );
@@ -378,9 +422,11 @@ function CategoryCard({
   onDelete: (item: QuestionCategoryRecord) => void;
   onToggle: (item: QuestionCategoryRecord, nextEnabled: boolean) => void;
   onSort: () => void;
-  onViewQuestions: () => void;
+  onViewQuestions: (item: QuestionCategoryRecord) => void;
 }) {
   const Icon = resolveCategoryIcon(item.iconKey);
+  const toggleAction = buildQuestionCategoryQuickToggleLabel(item.enabled);
+  const ToggleIcon = item.enabled ? PowerOff : Power;
   return (
     <article className="group flex h-[158px] flex-col overflow-hidden rounded-[8px] border border-[#e5e7eb] bg-white shadow-[0_1px_4px_rgba(15,23,42,0.04)] transition hover:border-[#b7d6ff] hover:shadow-[0_8px_22px_rgba(15,23,42,0.08)]">
       <div className="relative flex min-h-0 flex-1 gap-4 px-5 py-4">
@@ -397,21 +443,23 @@ function CategoryCard({
           </div>
         </div>
         {source ? (
-          <button type="button" onClick={() => void onDelete(source)} className="absolute right-5 top-5 text-[#344054] transition hover:text-[#d92d20]" aria-label={`删除 ${item.name}`}>
-            <MoreHorizontal size={20} />
+          <button
+            type="button"
+            onClick={() => void onDelete(source)}
+            className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent text-[#d92d20] transition hover:border-[#fda29b] hover:bg-[#fff1f0]"
+            aria-label={`删除 ${item.name}`}
+            title="删除"
+          >
+            <Trash2 size={17} />
           </button>
         ) : null}
       </div>
-      <div className="grid h-[39px] grid-cols-3 border-t border-[#edf0f5] text-[15px] font-medium text-[#344054]">
+      <div className="grid h-[39px] grid-cols-4 border-t border-[#edf0f5] text-[15px] font-medium text-[#344054]">
         <CategoryActionButton disabled={!source} onClick={() => source && onEdit(source)} icon={Edit3} label="编辑" />
-        <CategoryActionButton onClick={onViewQuestions} icon={ClipboardList} label="查看题目" />
+        <CategoryActionButton disabled={!source} onClick={() => source && onViewQuestions(source)} icon={ClipboardList} label="查看题目" />
+        <CategoryActionButton disabled={!source} onClick={() => source && onToggle(source, toggleAction.nextEnabled)} icon={ToggleIcon} label={toggleAction.label} />
         <CategoryActionButton onClick={onSort} icon={Rows3} label="调整排序" />
       </div>
-      {source ? (
-        <div className="sr-only">
-          <Switch checked={Boolean(item.enabled)} onCheckedChange={(next) => onToggle(source, next)} />
-        </div>
-      ) : null}
     </article>
   );
 }
@@ -429,6 +477,8 @@ function DraftCategoryRow({
   onDelete: (item: QuestionCategoryRecord) => void;
   onToggle: (item: QuestionCategoryRecord, nextEnabled: boolean) => void;
 }) {
+  const toggleAction = buildQuestionCategoryQuickToggleLabel(item.enabled);
+  const ToggleIcon = item.enabled ? PowerOff : Power;
   return (
     <div className="flex min-h-[60px] items-center gap-4 rounded-[8px] border border-[#e5e7eb] bg-white px-4 text-[#344054]">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eef2f6] text-[#667085]">
@@ -443,11 +493,11 @@ function DraftCategoryRow({
           <button type="button" onClick={() => onEdit(source)} className="rounded-[4px] p-2 text-[#344054] hover:bg-[#f2f4f7] hover:text-[#1677ff]" aria-label={`编辑 ${item.name}`}>
             <Edit3 size={16} />
           </button>
-          <button type="button" onClick={() => onToggle(source, true)} className="rounded-[4px] p-2 text-[#344054] hover:bg-[#f2f4f7] hover:text-[#039855]" aria-label={`启用 ${item.name}`}>
-            <RefreshCw size={16} />
+          <button type="button" onClick={() => onToggle(source, toggleAction.nextEnabled)} className="rounded-[4px] p-2 text-[#344054] hover:bg-[#f2f4f7] hover:text-[#039855]" aria-label={`${toggleAction.label} ${item.name}`} title={toggleAction.label}>
+            <ToggleIcon size={16} />
           </button>
           <button type="button" onClick={() => void onDelete(source)} className="rounded-[4px] p-2 text-[#344054] hover:bg-[#fff1f0] hover:text-[#d92d20]" aria-label={`删除 ${item.name}`}>
-            <ChevronRight size={18} />
+            <Trash2 size={16} />
           </button>
         </div>
       ) : null}
@@ -534,20 +584,14 @@ function QuestionCategoryDialog({
             <HorizontalField label="前台显示名称" required>
               <CountedInput value={designFields.frontDisplayName} max={50} onChange={(value) => onDesignFieldsChange({ ...designFields, frontDisplayName: value })} />
             </HorizontalField>
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-              <HorizontalField label="排序值" required compact>
-                <input
-                  type="number"
-                  value={form.sortOrder}
-                  onChange={(event) => onFormChange({ ...form, sortOrder: event.target.value })}
-                  className={inputClassName()}
-                />
-              </HorizontalField>
-              <div className="flex items-center justify-between gap-4 text-[16px] font-semibold text-[#101828]">
-                <span>是否启用</span>
-                <Switch checked={Boolean(form.enabled)} onCheckedChange={(next) => onFormChange({ ...form, enabled: next })} className="h-[30px] w-[58px] data-[state=checked]:bg-[#1677ff]" />
-              </div>
-            </div>
+            <HorizontalField label="排序值" required>
+              <input
+                type="number"
+                value={form.sortOrder}
+                onChange={(event) => onFormChange({ ...form, sortOrder: event.target.value })}
+                className={inputClassName()}
+              />
+            </HorizontalField>
             <HorizontalField label="分类图标选择" required>
               <div>
                 <div className="grid grid-cols-7 gap-3">
@@ -579,6 +623,12 @@ function QuestionCategoryDialog({
                 ))}
               </select>
             </HorizontalField>
+            <HorizontalField label="是否启用">
+              <div className="flex h-12 items-center justify-between rounded-[6px] border border-[#d0d5dd] bg-white px-4">
+                <span className={`text-sm font-semibold ${form.enabled ? "text-[#039855]" : "text-[#667085]"}`}>{form.enabled ? "当前启用" : "当前停用"}</span>
+                <Switch checked={Boolean(form.enabled)} onCheckedChange={(next) => onFormChange({ ...form, enabled: next })} className="h-[30px] w-[58px] data-[state=checked]:bg-[#1677ff]" />
+              </div>
+            </HorizontalField>
           </div>
           <aside className="rounded-[8px] border border-[#e5e7eb] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
             <div className="flex items-center gap-4">
@@ -601,6 +651,83 @@ function QuestionCategoryDialog({
             <Save size={16} />
             保存分类
           </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function QuestionListDialog({
+  open,
+  category,
+  questions,
+  total,
+  page,
+  pageSize,
+  loading,
+  onOpenChange,
+  onPageChange,
+}: {
+  open: boolean;
+  category: QuestionCategoryRecord | null;
+  questions: NonNullable<AdminQuestionsResponse["questions"]>;
+  total: number;
+  page: number;
+  pageSize: number;
+  loading: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPageChange: (page: number) => void;
+}) {
+  const rows = normalizeCategoryQuestionPreviewRows(questions);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="max-h-[90vh] w-[min(900px,calc(100vw-2rem))] max-w-none overflow-hidden rounded-[8px] border-[#d0d5dd] bg-white p-0 shadow-[0_22px_60px_rgba(15,23,42,0.22)] sm:max-w-none">
+        <DialogHeader className="border-b border-[#e5e7eb] px-8 pb-5 pt-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <DialogTitle className="text-[24px] font-semibold text-[#101828]">分类题目列表</DialogTitle>
+              <DialogDescription className="mt-2 text-sm text-[#667085]">
+                {category?.name || "当前分类"} · 共 {total} 题
+              </DialogDescription>
+            </div>
+            <button type="button" onClick={() => onOpenChange(false)} className="rounded-[4px] p-2 text-[#344054] hover:bg-[#f2f4f7]" aria-label="关闭">
+              <X size={22} />
+            </button>
+          </div>
+        </DialogHeader>
+        <div className="max-h-[calc(90vh-190px)] overflow-y-auto px-8 py-6">
+          {loading ? (
+            <div className="rounded-[8px] border border-dashed border-[#d0d5dd] bg-[#fbfcfe] px-6 py-12 text-center text-sm text-[#667085]">题目加载中...</div>
+          ) : rows.length === 0 ? (
+            <AdminEmptyState message="该分类下暂无题目。" />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {rows.map((item) => (
+                <article key={item.id} className="rounded-[8px] border border-[#e5e7eb] bg-white p-4 shadow-[0_1px_4px_rgba(15,23,42,0.04)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 truncate text-[17px] font-semibold text-[#101828]" title={item.title}>{item.title}</h3>
+                    <span className={`shrink-0 rounded-[4px] px-2.5 py-1 text-xs font-semibold ${item.statusLabel === "启用" ? "bg-[#dff7ea] text-[#039855]" : "bg-[#eef2f6] text-[#667085]"}`}>
+                      {item.statusLabel}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#344054]">
+                    <span className="rounded-[4px] bg-[#eef5ff] px-2.5 py-1 font-semibold text-[#1677ff]">{item.difficultyLabel}</span>
+                    <span className="rounded-[4px] bg-[#f8fafc] px-2.5 py-1">{item.pointsLabel}</span>
+                    <span className="text-[#667085]">ID {item.id}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter className="flex items-center justify-between border-t border-[#e5e7eb] bg-white px-8 py-5">
+          <div className="text-sm text-[#667085]">第 {page} / {totalPages} 页</div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1 || loading} className={secondaryButtonClassName()}>上一页</button>
+            <button type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages || loading} className={secondaryButtonClassName()}>下一页</button>
+            <button type="button" onClick={() => onOpenChange(false)} className={primaryButtonClassName()}>关闭</button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

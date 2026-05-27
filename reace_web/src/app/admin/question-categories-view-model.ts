@@ -40,6 +40,22 @@ export type SortableQuestionCategoryRow = {
   sortOrder: number;
 };
 
+export type CategoryQuestionPreviewRecord = {
+  id: number;
+  title?: string | null;
+  difficulty?: number | string | null;
+  enabled?: boolean | null;
+  points?: number | string | null;
+};
+
+export type CategoryQuestionPreviewRow = {
+  id: number;
+  title: string;
+  difficultyLabel: string;
+  statusLabel: "启用" | "停用";
+  pointsLabel: string;
+};
+
 export type QuestionCategoryMutationForm = {
   name: string;
   description: string;
@@ -158,6 +174,63 @@ export function buildQuestionCategoryMutationPayload(form: QuestionCategoryMutat
     iconKey: normalizeIconKey(designFields.iconKey),
     recommendedDifficulty: normalizeRecommendedDifficulty(designFields.recommendedDifficulty),
   };
+}
+
+export function buildQuestionCategoryTogglePayload(record: QuestionCategoryViewRecord, nextEnabled: boolean) {
+  return buildQuestionCategoryMutationPayload({
+    name: toText(record.name),
+    description: toText(record.description),
+    groupName: toText(record.groupName),
+    sortOrder: toNumber(record.sortOrder),
+    enabled: nextEnabled,
+  }, {
+    frontDisplayName: toText(record.frontDisplayName) || toText(record.name),
+    iconKey: normalizeIconKey(record.iconKey),
+    recommendedDifficulty: normalizeRecommendedDifficulty(record.recommendedDifficulty),
+  });
+}
+
+export function buildQuestionCategoryQuickToggleLabel(enabled: boolean) {
+  return enabled
+    ? { label: "停用", nextEnabled: false }
+    : { label: "启用", nextEnabled: true };
+}
+
+export function buildCategoryQuestionListQuery({
+  categoryId,
+  page = 1,
+  size = 8,
+}: {
+  categoryId: number | string;
+  page?: number;
+  size?: number;
+}) {
+  return new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    type: "excel_template",
+    questionCategoryId: String(categoryId),
+  }).toString();
+}
+
+function resolveQuestionDifficultyLabel(value: unknown) {
+  const difficulty = toNumber(value, 1);
+  if (difficulty <= 2) return "基础";
+  if (difficulty <= 6) return "中等";
+  return "进阶";
+}
+
+export function normalizeCategoryQuestionPreviewRows(records: CategoryQuestionPreviewRecord[]): CategoryQuestionPreviewRow[] {
+  return records.map((item) => {
+    const points = toNumber(item.points);
+    return {
+      id: item.id,
+      title: toText(item.title) || `题目 ${item.id}`,
+      difficultyLabel: resolveQuestionDifficultyLabel(item.difficulty),
+      statusLabel: item.enabled === false ? "停用" : "启用",
+      pointsLabel: `${points} 分`,
+    };
+  });
 }
 
 export function renumberSortableCategoryRows(rows: SortableQuestionCategoryRow[]) {
