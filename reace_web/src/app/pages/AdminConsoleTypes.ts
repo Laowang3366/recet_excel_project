@@ -262,6 +262,10 @@ export type LevelRuleForm = {
   level: string;
   name: string;
   threshold: string;
+  maxExp?: string;
+  sortOrder?: string;
+  iconTone?: string;
+  benefits?: string;
   enabled: boolean;
 };
 
@@ -269,7 +273,12 @@ export type LevelRuleRecord = {
   level: number;
   name?: string | null;
   threshold?: number;
+  maxExp?: number | null;
   enabled?: boolean;
+  sortOrder?: number;
+  iconTone?: string | null;
+  benefits?: string | null;
+  rangeText?: string | null;
 };
 
 export type ExpRuleForm = {
@@ -304,6 +313,12 @@ export type LevelsOverviewResponse = {
   };
   levelRules?: LevelRuleRecord[];
   expRules?: ExpRuleRecord[];
+  distribution?: Array<{
+    level: number;
+    name?: string | null;
+    threshold?: number;
+    userCount?: number;
+  }>;
 };
 
 export type LevelUserRecord = {
@@ -312,6 +327,10 @@ export type LevelUserRecord = {
   levelName?: string | null;
   level?: number;
   exp?: number;
+  points?: number;
+  role?: string | null;
+  status?: number | null;
+  avatar?: string | null;
   progress?: {
     current?: number;
     nextThreshold?: number;
@@ -326,6 +345,19 @@ export type ExpLogRecord = {
   expChange?: number;
   reason?: string | null;
   createTime?: string | null;
+};
+
+export type LevelUserDetailResponse = {
+  user?: LevelUserRecord;
+  recentLogs?: ExpLogRecord[];
+  totalLogs?: number;
+};
+
+export type LevelRecalculatePreviewResponse = {
+  affectedUsers?: number;
+  totalUsers?: number;
+  estimatedMinutesMin?: number;
+  estimatedMinutesMax?: number;
 };
 
 export type FormDialogProps = {
