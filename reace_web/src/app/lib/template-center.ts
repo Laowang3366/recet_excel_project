@@ -1,6 +1,6 @@
 export const TEMPLATE_INDUSTRY_CATEGORIES = ["财务", "人事", "生产", "销售", "运营", "仓储", "采购"] as const;
 
-export const TEMPLATE_DIFFICULTY_LEVELS = ["入门", "基础", "进阶", "高级", "专家"] as const;
+export const TEMPLATE_DIFFICULTY_LEVELS = ["入门", "基础", "中级", "进阶", "高级", "专家"] as const;
 
 export function formatTemplateDifficulty(value?: string | null) {
   return value || "入门";

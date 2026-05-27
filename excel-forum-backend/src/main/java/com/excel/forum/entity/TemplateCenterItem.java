@@ -19,10 +19,16 @@ public class TemplateCenterItem {
     private String useScenario;
     private String previewImageUrl;
     private String templateDescription;
+    private String usageGuide;
     private String functionsUsed;
+    private String tagsJson;
     private String difficultyLevel;
     private Integer downloadCostPoints;
     private String templateFileUrl;
+    private String fileName;
+    private Long fileSize;
+    private String fileVersion;
+    private LocalDateTime lastUploadedAt;
     private Integer sortOrder;
     private Boolean enabled;
     @TableField(fill = FieldFill.INSERT)
