@@ -23,6 +23,7 @@ export function getAdminSearchPlaceholder(moduleKey?: AdminModuleKey | null) {
     templates: "搜索模板标题、行业、标签",
     qa: "搜索求助标题、答疑内容、用户",
     assistant: "搜索模型、配置、单位",
+    "file-recycle-bin": "搜索文件名、来源模块、删除人",
   };
 
   return placeholders[moduleKey || "users"] || "搜索用户、手机号、邮箱";

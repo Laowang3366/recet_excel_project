@@ -2,19 +2,20 @@ package com.excel.forum.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.entity.FileRecycleItem;
 import com.excel.forum.entity.QaCaseHelp;
 import com.excel.forum.entity.QaCaseHelpAnswer;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionExcelTemplate;
 import com.excel.forum.entity.TemplateCenterItem;
+import com.excel.forum.entity.User;
 import com.excel.forum.mapper.FileRecycleItemMapper;
 import com.excel.forum.mapper.QaCaseHelpAnswerMapper;
 import com.excel.forum.mapper.QaCaseHelpMapper;
 import com.excel.forum.mapper.QuestionExcelTemplateMapper;
 import com.excel.forum.mapper.QuestionMapper;
 import com.excel.forum.mapper.TemplateCenterItemMapper;
+import com.excel.forum.mapper.UserMapper;
 import com.excel.forum.service.FileRecycleService;
 import com.excel.forum.service.FileStorageService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,9 +29,12 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +55,7 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     private final TemplateCenterItemMapper templateCenterItemMapper;
     private final QaCaseHelpMapper qaCaseHelpMapper;
     private final QaCaseHelpAnswerMapper qaCaseHelpAnswerMapper;
+    private final UserMapper userMapper;
     private final FileStorageService fileStorageService;
     private final ObjectMapper objectMapper;
 
@@ -166,6 +171,20 @@ public class FileRecycleServiceImpl implements FileRecycleService {
 
     @Override
     public Map<String, Object> listItems(String resourceType, String keyword, Boolean expired, Integer page, Integer size) {
+        return listItems(resourceType, keyword, expired, null, null, null, null, page, size);
+    }
+
+    @Override
+    public Map<String, Object> listItems(
+            String resourceType,
+            String keyword,
+            Boolean expired,
+            String fileType,
+            Long deletedBy,
+            LocalDateTime deletedStart,
+            LocalDateTime deletedEnd,
+            Integer page,
+            Integer size) {
         int safePage = page == null || page < 1 ? 1 : page;
         int safeSize = size == null || size < 1 ? 10 : Math.min(size, 100);
         QueryWrapper<FileRecycleItem> wrapper = new QueryWrapper<>();
@@ -173,7 +192,7 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         if (StringUtils.hasText(resourceType) && !"all".equalsIgnoreCase(resourceType)) {
             wrapper.eq("resource_type", resourceType.trim());
         }
-        if (StringUtils.hasText(keyword)) {
+        if (StringUtils.hasText(keyword) && !matchesAnySourceLabel(keyword)) {
             String trimmed = keyword.trim();
             wrapper.and(query -> query.like("display_name", trimmed)
                     .or()
@@ -186,13 +205,32 @@ public class FileRecycleServiceImpl implements FileRecycleService {
                 wrapper.gt("expires_at", LocalDateTime.now());
             }
         }
+        if (deletedBy != null && deletedBy > 0) {
+            wrapper.eq("deleted_by", deletedBy);
+        }
+        if (deletedStart != null) {
+            wrapper.ge("deleted_at", deletedStart);
+        }
+        if (deletedEnd != null) {
+            wrapper.le("deleted_at", deletedEnd);
+        }
         wrapper.orderByDesc("deleted_at");
-        Page<FileRecycleItem> result = fileRecycleItemMapper.selectPage(new Page<>(safePage, safeSize), wrapper);
+        List<FileRecycleItem> matchedItems = fileRecycleItemMapper.selectList(wrapper).stream()
+                .filter(item -> matchesKeyword(item, keyword))
+                .filter(item -> matchesFileType(item, fileType))
+                .toList();
+        long total = matchedItems.size();
+        int fromIndex = Math.min((safePage - 1) * safeSize, matchedItems.size());
+        int toIndex = Math.min(fromIndex + safeSize, matchedItems.size());
+        List<FileRecycleItem> pageItems = matchedItems.subList(fromIndex, toIndex);
+        Map<Long, String> deletedByNames = resolveDeletedByNames(matchedItems);
         return Map.of(
-                "records", result.getRecords().stream().map(this::toPayload).toList(),
-                "total", result.getTotal(),
-                "page", result.getCurrent(),
-                "size", result.getSize()
+                "records", pageItems.stream().map(item -> toPayload(item, deletedByNames)).toList(),
+                "total", total,
+                "page", safePage,
+                "size", safeSize,
+                "stats", buildStats(matchedItems),
+                "deletedByOptions", buildDeletedByOptions(matchedItems, deletedByNames)
         );
     }
 
@@ -219,6 +257,20 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         item.setRestoredAt(LocalDateTime.now());
         fileRecycleItemMapper.updateById(item);
         return Map.of("message", "已恢复", "id", item.getId());
+    }
+
+    @Override
+    @Transactional
+    public int restoreBatch(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (Long id : ids.stream().filter(Objects::nonNull).distinct().toList()) {
+            restore(id);
+            count++;
+        }
+        return count;
     }
 
     @Override
@@ -453,21 +505,247 @@ public class FileRecycleServiceImpl implements FileRecycleService {
         return item;
     }
 
+    private boolean matchesKeyword(FileRecycleItem item, String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return true;
+        }
+        String normalized = keyword.trim().toLowerCase();
+        return containsIgnoreCase(item.getDisplayName(), normalized)
+                || containsIgnoreCase(item.getOriginalFileUrl(), normalized)
+                || containsIgnoreCase(item.getRecycleFileUrl(), normalized)
+                || containsIgnoreCase(sourceLabel(item.getResourceType()), normalized);
+    }
+
+    private boolean matchesFileType(FileRecycleItem item, String fileType) {
+        if (!StringUtils.hasText(fileType) || "all".equalsIgnoreCase(fileType)) {
+            return true;
+        }
+        String normalizedType = fileType.trim().toLowerCase();
+        List<RecycleFile> files = parseFiles(item.getFilesJson());
+        if (files.isEmpty()) {
+            return fileTypeMatchesUrl(normalizedType, item.getOriginalFileUrl())
+                    || fileTypeMatchesUrl(normalizedType, item.getRecycleFileUrl());
+        }
+        return files.stream().anyMatch(file -> fileTypeMatchesUrl(normalizedType, file.originalFileUrl())
+                || fileTypeMatchesUrl(normalizedType, file.recycleFileUrl()));
+    }
+
+    private boolean fileTypeMatchesUrl(String fileType, String fileUrl) {
+        String extension = fileExtension(fileUrl);
+        if ("excel".equals(fileType)) {
+            return Set.of("xls", "xlsx", "csv").contains(extension);
+        }
+        if ("image".equals(fileType)) {
+            return Set.of("png", "jpg", "jpeg", "gif", "webp").contains(extension);
+        }
+        if ("other".equals(fileType)) {
+            return StringUtils.hasText(extension)
+                    && !Set.of("xls", "xlsx", "csv", "png", "jpg", "jpeg", "gif", "webp").contains(extension);
+        }
+        return true;
+    }
+
+    private String fileExtension(String fileUrl) {
+        if (!StringUtils.hasText(fileUrl)) {
+            return "";
+        }
+        String normalized = fileUrl.replace("\\", "/");
+        String fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+        int dotIndex = fileName.lastIndexOf('.');
+        return dotIndex >= 0 && dotIndex + 1 < fileName.length() ? fileName.substring(dotIndex + 1).toLowerCase() : "";
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedNeedle) {
+        return StringUtils.hasText(value) && value.toLowerCase().contains(normalizedNeedle);
+    }
+
+    private boolean matchesAnySourceLabel(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return false;
+        }
+        String normalized = keyword.trim().toLowerCase();
+        return List.of(RESOURCE_QUESTION, RESOURCE_TEMPLATE, RESOURCE_QA_CASE, RESOURCE_QA_ANSWER)
+                .stream()
+                .anyMatch(resourceType -> sourceLabel(resourceType).toLowerCase().contains(normalized));
+    }
+
+    private Map<Long, String> resolveDeletedByNames(List<FileRecycleItem> items) {
+        LinkedHashSet<Long> uniqueIds = items.stream()
+                .map(FileRecycleItem::getDeletedBy)
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        List<Long> ids = new ArrayList<>(uniqueIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> result = new LinkedHashMap<>();
+        List<User> users = userMapper.selectBatchIds(ids);
+        for (User user : users) {
+            if (user.getId() != null) {
+                result.put(user.getId(), defaultText(user.getUsername(), "ID " + user.getId()));
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> buildStats(List<FileRecycleItem> items) {
+        LocalDateTime now = LocalDateTime.now();
+        long recoverable = 0;
+        long expired = 0;
+        long expiringSoon = 0;
+        long todayDeleted = 0;
+        long totalFileCount = 0;
+        long totalSize = 0;
+        long expiredFileCount = 0;
+        long expiredSize = 0;
+        boolean hasUnknownSize = false;
+        boolean hasUnknownExpiredSize = false;
+        LinkedHashSet<String> sourceModules = new LinkedHashSet<>();
+        LinkedHashSet<String> expiredSourceModules = new LinkedHashSet<>();
+        LinkedHashMap<String, Long> expiredSourceModuleCounts = new LinkedHashMap<>();
+
+        for (FileRecycleItem item : items) {
+            String sourceLabel = sourceLabel(item.getResourceType());
+            List<RecycleFile> files = parseFiles(item.getFilesJson());
+            long fileCount = files.isEmpty() ? 1 : files.size();
+            Long itemSize = resolveItemSize(files);
+            boolean itemExpired = item.getExpiresAt() != null && !item.getExpiresAt().isAfter(now);
+            if (itemExpired) {
+                expired++;
+                expiredFileCount += fileCount;
+                expiredSourceModules.add(sourceLabel);
+                expiredSourceModuleCounts.merge(sourceLabel, fileCount, Long::sum);
+                if (itemSize == null) {
+                    hasUnknownExpiredSize = true;
+                } else {
+                    expiredSize += itemSize;
+                }
+            } else {
+                recoverable++;
+                if (item.getExpiresAt() != null && !item.getExpiresAt().isAfter(now.plusDays(7))) {
+                    expiringSoon++;
+                }
+            }
+            if (item.getDeletedAt() != null && item.getDeletedAt().toLocalDate().equals(now.toLocalDate())) {
+                todayDeleted++;
+            }
+            sourceModules.add(sourceLabel);
+            totalFileCount += fileCount;
+            if (itemSize == null) {
+                hasUnknownSize = true;
+            } else {
+                totalSize += itemSize;
+            }
+        }
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalRecords", items.size());
+        stats.put("recoverableRecords", recoverable);
+        stats.put("expiredRecords", expired);
+        stats.put("expiringSoonRecords", expiringSoon);
+        stats.put("todayDeletedRecords", todayDeleted);
+        stats.put("totalFileCount", totalFileCount);
+        stats.put("totalSizeBytes", totalSize);
+        stats.put("totalSizeLabel", hasUnknownSize ? "未提供" : formatBytes(totalSize));
+        stats.put("hasUnknownSize", hasUnknownSize);
+        stats.put("sourceModules", new ArrayList<>(sourceModules));
+        stats.put("expiredFileCount", expiredFileCount);
+        stats.put("expiredSizeBytes", expiredSize);
+        stats.put("expiredSizeLabel", hasUnknownExpiredSize ? "未提供" : formatBytes(expiredSize));
+        stats.put("hasUnknownExpiredSize", hasUnknownExpiredSize);
+        stats.put("expiredSourceModules", new ArrayList<>(expiredSourceModules));
+        stats.put("expiredSourceModuleCounts", expiredSourceModuleCounts.entrySet().stream()
+                .map(entry -> Map.of("label", entry.getKey(), "count", entry.getValue()))
+                .toList());
+        return stats;
+    }
+
+    private List<Map<String, Object>> buildDeletedByOptions(List<FileRecycleItem> items, Map<Long, String> deletedByNames) {
+        LinkedHashSet<Long> uniqueIds = items.stream()
+                .map(FileRecycleItem::getDeletedBy)
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (Long id : uniqueIds) {
+            options.add(Map.of(
+                    "value", id,
+                    "label", deletedByNames.getOrDefault(id, "ID " + id)
+            ));
+        }
+        return options;
+    }
+
     private Map<String, Object> toPayload(FileRecycleItem item) {
+        return toPayload(item, Map.of());
+    }
+
+    private Map<String, Object> toPayload(FileRecycleItem item, Map<Long, String> deletedByNames) {
+        List<RecycleFile> files = parseFiles(item.getFilesJson());
+        Long fileSizeBytes = resolveItemSize(files);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("id", item.getId());
         payload.put("resourceType", item.getResourceType());
+        payload.put("sourceLabel", sourceLabel(item.getResourceType()));
         payload.put("resourceId", item.getResourceId());
         payload.put("displayName", item.getDisplayName());
         payload.put("originalFileUrl", item.getOriginalFileUrl());
         payload.put("recycleFileUrl", item.getRecycleFileUrl());
-        payload.put("fileCount", parseFiles(item.getFilesJson()).size());
+        payload.put("fileCount", files.isEmpty() ? 1 : files.size());
+        payload.put("fileSizeBytes", fileSizeBytes);
+        payload.put("fileSizeLabel", fileSizeBytes == null ? "未提供" : formatBytes(fileSizeBytes));
         payload.put("deletedBy", item.getDeletedBy());
+        payload.put("deletedByName", deletedByNames.getOrDefault(item.getDeletedBy(), item.getDeletedBy() == null ? null : "ID " + item.getDeletedBy()));
         payload.put("deletedAt", item.getDeletedAt());
         payload.put("expiresAt", item.getExpiresAt());
         payload.put("expired", item.getExpiresAt() != null && !item.getExpiresAt().isAfter(LocalDateTime.now()));
         payload.put("status", item.getStatus());
         return payload;
+    }
+
+    private Long resolveItemSize(List<RecycleFile> files) {
+        if (files.isEmpty()) {
+            return null;
+        }
+        long total = 0;
+        boolean found = false;
+        for (RecycleFile file : files) {
+            Long size = fileStorageService.size(file.recycleFileUrl());
+            if (size == null) {
+                size = fileStorageService.size(file.originalFileUrl());
+            }
+            if (size != null) {
+                total += size;
+                found = true;
+            }
+        }
+        return found ? total : null;
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+        if (bytes < 1024L * 1024L) {
+            return trimNumber(bytes / 1024.0) + "KB";
+        }
+        if (bytes < 1024L * 1024L * 1024L) {
+            return trimNumber(bytes / 1024.0 / 1024.0) + "MB";
+        }
+        return trimNumber(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";
+    }
+
+    private String trimNumber(double value) {
+        return Math.rint(value) == value ? String.valueOf((long) value) : String.format(Locale.ROOT, "%.1f", value).replace(".0", "");
+    }
+
+    private String sourceLabel(String resourceType) {
+        return switch (resourceType) {
+            case RESOURCE_QUESTION -> "题库模板";
+            case RESOURCE_TEMPLATE -> "模板中心";
+            case RESOURCE_QA_CASE -> "答疑管理";
+            case RESOURCE_QA_ANSWER -> "答疑附件";
+            default -> defaultText(resourceType, "-");
+        };
     }
 
     private Map<String, Object> parseSnapshot(FileRecycleItem item) {

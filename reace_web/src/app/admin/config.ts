@@ -7,8 +7,8 @@ import {
   Layers3,
   MessageSquareText,
   PanelsTopLeft,
-  ArchiveRestore,
   Shield,
+  Trash2,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -48,7 +48,7 @@ export const ADMIN_MODULES: AdminModule[] = [
   { key: "levels", label: "等级体系", path: "/admin/levels", icon: Shield, roles: ["admin"] },
   { key: "assistant", label: "AI助手", path: "/admin/assistant", icon: Bot, roles: ["admin"] },
   { key: "qa", label: "答疑管理", path: "/admin/qa", icon: MessageSquareText, roles: ["admin"] },
-  { key: "file-recycle-bin", label: "文件回收站", path: "/admin/file-recycle-bin", icon: ArchiveRestore, roles: ["admin"] },
+  { key: "file-recycle-bin", label: "文件回收站", path: "/admin/file-recycle-bin", icon: Trash2, roles: ["admin"] },
 ];
 
 export function hasAdminConsoleAccess(role?: string | null): role is AdminRole {
