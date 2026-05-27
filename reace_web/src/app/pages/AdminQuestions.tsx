@@ -1668,14 +1668,25 @@ export function AdminQuestions() {
                   ? `最近测试：${lastPublishRecord.passed ? "通过" : "未通过"}，得分 ${lastPublishRecord.score ?? 0}/${lastPublishRecord.totalScore ?? 0}`
                   : "保存题目后可执行服务端一键测试，系统会用标准答案快照生成测试提交并调用判题规则。"}
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-3 text-sm">
-                {["校验项", "预期值", "实际值", "误差"].map((item) => <div key={item} className="font-semibold text-[#475467]">{item}</div>)}
-                {[
-                  lastPublishRecord?.title || "总销售额合计",
-                  String(lastPublishRecord?.totalScore ?? (answerPreviewText || "-")),
-                  String(lastPublishRecord?.score ?? (answerPreviewText || "-")),
-                  lastPublishRecord ? (lastPublishRecord.passed ? "0%" : "待修正") : "0%",
-                ].map((item, index) => <div key={`${item}-${index}`} className="text-[#101828]">{item}</div>)}
+              <div className="mt-4 overflow-x-auto">
+                <div className="grid min-w-[720px] grid-cols-[140px_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-x-3 gap-y-2 text-sm">
+                  {["校验项", "预期值", "实际值", "误差"].map((item) => (
+                    <div key={item} className="min-w-0 font-semibold text-[#475467]">{item}</div>
+                  ))}
+                  {[
+                    lastPublishRecord?.title || "总销售额合计",
+                    String(lastPublishRecord?.totalScore ?? (answerPreviewText || "-")),
+                    String(lastPublishRecord?.score ?? (answerPreviewText || "-")),
+                    lastPublishRecord ? (lastPublishRecord.passed ? "0%" : "待修正") : "0%",
+                  ].map((item, index) => (
+                    <div
+                      key={`${item}-${index}`}
+                      className="min-w-0 max-h-[320px] overflow-auto whitespace-pre-wrap break-words leading-6 text-[#101828] [overflow-wrap:anywhere]"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </section>

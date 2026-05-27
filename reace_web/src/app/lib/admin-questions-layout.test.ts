@@ -100,4 +100,17 @@ describe("admin questions layout", () => {
     expect(source).not.toContain("需要后端接口支持");
     expect(source).not.toContain("需等待后端任务接口");
   });
+
+  it("wraps long publish-test values instead of letting columns overlap", () => {
+    const source = adminQuestionsSource();
+    const testResultStart = source.indexOf("测试结果");
+    const testResultBlock = source.slice(
+      testResultStart,
+      source.indexOf("editorStep === 4", testResultStart),
+    );
+
+    expect(testResultBlock).toContain("min-w-0");
+    expect(testResultBlock).toContain("whitespace-pre-wrap");
+    expect(testResultBlock).toContain("[overflow-wrap:anywhere]");
+  });
 });
