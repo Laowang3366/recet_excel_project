@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-05-27 16:27 Asia/Shanghai
+
+- Scope: 题目分类模块 followup 分支合并上线
+- Verification: local quality gate passed before deploy; https://www.excelcc.cn/ -> 200; https://www.excelcc.cn/api/public/home-overview -> 200; https://www.excelcc.cn/admin/question-categories -> 200; https://www.excelcc.cn/practice -> 200; https://www.excelcc.cn/api/practice/campaign/chapters -> 200; remote standard deploy completed for runtime commit cfc4595; remote service checks returned active services and local API 200.
+- Deploy: pushed origin/main, then ran bash scripts/deploy/production-deploy.sh in /www/wwwroot/excelcc/kick-deploy/repo on the server through scripts/deploy/push-and-deploy.ps1.
+- Server backup: /www/wwwroot/excelcc/kick-deploy/backups/20260527-082255
+- Notes: first public smoke request in the one-click script timed out once after deploy, immediate independent retries returned 200; /www/wwwroot/quick-translate was not changed.
+
 ## 2026-05-27 15:01 Asia/Shanghai
 
 - Scope: 题库判题测试结果长内容换行修复
