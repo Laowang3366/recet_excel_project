@@ -33,6 +33,7 @@ class LocalFileStorageServiceTest {
         String recycleUrl = storage.moveToRecycle("/uploads/sample.xlsx", "question/7");
 
         assertThat(recycleUrl).isEqualTo("/uploads/.trash/question/7/sample.xlsx");
+        assertThat(storage.size(recycleUrl)).isEqualTo(13L);
         assertThat(source).doesNotExist();
         assertThat(tempDir.resolve(".trash/question/7/sample.xlsx")).exists();
 
@@ -46,6 +47,7 @@ class LocalFileStorageServiceTest {
         storage.deletePermanently(recycleUrl);
 
         assertThat(tempDir.resolve(".trash/question/7/sample.xlsx")).doesNotExist();
+        assertThat(storage.size(recycleUrl)).isNull();
     }
 
     @Test

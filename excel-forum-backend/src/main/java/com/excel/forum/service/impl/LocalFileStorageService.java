@@ -151,6 +151,19 @@ public class LocalFileStorageService implements FileStorageService {
         delete(fileUrl);
     }
 
+    @Override
+    public Long size(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return null;
+        }
+        try {
+            Path filePath = resolveLocalPath(fileUrl);
+            return Files.exists(filePath) ? Files.size(filePath) : null;
+        } catch (IllegalArgumentException | IOException ignored) {
+            return null;
+        }
+    }
+
     private Path resolveLocalPath(String fileUrl) {
         if (fileUrl == null || !fileUrl.startsWith(fileStorageConfig.getLocal().getUrlPrefix())) {
             throw new IllegalArgumentException("文件地址无效");

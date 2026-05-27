@@ -10,4 +10,5 @@ public interface FileStorageService {
     String moveToRecycle(String fileUrl, String recycleKey);
     String restoreFromRecycle(String recycleFileUrl, String originalFileUrl);
     void deletePermanently(String fileUrl);
+    Long size(String fileUrl);
 }

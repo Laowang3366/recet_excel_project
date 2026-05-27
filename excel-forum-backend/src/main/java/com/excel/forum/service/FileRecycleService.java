@@ -7,6 +7,7 @@ import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionExcelTemplate;
 import com.excel.forum.entity.TemplateCenterItem;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,20 @@ public interface FileRecycleService {
 
     Map<String, Object> listItems(String resourceType, String keyword, Boolean expired, Integer page, Integer size);
 
+    Map<String, Object> listItems(
+            String resourceType,
+            String keyword,
+            Boolean expired,
+            String fileType,
+            Long deletedBy,
+            LocalDateTime deletedStart,
+            LocalDateTime deletedEnd,
+            Integer page,
+            Integer size);
+
     Map<String, Object> restore(Long id);
+
+    int restoreBatch(List<Long> ids);
 
     void purge(Long id);
 
