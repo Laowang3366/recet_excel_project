@@ -159,7 +159,7 @@ public class LocalFileStorageService implements FileStorageService {
         try {
             Path filePath = resolveLocalPath(fileUrl);
             return Files.exists(filePath) ? Files.size(filePath) : null;
-        } catch (IllegalArgumentException | IOException ignored) {
+        } catch (IllegalArgumentException | IOException unavailableFile) {
             return null;
         }
     }

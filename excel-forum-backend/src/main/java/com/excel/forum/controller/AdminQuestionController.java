@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.excel.forum.entity.Question;
 import com.excel.forum.entity.QuestionCategory;
 import com.excel.forum.entity.QuestionExcelTemplate;
+import com.excel.forum.entity.dto.AdminQuestionBatchImportRequest;
 import com.excel.forum.entity.dto.AdminQuestionRequest;
 import com.excel.forum.entity.dto.ExcelTemplateEvaluation;
 import com.excel.forum.entity.dto.ExcelTemplateExpectedSnapshot;
@@ -132,8 +133,8 @@ public class AdminQuestionController {
     }
 
     @PostMapping("/batch-import")
-    public ResponseEntity<?> batchImportQuestions(@RequestBody Map<String, List<AdminQuestionRequest>> request) {
-        List<AdminQuestionRequest> records = request == null ? List.of() : Objects.requireNonNullElse(request.get("records"), List.of());
+    public ResponseEntity<?> batchImportQuestions(@RequestBody AdminQuestionBatchImportRequest request) {
+        List<AdminQuestionRequest> records = request == null ? List.of() : Objects.requireNonNullElse(request.getRecords(), List.of());
         if (records.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "导入题目不能为空"));
         }
@@ -599,7 +600,7 @@ public class AdminQuestionController {
         if (index < normalized.length()) {
             try {
                 row = Math.max(1, Integer.parseInt(normalized.substring(index).replaceAll("[^0-9]", "")));
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException invalidNumber) {
                 row = 1;
             }
         }
