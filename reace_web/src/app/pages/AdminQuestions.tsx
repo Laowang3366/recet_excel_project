@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect, useRef, useState, type ClipboardEvent } from
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { AlertTriangle, CheckCircle2, Edit3, FileSpreadsheet, ImagePlus, LoaderCircle, MousePointer2, Plus, RefreshCw, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
@@ -13,7 +12,7 @@ import { buildWorkbookWithAnswerSnapshot, columnIndexToLabel, convertWorkbookSel
 import { normalizeResourceUrl } from "../lib/mappers";
 import { adminKeys, practiceKeys } from "../lib/query-keys";
 import { resolveInitialQuestionCategoryId } from "../admin/admin-question-url-state";
-import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, AdminSection, FilterBar, FilterField, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
+import { AddButton, AdminBulkActions, AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPagination, formatQuestionType, answerRangeButtonClassName, primaryButtonClassName, secondaryButtonClassName, inputClassName, textareaClassName } from "../admin/shared";
 import { PagedAdminResponse, QuestionCategoryRecord, PracticeCampaignLevelRecord, LevelConfigForm, QuestionGradingMode, AdminQuestionForm, AdminQuestionRecord, AdminQuestionsResponse, adminRequest, ExcelEditorErrorBoundary, showAdminSuccess, showAdminError, runAdminDelete, runAdminBulkDelete, openAdminConfirm, formatAdminEntityMessage, useAdminRole, FormDialog, Field, AdminFormSwitch, AdminTableSwitch, toNullableNumber, defaultQuestionForm, defaultDynamicArrayRule, parseDynamicArrayRulesFromJson, buildDynamicArrayRuleJson, applyQuestionDifficulty, normalizeQuestionDifficulty, resolveQuestionPointsByDifficulty, QUESTION_DIFFICULTY_POINT_OPTIONS } from "./AdminConsoleShared";
 
 const ExcelWorkbookEditor = lazy(() =>
