@@ -53,6 +53,30 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
 
     @Override
     @Transactional
+    public void addManualPointsRecord(Long userId, Integer change, String description, String businessNo, boolean notifyUser) {
+        User user = userService.getById(userId);
+        if (user == null) return;
+        int changeValue = change == null ? 0 : change;
+        int newBalance = (user.getPoints() != null ? user.getPoints() : 0) + changeValue;
+
+        PointsRecord record = new PointsRecord();
+        record.setUserId(userId);
+        record.setRuleName("管理员发放");
+        record.setTaskKey("manual_grant");
+        record.setChange(changeValue);
+        record.setBalance(newBalance);
+        record.setDescription(description);
+        record.setBusinessNo(normalizeBusinessNo(businessNo));
+        record.setNotifyUser(notifyUser);
+        record.setAnomalyFlag(false);
+        save(record);
+        if (changeValue != 0 && userMapper.addPoints(userId, changeValue) == 0) {
+            throw new IllegalStateException("用户积分更新失败");
+        }
+    }
+
+    @Override
+    @Transactional
     public boolean addTaskPointsRecord(Long userId, Long ruleId, String ruleName, String taskKey, Long bizId, LocalDate taskDate, Integer change, String description) {
         User user = userService.getById(userId);
         if (user == null) return false;
@@ -93,6 +117,29 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
     }
 
     @Override
+    public long countManualAnomalyRecords() {
+        QueryWrapper<PointsRecord> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("COUNT(*) AS anomaly_count")
+                .eq("task_key", "manual_grant")
+                .isNotNull("business_no")
+                .ne("business_no", "")
+                .inSql("business_no", "SELECT `business_no` FROM `points_record` WHERE `task_key` = 'manual_grant' AND `business_no` IS NOT NULL AND `business_no` <> '' GROUP BY `business_no` HAVING COUNT(*) > 1");
+        Map<String, Object> result = getMap(queryWrapper);
+        if (result == null || result.isEmpty()) {
+            return 0L;
+        }
+        Object value = result.get("anomaly_count");
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return 0L;
+        }
+    }
+
+    @Override
     public Map<String, Object> getRecordsPage(int page, int size, String username) {
         Page<PointsRecord> pageParam = new Page<>(page, size);
         QueryWrapper<PointsRecord> queryWrapper = new QueryWrapper<>();
@@ -114,6 +161,9 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
             map.put("taskKey", record.getTaskKey());
             map.put("ruleId", record.getRuleId());
             map.put("bizId", record.getBizId());
+            map.put("businessNo", record.getBusinessNo());
+            map.put("notifyUser", record.getNotifyUser());
+            map.put("anomalyFlag", record.getAnomalyFlag());
             map.put("taskDate", record.getTaskDate());
             map.put("change", record.getChange());
             map.put("balance", record.getBalance());
@@ -152,6 +202,9 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
             map.put("taskKey", record.getTaskKey());
             map.put("ruleId", record.getRuleId());
             map.put("bizId", record.getBizId());
+            map.put("businessNo", record.getBusinessNo());
+            map.put("notifyUser", record.getNotifyUser());
+            map.put("anomalyFlag", record.getAnomalyFlag());
             map.put("taskDate", record.getTaskDate());
             map.put("change", record.getChange());
             map.put("balance", record.getBalance());
@@ -167,5 +220,11 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         response.put("size", result.getSize());
         response.put("pages", result.getPages());
         return response;
+    }
+
+    private String normalizeBusinessNo(String businessNo) {
+        if (businessNo == null) return null;
+        String normalized = businessNo.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

@@ -15,6 +15,9 @@ public class PointsRecord {
     private String ruleName;
     private String taskKey;
     private Long bizId;
+    private String businessNo;
+    private Boolean notifyUser;
+    private Boolean anomalyFlag;
     private LocalDate taskDate;
     private String idempotencyKey;
     @TableField("`change`")

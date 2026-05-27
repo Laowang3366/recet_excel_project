@@ -183,6 +183,9 @@ export type PointsRuleForm = {
   taskKey: string;
   points: string | number;
   type: string;
+  dailyLimit: string | number;
+  effectiveAt?: string | null;
+  expiresAt?: string | null;
   enabled: boolean;
   userVisible: boolean;
   sortOrder: string | number;
@@ -217,6 +220,9 @@ export type PointsStatsResponse = {
   activeUsers?: number;
   totalPoints?: number;
   todayPoints?: number;
+  todayIssued?: number;
+  todayConsumed?: number;
+  anomalyRecords?: number;
 };
 
 export type PointsOptionsResponse = {
@@ -231,15 +237,25 @@ export type PointsRecord = {
   user?: { username?: string | null } | null;
   change?: number;
   points?: number;
+  balance?: number;
   reason?: string | null;
+  description?: string | null;
+  ruleName?: string | null;
   bizLabel?: string | null;
+  businessNo?: string | null;
+  notifyUser?: boolean | null;
+  anomalyFlag?: boolean | null;
   taskName?: string | null;
+  taskKey?: string | null;
   createTime?: string | null;
 };
 
 export type PointsGrantResponse = {
   username?: string | null;
   points?: number;
+  balance?: number;
+  businessNo?: string | null;
+  notifyUser?: boolean;
 };
 
 export type LevelRuleForm = {
