@@ -118,6 +118,20 @@ class AdminAssistantControllerTest {
     }
 
     @Test
+    void fullApiKeyEndpointReturnsStoredKeyForAdminReveal() throws Exception {
+        MockMvc mockMvc = mockMvc();
+        AiAssistantConfig config = new AiAssistantConfig();
+        config.setId(3L);
+        config.setApiKey("sk-full-secret-value");
+        when(aiAssistantConfigService.getById(3L)).thenReturn(config);
+
+        mockMvc.perform(get("/api/admin/assistant/configs/3/api-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.apiKey").value("sk-full-secret-value"))
+                .andExpect(jsonPath("$.hasApiKey").value(true));
+    }
+
+    @Test
     void userDetailReturnsPerUserCallRecords() throws Exception {
         MockMvc mockMvc = mockMvc();
         when(aiAssistantCallLogService.getUserDetail(eq(7L), any(), any(), eq(1L), eq(10L))).thenReturn(Map.of(

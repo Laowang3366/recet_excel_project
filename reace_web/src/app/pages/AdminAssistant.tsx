@@ -40,6 +40,7 @@ import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
 import {
   buildAssistantDashboardMetrics,
   buildAssistantConfigTestSignature,
+  buildFailureReasonDetailSummary,
   buildFailureReasonRows,
   buildRawLogDisplayRows,
   buildTestPanelFromResult,
@@ -175,7 +176,7 @@ type AssistantFormState = {
   backupModel: string;
   maxRetries: number;
   reasoningEffort: string;
-  timeoutSeconds: number;
+  timeoutMinutes: number;
   systemPrompt: string;
   promptFileName: string;
   promptMode: PromptMode;
@@ -205,7 +206,7 @@ const defaultForm: AssistantFormState = {
   backupModel: "gpt-5.5",
   maxRetries: 3,
   reasoningEffort: "",
-  timeoutSeconds: 30,
+  timeoutMinutes: 1,
   systemPrompt: defaultSystemPrompt,
   promptFileName: "",
   promptMode: "text",
@@ -232,6 +233,7 @@ export function AdminAssistant() {
   const [form, setForm] = useState<AssistantFormState>(defaultForm);
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingDefaultPrompt, setLoadingDefaultPrompt] = useState(false);
@@ -241,6 +243,7 @@ export function AdminAssistant() {
   const [lastSuccessfulTestSignature, setLastSuccessfulTestSignature] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<AiAssistantUserStatsRecord | null>(null);
   const [rawLogsOpen, setRawLogsOpen] = useState(false);
+  const [failureDetailOpen, setFailureDetailOpen] = useState(false);
   const [page, setPage] = useState(1);
   const size = 10;
 
@@ -308,12 +311,12 @@ export function AdminAssistant() {
   const visibleModelOptions = uniqueModels([form.model, form.backupModel, ...modelOptions]);
   const currentTestSignature = () => buildAssistantConfigTestSignature({
     baseUrl: form.baseUrl,
-    apiKey: normalizeApiKeyInput(form.apiKey),
+    apiKey: editingItem && !apiKeyTouched ? `stored:${editingItem.id}` : normalizeApiKeyInput(form.apiKey),
     model: form.model,
     backupModel: form.backupModel,
     maxRetries: normalizeRetryCount(form.maxRetries),
     reasoningEffort: form.reasoningEffort,
-    timeoutSeconds: normalizeTimeoutSeconds(form.timeoutSeconds),
+    timeoutMinutes: normalizeTimeoutMinutes(form.timeoutMinutes),
     systemPrompt: form.systemPrompt,
     promptFileName: form.promptMode === "file" ? form.promptFileName : "",
     promptMode: form.promptMode,
@@ -340,6 +343,7 @@ export function AdminAssistant() {
     setForm(defaultForm);
     setApiKeyTouched(false);
     setApiKeyVisible(false);
+    setApiKeyLoading(false);
     setModelOptions([]);
     setTestPanel(defaultTestPanel);
     setLastSuccessfulTestSignature(null);
@@ -357,7 +361,7 @@ export function AdminAssistant() {
       backupModel: item.backupModel || "",
       maxRetries: Number(item.maxRetries || 3),
       reasoningEffort: item.reasoningEffort || "",
-      timeoutSeconds: Number(item.timeoutSeconds || timeoutMsToSeconds(item.timeoutMs)),
+      timeoutMinutes: Number(item.timeoutMinutes || timeoutMsToMinutes(item.timeoutMs)),
       systemPrompt: item.systemPrompt || "",
       promptFileName: item.promptFileName || "",
       promptMode,
@@ -368,6 +372,7 @@ export function AdminAssistant() {
     });
     setApiKeyTouched(false);
     setApiKeyVisible(false);
+    setApiKeyLoading(false);
     setModelOptions(uniqueModels([item.model || "", item.backupModel || ""]));
     setTestPanel(defaultTestPanel);
     setLastSuccessfulTestSignature(null);
@@ -389,7 +394,7 @@ export function AdminAssistant() {
       return;
     }
     try {
-      const timeoutSeconds = normalizeTimeoutSeconds(form.timeoutSeconds);
+      const timeoutMinutes = normalizeTimeoutMinutes(form.timeoutMinutes);
       const payload = {
         name: form.name,
         baseUrl: form.baseUrl,
@@ -398,7 +403,7 @@ export function AdminAssistant() {
         backupModel: form.backupModel,
         maxRetries: normalizeRetryCount(form.maxRetries),
         reasoningEffort: form.reasoningEffort,
-        timeoutMs: timeoutSecondsToMs(timeoutSeconds),
+        timeoutMinutes,
         systemPrompt: form.systemPrompt,
         promptFileName: form.promptMode === "file" ? form.promptFileName : "",
         enabled: form.enabled,
@@ -493,6 +498,31 @@ export function AdminAssistant() {
     }
   };
 
+  const toggleApiKeyVisibility = async () => {
+    if (apiKeyVisible) {
+      setApiKeyVisible(false);
+      return;
+    }
+    if (editingItem?.id && editingItem.hasApiKey && !apiKeyTouched && !form.apiKey) {
+      setApiKeyLoading(true);
+      try {
+        const result = await api.get<{ apiKey?: string; hasApiKey?: boolean }>(`/api/admin/assistant/configs/${editingItem.id}/api-key`);
+        if (!result.hasApiKey || !result.apiKey) {
+          toast.info("当前配置未保存 API Key");
+          return;
+        }
+        setForm((prev) => ({ ...prev, apiKey: result.apiKey || "" }));
+        setApiKeyVisible(true);
+      } catch (error) {
+        handleAdminError(error, navigate);
+      } finally {
+        setApiKeyLoading(false);
+      }
+      return;
+    }
+    setApiKeyVisible(true);
+  };
+
   const runConnectionTest = async () => {
     const normalizedApiKey = normalizeApiKeyInput(form.apiKey);
     if (!form.testQuestion.trim()) {
@@ -511,7 +541,7 @@ export function AdminAssistant() {
         backupModel: form.backupModel,
         maxRetries: normalizeRetryCount(form.maxRetries),
         reasoningEffort: form.reasoningEffort,
-        timeoutMs: timeoutSecondsToMs(form.timeoutSeconds),
+        timeoutMinutes: normalizeTimeoutMinutes(form.timeoutMinutes),
         systemPrompt: form.systemPrompt,
         promptFileName: form.promptMode === "file" ? form.promptFileName : "",
         testQuestion: form.testQuestion,
@@ -685,7 +715,7 @@ export function AdminAssistant() {
 
         <div className="grid gap-4">
           <SecurityPanel />
-          <FailureReasonPanel rows={failureRows} />
+          <FailureReasonPanel rows={failureRows} onViewDetail={() => setFailureDetailOpen(true)} />
         </div>
       </div>
 
@@ -743,7 +773,7 @@ export function AdminAssistant() {
         apiKeyTouched={apiKeyTouched}
         setApiKeyTouched={setApiKeyTouched}
         apiKeyVisible={apiKeyVisible}
-        setApiKeyVisible={setApiKeyVisible}
+        apiKeyLoading={apiKeyLoading}
         modelOptions={visibleModelOptions}
         loadingModels={loadingModels}
         loadingDefaultPrompt={loadingDefaultPrompt}
@@ -751,6 +781,7 @@ export function AdminAssistant() {
         promptFileRef={promptFileRef}
         testPanel={testPanel}
         onFetchModels={() => void fetchModels()}
+        onToggleApiKeyVisibility={() => void toggleApiKeyVisibility()}
         onRunConnectionTest={() => void runConnectionTest()}
         onLoadDefaultPrompt={() => void loadSystemDefaultPrompt()}
         onSaveDefaultPrompt={() => void saveSystemDefaultPrompt()}
@@ -778,6 +809,11 @@ export function AdminAssistant() {
         userLabel={selectedUser?.username || selectedUser?.email || (selectedUser?.userId == null ? "" : `用户#${selectedUser.userId}`)}
         data={rawLogsQuery.data}
         loading={rawLogsQuery.isFetching}
+      />
+      <FailureReasonDetailDialog
+        open={failureDetailOpen}
+        onOpenChange={setFailureDetailOpen}
+        rows={failureRows}
       />
     </AdminPageShell>
   );
@@ -837,11 +873,19 @@ function SecurityPanel() {
   );
 }
 
-function FailureReasonPanel({ rows }: { rows: ReturnType<typeof buildFailureReasonRows> }) {
+function FailureReasonPanel({ rows, onViewDetail }: { rows: ReturnType<typeof buildFailureReasonRows>; onViewDetail: () => void }) {
   return (
     <DesignPanel
       title="失败原因分析"
-      actions={<button type="button" className="text-sm font-semibold text-[#005bff] hover:text-[#0040b8]">查看详情</button>}
+      actions={
+        <button
+          type="button"
+          onClick={onViewDetail}
+          className="rounded-[4px] px-2 py-1 text-sm font-semibold text-[#005bff] transition hover:bg-[#eef4ff] hover:text-[#0040b8] active:scale-[0.98] active:bg-[#dbeafe]"
+        >
+          查看详情
+        </button>
+      }
     >
       <div className="space-y-4 py-1">
         {rows.map((row) => (
@@ -849,6 +893,41 @@ function FailureReasonPanel({ rows }: { rows: ReturnType<typeof buildFailureReas
         ))}
       </div>
     </DesignPanel>
+  );
+}
+
+function FailureReasonDetailDialog({ open, onOpenChange, rows }: { open: boolean; onOpenChange: (next: boolean) => void; rows: ReturnType<typeof buildFailureReasonRows> }) {
+  const summary = buildFailureReasonDetailSummary(rows);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="w-[min(520px,calc(100vw-2rem))] rounded-[6px] p-0 sm:max-w-none">
+        <DialogHeader className="border-b border-[#dfe7f1] px-6 py-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <DialogTitle className="text-[20px] font-semibold text-[#101828]">失败原因详情</DialogTitle>
+              <div className="mt-1 text-sm text-[#667085]">共 {formatCount(summary.totalFailures)} 次失败，主要原因：{summary.primaryReason}</div>
+            </div>
+            <button type="button" onClick={() => onOpenChange(false)} aria-label="关闭" className="flex h-9 w-9 items-center justify-center rounded-[4px] text-[#101828] hover:bg-[#f2f4f7]">
+              <X size={21} />
+            </button>
+          </div>
+        </DialogHeader>
+        <div className="space-y-4 px-6 py-5">
+          {rows.map((row) => (
+            <div key={row.key} className="rounded-[6px] border border-[#dfe7f1] bg-[#fbfcfe] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="font-semibold text-[#101828]">{row.label}</div>
+                <div className="text-sm text-[#667085]">{row.count} 次 · {row.percentText}</div>
+              </div>
+              <FailureReasonBar label={row.label} count={row.count} percent={row.percent} tone={row.key} />
+            </div>
+          ))}
+        </div>
+        <DialogFooter className="border-t border-[#dfe7f1] px-6 py-4">
+          <button type="button" onClick={() => onOpenChange(false)} className={assistantSecondaryButtonClassName()}>关闭</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -879,7 +958,7 @@ function ConfigDialog({
   apiKeyTouched,
   setApiKeyTouched,
   apiKeyVisible,
-  setApiKeyVisible,
+  apiKeyLoading,
   modelOptions,
   loadingModels,
   loadingDefaultPrompt,
@@ -887,6 +966,7 @@ function ConfigDialog({
   promptFileRef,
   testPanel,
   onFetchModels,
+  onToggleApiKeyVisibility,
   onRunConnectionTest,
   onLoadDefaultPrompt,
   onSaveDefaultPrompt,
@@ -901,7 +981,7 @@ function ConfigDialog({
   apiKeyTouched: boolean;
   setApiKeyTouched: (next: boolean) => void;
   apiKeyVisible: boolean;
-  setApiKeyVisible: (next: boolean) => void;
+  apiKeyLoading: boolean;
   modelOptions: string[];
   loadingModels: boolean;
   loadingDefaultPrompt: boolean;
@@ -909,6 +989,7 @@ function ConfigDialog({
   promptFileRef: React.RefObject<HTMLInputElement>;
   testPanel: TestPanelState;
   onFetchModels: () => void;
+  onToggleApiKeyVisibility: () => void;
   onRunConnectionTest: () => void;
   onLoadDefaultPrompt: () => void;
   onSaveDefaultPrompt: () => void;
@@ -954,22 +1035,28 @@ function ConfigDialog({
                       className={`${inputClassName()} pr-10`}
                       placeholder={editingItem?.hasApiKey && !apiKeyTouched ? editingItem.apiKeyMasked || "已配置" : "sk-********************************"}
                     />
-                    <button type="button" onClick={() => setApiKeyVisible(!apiKeyVisible)} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-[4px] text-[#667085] hover:bg-[#f2f4f7]">
-                      {apiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    <button
+                      type="button"
+                      onClick={onToggleApiKeyVisibility}
+                      disabled={apiKeyLoading}
+                      aria-label={apiKeyVisible ? "隐藏 API Key" : "显示完整 API Key"}
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-[4px] text-[#667085] hover:bg-[#f2f4f7] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {apiKeyLoading ? <LoaderCircle size={16} className="animate-spin" /> : apiKeyVisible ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </Field>
                 <Field label="备用模型">
                   <ModelInput value={form.backupModel} options={modelOptions} onChange={(backupModel) => setForm((prev) => ({ ...prev, backupModel }))} />
                 </Field>
-                <Field label="超时时间（秒）" required>
+                <Field label="超时时间（分钟）" required>
                   <input
                     type="number"
                     min={1}
-                    max={3600}
+                    max={60}
                     step={1}
-                    value={form.timeoutSeconds}
-                    onChange={(event) => setForm((prev) => ({ ...prev, timeoutSeconds: Number(event.target.value || 0) }))}
+                    value={form.timeoutMinutes}
+                    onChange={(event) => setForm((prev) => ({ ...prev, timeoutMinutes: Number(event.target.value || 0) }))}
                     className={inputClassName()}
                   />
                 </Field>
@@ -1446,26 +1533,10 @@ export function timeoutMinutesToMs(value: unknown) {
   return normalizeTimeoutMinutes(value) * 60 * 1000;
 }
 
-function timeoutMsToSeconds(value: unknown) {
-  const timeoutMs = Number(value || 30000);
-  if (!Number.isFinite(timeoutMs)) return 30;
-  return normalizeTimeoutSeconds(Math.ceil(timeoutMs / 1000));
-}
-
-function timeoutSecondsToMs(value: unknown) {
-  return normalizeTimeoutSeconds(value) * 1000;
-}
-
 function normalizeTimeoutMinutes(value: unknown) {
   const minutes = Number(value || 1);
   if (!Number.isFinite(minutes)) return 1;
   return Math.min(60, Math.max(1, Math.round(minutes)));
-}
-
-function normalizeTimeoutSeconds(value: unknown) {
-  const seconds = Number(value || 30);
-  if (!Number.isFinite(seconds)) return 30;
-  return Math.min(3600, Math.max(1, Math.round(seconds)));
 }
 
 function normalizeRetryCount(value: unknown) {

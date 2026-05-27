@@ -49,6 +49,19 @@ public class AdminAssistantController {
         return ResponseEntity.ok(Map.of("records", aiAssistantConfigService.listAdminConfigs()));
     }
 
+    @GetMapping("/configs/{id}/api-key")
+    public ResponseEntity<?> getConfigApiKey(@PathVariable Long id) {
+        AiAssistantConfig config = aiAssistantConfigService.getById(id);
+        if (config == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String apiKey = normalizeText(config.getApiKey());
+        return ResponseEntity.ok(Map.of(
+                "apiKey", apiKey == null ? "" : apiKey,
+                "hasApiKey", apiKey != null
+        ));
+    }
+
     @PostMapping("/configs")
     @Transactional
     public ResponseEntity<?> createConfig(@RequestBody AdminAiAssistantConfigRequest request, HttpServletRequest servletRequest) {
