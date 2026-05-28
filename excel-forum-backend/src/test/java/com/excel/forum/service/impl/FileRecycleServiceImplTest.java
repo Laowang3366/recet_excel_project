@@ -131,13 +131,14 @@ class FileRecycleServiceImplTest {
     @Test
     @SuppressWarnings("unchecked")
     void listItemsReturnsStatsFileSizesDeleteUserNamesAndServerSideFilters() {
+        LocalDateTime futureExpiry = LocalDateTime.now().plusDays(30);
         FileRecycleItem template = recycleItem(
                 1L,
                 "template",
                 "old_template.xlsx",
                 3L,
                 LocalDateTime.of(2026, 5, 26, 10, 20),
-                LocalDateTime.of(2026, 5, 28, 10, 20),
+                futureExpiry,
                 """
                         [
                           {"label":"templateFile","originalFileUrl":"/uploads/template.xlsx","recycleFileUrl":"/uploads/.trash/template/11/template.xlsx"},
@@ -151,7 +152,7 @@ class FileRecycleServiceImplTest {
                 "qa_attachment.png",
                 8L,
                 LocalDateTime.of(2026, 5, 25, 10, 20),
-                LocalDateTime.of(2026, 6, 2, 10, 20),
+                futureExpiry.plusDays(15),
                 """
                         [
                           {"label":"answerFile","originalFileUrl":"/uploads/answer.png","recycleFileUrl":"/uploads/.trash/qa_answer/12/answer.png"}
