@@ -3,8 +3,10 @@ import {
   QUESTION_BANK_SERVICE_ENDPOINTS,
   QUESTION_BANK_TABS,
   QUESTION_EDITOR_STEPS,
+  buildQuestionWorksheetPreviewGrid,
   buildQuestionBankStats,
   getQuestionStatusMeta,
+  getQuestionBasicInfoValidationErrors,
 } from "./question-bank-view-model";
 
 describe("question bank view model", () => {
@@ -56,5 +58,50 @@ describe("question bank view model", () => {
     expect(QUESTION_BANK_SERVICE_ENDPOINTS.exceptions).toBe("/api/admin/questions/exceptions");
     expect(QUESTION_BANK_SERVICE_ENDPOINTS.publishTests).toBe("/api/admin/questions/publish-tests");
     expect(QUESTION_BANK_SERVICE_ENDPOINTS.publishTest(18)).toBe("/api/admin/questions/18/publish-test");
+  });
+
+  it("validates required basic information before the upload step", () => {
+    expect(getQuestionBasicInfoValidationErrors({
+      title: "只写标题",
+      questionCategoryId: "",
+      difficulty: 1,
+      explanation: "",
+    })).toEqual(["请选择题目分类", "请填写题目说明"]);
+
+    expect(getQuestionBasicInfoValidationErrors({
+      title: "SUMIF 条件求和",
+      questionCategoryId: 3,
+      difficulty: 4,
+      explanation: "根据地区统计销售额。",
+    })).toEqual([]);
+  });
+
+  it("builds worksheet preview rows from the uploaded workbook snapshot", () => {
+    const preview = buildQuestionWorksheetPreviewGrid({
+      workbook: {
+        sheets: [
+          {
+            name: "模板工作表",
+            cells: {
+              A1: { value: "销售数据分析表", display: "销售数据分析表" },
+              B1: { value: "产品A", display: "产品A" },
+              C1: { value: 120, display: "120" },
+              M10: { value: "日期", display: "日期" },
+              M11: { formula: "FILTER(A1:A3,A1:A3<>\"\")", value: "2026-04-03", display: "2026-04-03" },
+            },
+          },
+        ],
+      },
+      sheetName: "模板工作表",
+      answerRange: "M11:M12",
+      standardRange: "M11:M12",
+      maxRows: 3,
+      maxCols: 3,
+    });
+
+    expect(preview.sheetName).toBe("模板工作表");
+    expect(preview.headers).toEqual(["", "A", "B", "C"]);
+    expect(preview.rows[0].cells.map((cell) => cell.text)).toEqual(["销售数据分析表", "产品A", "120"]);
+    expect(preview.rows.flatMap((row) => row.cells.map((cell) => cell.text))).not.toContain("2024-01-01");
   });
 });

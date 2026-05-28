@@ -57,6 +57,7 @@ export function FormDialog({
   title,
   description,
   submitLabel = "保存",
+  submitDisabled = false,
   contentClassName,
   bodyClassName,
   onSubmit,
@@ -76,7 +77,12 @@ export function FormDialog({
           <button type="button" onClick={() => onOpenChange(false)} className={secondaryButtonClassName()}>
             取消
           </button>
-          <button type="button" onClick={() => void onSubmit()} className={primaryButtonClassName()}>
+          <button
+            type="button"
+            onClick={() => void onSubmit()}
+            disabled={submitDisabled}
+            className={`${primaryButtonClassName()} ${submitDisabled ? "pointer-events-none opacity-50" : ""}`}
+          >
             {submitLabel}
           </button>
         </DialogFooter>

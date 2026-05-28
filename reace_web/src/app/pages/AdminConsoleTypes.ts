@@ -366,6 +366,7 @@ export type FormDialogProps = {
   title: string;
   description?: string;
   submitLabel?: string;
+  submitDisabled?: boolean;
   contentClassName?: string;
   bodyClassName?: string;
   onSubmit: () => Promise<void> | void;

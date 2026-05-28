@@ -1,4 +1,14 @@
 import { AlertTriangle, Bell, Blocks, CheckCircle2, ClipboardCheck, FileSpreadsheet, Flag, ShieldCheck, type LucideIcon } from "lucide-react";
+import {
+  columnIndexToLabel,
+  getCellDisplayValue,
+  getCellSnapshot,
+  getSheetSnapshot,
+  parseRangeRef,
+  resolveSheetBounds,
+  toCellRef,
+  type ExcelWorkbookSnapshot,
+} from "../lib/excel";
 
 export type QuestionBankTabKey = "questions" | "campaign" | "snapshots" | "exceptions";
 
@@ -33,6 +43,31 @@ export type QuestionBankStatsInput = {
   }>;
   campaignLevelCount: number;
   categoryCount: number;
+};
+
+export type QuestionBasicInfoValidationInput = {
+  title?: unknown;
+  questionCategoryId?: unknown;
+  difficulty?: unknown;
+  explanation?: unknown;
+};
+
+export type QuestionWorksheetPreviewCell = {
+  ref: string;
+  text: string;
+  isAnswerCell: boolean;
+  isStandardCell: boolean;
+};
+
+export type QuestionWorksheetPreviewRow = {
+  rowNumber: number;
+  cells: QuestionWorksheetPreviewCell[];
+};
+
+export type QuestionWorksheetPreviewGrid = {
+  sheetName: string;
+  headers: string[];
+  rows: QuestionWorksheetPreviewRow[];
 };
 
 export type QuestionStatusMeta = {
@@ -124,6 +159,77 @@ export function getQuestionStatusMeta(value: unknown): QuestionStatusMeta {
 
 export function getQuestionRiskIcon(index: number) {
   return index < 4 ? CheckCircle2 : AlertTriangle;
+}
+
+export function getQuestionBasicInfoValidationErrors(input: QuestionBasicInfoValidationInput) {
+  const errors: string[] = [];
+  if (!String(input.title || "").trim()) {
+    errors.push("请填写题目标题");
+  }
+  if (!String(input.questionCategoryId || "").trim()) {
+    errors.push("请选择题目分类");
+  }
+  const difficulty = Number(input.difficulty);
+  if (!Number.isFinite(difficulty) || difficulty < 1) {
+    errors.push("请选择题目难度");
+  }
+  if (!String(input.explanation || "").trim()) {
+    errors.push("请填写题目说明");
+  }
+  return errors;
+}
+
+function isCellInsideRange(cellRef: string, rangeRef: string | null | undefined) {
+  const cell = parseRangeRef(cellRef);
+  const range = rangeRef ? parseRangeRef(rangeRef) : null;
+  if (!cell || !range) return false;
+  return cell.startRow >= range.startRow
+    && cell.endRow <= range.endRow
+    && cell.startCol >= range.startCol
+    && cell.endCol <= range.endCol;
+}
+
+export function buildQuestionWorksheetPreviewGrid({
+  workbook,
+  sheetName,
+  answerRange,
+  standardRange,
+  maxRows = 12,
+  maxCols = 14,
+}: {
+  workbook: ExcelWorkbookSnapshot | null | undefined;
+  sheetName?: string | null;
+  answerRange?: string | null;
+  standardRange?: string | null;
+  maxRows?: number;
+  maxCols?: number;
+}): QuestionWorksheetPreviewGrid {
+  const resolvedSheetName = sheetName || workbook?.sheets?.[0]?.name || "";
+  const sheet = getSheetSnapshot(workbook, resolvedSheetName);
+  if (!sheet) {
+    return { sheetName: "", headers: [""], rows: [] };
+  }
+
+  const bounds = resolveSheetBounds(sheet);
+  const rowCount = Math.min(bounds.rowCount, Math.max(1, maxRows));
+  const columnCount = Math.min(bounds.columnCount, Math.max(1, maxCols));
+  const headers = ["", ...Array.from({ length: columnCount }, (_, index) => columnIndexToLabel(index + 1))];
+  const rows = Array.from({ length: rowCount }, (_, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const cells = Array.from({ length: columnCount }, (_, colIndex) => {
+      const cellRef = toCellRef(rowNumber, colIndex + 1);
+      const cell = getCellSnapshot(sheet, cellRef);
+      return {
+        ref: cellRef,
+        text: cell ? getCellDisplayValue(cell) : "",
+        isAnswerCell: isCellInsideRange(cellRef, answerRange),
+        isStandardCell: isCellInsideRange(cellRef, standardRange),
+      };
+    });
+    return { rowNumber, cells };
+  });
+
+  return { sheetName: sheet.name, headers, rows };
 }
 
 function isDynamicArrayQuestion(item: QuestionBankStatsInput["records"][number]) {

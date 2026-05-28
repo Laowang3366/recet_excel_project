@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
 import { FastWorkbookFallbackEditor, preloadExcelWorkbookEditor } from "../components/FastWorkbookFallbackEditor";
 import { useAdminBulkSelection } from "../admin/bulk-selection";
-import { QUESTION_BANK_SERVICE_ENDPOINTS, QUESTION_BANK_TABS, QUESTION_EDITOR_STEPS, QUESTION_PUBLISH_CHECKS, buildQuestionBankStats, getQuestionRiskIcon, getQuestionStatusMeta, type QuestionBankTabKey } from "../admin/question-bank-view-model";
+import { QUESTION_BANK_SERVICE_ENDPOINTS, QUESTION_BANK_TABS, QUESTION_EDITOR_STEPS, QUESTION_PUBLISH_CHECKS, buildQuestionBankStats, buildQuestionWorksheetPreviewGrid, getQuestionBasicInfoValidationErrors, getQuestionRiskIcon, getQuestionStatusMeta, type QuestionBankTabKey } from "../admin/question-bank-view-model";
 import { api } from "../lib/api";
 import { buildWorkbookWithAnswerSnapshot, convertWorkbookSelectionToDateFormat, detectFormulaAnswerRegion, extractDateAwareRangeAnswerSnapshot, extractRangeAnswerSnapshot, extractStoredAnswerSnapshot, findMissingFormulaCellRefs, formatAnswerPreviewCellDisplay, ExcelRangeSelection, ExcelWorkbookSnapshot, DynamicArrayHydrationRule, normalizeSelection, parseRangeRef, selectionToRangeRef } from "../lib/excel";
 import { normalizeResourceUrl } from "../lib/mappers";
@@ -289,7 +289,6 @@ export function AdminQuestions() {
         ? snapshot
         : buildWorkbookWithAnswerSnapshot(snapshot, answerSheet, answerRange, answerSnapshotJson, {
           dynamicArrayRules: Array.isArray(dynamicArrayRules) ? dynamicArrayRules : [],
-          preserveDynamicArraySpillChildren: true,
         });
       setTemplateWorkbook(snapshot);
       setEditorWorkbook(workbookWithAnswer);
@@ -876,6 +875,36 @@ export function AdminQuestions() {
   const missingFormulaCellRefs = !isDynamicArrayMode && Boolean(form.checkFormula)
     ? findMissingFormulaCellRefs(answerPreview, previewRangeRef)
     : [];
+  const basicInfoValidationErrors = getQuestionBasicInfoValidationErrors(form);
+  const worksheetPreview = buildQuestionWorksheetPreviewGrid({
+    workbook: templateWorkbook,
+    sheetName: primarySheetName || selectedSheetName,
+    answerRange: form.answerRange,
+    standardRange: previewRangeRef,
+    maxRows: 12,
+    maxCols: 18,
+  });
+  const showBasicInfoValidationError = () => {
+    toast.error(basicInfoValidationErrors.join("、") || "请先完善基本信息");
+  };
+  const handleQuestionEditorStepClick = (nextStep: number) => {
+    if (nextStep > 0 && basicInfoValidationErrors.length > 0) {
+      showBasicInfoValidationError();
+      return;
+    }
+    setEditorStep(nextStep);
+  };
+  const handleQuestionEditorPrimaryAction = async () => {
+    if (editorStep < QUESTION_EDITOR_STEPS.length - 1) {
+      if (editorStep === 0 && basicInfoValidationErrors.length > 0) {
+        showBasicInfoValidationError();
+        return;
+      }
+      setEditorStep((current) => Math.min(current + 1, QUESTION_EDITOR_STEPS.length - 1));
+      return;
+    }
+    await submit();
+  };
   const openAnswerRangeEditor = () => {
     if (!isTemplateEditMode) return;
     const sheetName = primarySheetName;
@@ -1470,17 +1499,18 @@ export function AdminQuestions() {
         onOpenChange={setOpen}
         title={editing ? "编辑题目" : "新建题目"}
         description="按基本信息、上传模板、答题与判题、预览发布完成配置。"
-        submitLabel={editing ? "保存配置" : "创建题目"}
+        submitLabel={editorStep < QUESTION_EDITOR_STEPS.length - 1 ? "下一步" : (editing ? "保存配置" : "创建题目")}
         contentClassName="w-[min(1280px,calc(100vw-2rem))]"
         bodyClassName="px-6 py-5 bg-white"
-        onSubmit={submit}
+        submitDisabled={editorStep === 0 && basicInfoValidationErrors.length > 0}
+        onSubmit={handleQuestionEditorPrimaryAction}
       >
         <div className="flex flex-wrap items-center justify-center gap-2 border-b border-[#e5eaf3] pb-5">
           {QUESTION_EDITOR_STEPS.map((step, index) => {
             const completed = Boolean(editing) || index < editorStep;
             const active = index === editorStep;
             return (
-              <button key={step.key} type="button" onClick={() => setEditorStep(index)} className="flex min-w-[150px] items-center gap-3 text-left">
+              <button key={step.key} type="button" onClick={() => handleQuestionEditorStepClick(index)} className="flex min-w-[150px] items-center gap-3 text-left">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
                   active || completed ? "border-[#1769ff] bg-[#1769ff] text-white" : "border-[#c7d2e4] bg-white text-[#667085]"
                 }`}>
@@ -1506,11 +1536,12 @@ export function AdminQuestions() {
                     onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
                     className={inputClassName()}
                     placeholder="例如 SUMIF 条件求和"
+                    required
                   />
                 </Field>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="所属分类">
-                    <select value={String(form.questionCategoryId)} onChange={(event) => setForm((prev) => ({ ...prev, questionCategoryId: event.target.value }))} className={inputClassName()}>
+                    <select value={String(form.questionCategoryId)} onChange={(event) => setForm((prev) => ({ ...prev, questionCategoryId: event.target.value }))} className={inputClassName()} required>
                       <option value="">请选择</option>
                       {questionCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                     </select>
@@ -1543,8 +1574,14 @@ export function AdminQuestions() {
                     onChange={(event) => setForm((prev) => ({ ...prev, explanation: event.target.value }))}
                     className={textareaClassName()}
                     placeholder="请输入题目要求，避免泄露标准答案。"
+                    required
                   />
                 </Field>
+                {basicInfoValidationErrors.length > 0 ? (
+                  <div className="rounded-[8px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                    下一步前请补全：{basicInfoValidationErrors.join("、")}
+                  </div>
+                ) : null}
                 <AdminFormSwitch
                   label="启用（发布后学员可见）"
                   checked={Boolean(form.enabled)}
@@ -1799,7 +1836,6 @@ export function AdminQuestions() {
                       onSnapshotCaptureReady={(capture) => {
                         editorSnapshotGetterRef.current = capture;
                       }}
-                      preserveDynamicArraySpillChildren
                     />
                   </Suspense>
                 </ExcelEditorErrorBoundary>
@@ -1817,22 +1853,55 @@ export function AdminQuestions() {
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
               <div className="rounded-[8px] border border-[#e5eaf3] bg-white p-5">
                 <h3 className="text-[18px] font-semibold text-[#101828]">工作表预览</h3>
-                <div className="mt-4 overflow-hidden rounded-[8px] border border-[#d8e0ec] bg-white text-center text-xs">
-                  <div className="grid grid-cols-6 bg-[#f3f6fb] font-semibold">
-                    {["", "A", "B", "C", "D", "E"].map((item) => <div key={`answer-head-${item}`} className="border-r border-b border-[#d8e0ec] px-2 py-2">{item}</div>)}
-                  </div>
-                  {["销售数据分析表", "日期", "2024-01-01", "2024-01-02", "2024-01-03", "合计", "平均值", "最大值", "最小值"].map((row, rowIndex) => (
-                    <div key={`answer-row-${row}`} className="grid grid-cols-6">
-                      <div className="border-r border-b border-[#d8e0ec] bg-[#f8fafc] px-2 py-2 font-semibold">{rowIndex + 1}</div>
-                      {Array.from({ length: 5 }).map((_, colIndex) => (
-                        <div key={`answer-cell-${rowIndex}-${colIndex}`} className={`border-r border-b border-[#d8e0ec] px-2 py-2 ${
-                          rowIndex >= 1 && rowIndex <= 7 && colIndex >= 1 ? "bg-[#eaf2ff]" : ""
-                        } ${rowIndex >= 5 && colIndex === 1 ? "ring-1 ring-[#16a34a]" : ""}`}>
-                          {colIndex === 0 ? row : colIndex === 1 ? "产品A" : colIndex === 2 ? "120" : colIndex === 4 ? "¥6,000" : ""}
+                <div className="mt-1 text-xs text-[#667085]">工作表：{worksheetPreview.sheetName || "未加载模板"}</div>
+                <div className="mt-4 overflow-auto rounded-[8px] border border-[#d8e0ec] bg-white text-center text-xs">
+                  {worksheetPreview.rows.length > 0 ? (
+                    <div
+                      className="min-w-max"
+                      style={{
+                        gridTemplateColumns: `64px repeat(${Math.max(1, worksheetPreview.headers.length - 1)}, minmax(112px, 1fr))`,
+                      }}
+                    >
+                      <div
+                        className="grid bg-[#f3f6fb] font-semibold"
+                        style={{
+                          gridTemplateColumns: `64px repeat(${Math.max(1, worksheetPreview.headers.length - 1)}, minmax(112px, 1fr))`,
+                        }}
+                      >
+                        {worksheetPreview.headers.map((item) => (
+                          <div key={`answer-head-${item || "row"}`} className="border-r border-b border-[#d8e0ec] px-2 py-2">
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                      {worksheetPreview.rows.map((row) => (
+                        <div
+                          key={`answer-row-${row.rowNumber}`}
+                          className="grid"
+                          style={{
+                            gridTemplateColumns: `64px repeat(${Math.max(1, worksheetPreview.headers.length - 1)}, minmax(112px, 1fr))`,
+                          }}
+                        >
+                          <div className="border-r border-b border-[#d8e0ec] bg-[#f8fafc] px-2 py-2 font-semibold">{row.rowNumber}</div>
+                          {row.cells.map((cell) => (
+                            <div
+                              key={`answer-cell-${cell.ref}`}
+                              title={`${cell.ref}${cell.text ? `：${cell.text}` : ""}`}
+                              className={`min-h-9 truncate border-r border-b border-[#d8e0ec] px-2 py-2 ${
+                                cell.isAnswerCell ? "bg-[#eaf2ff]" : ""
+                              } ${cell.isStandardCell ? "ring-1 ring-inset ring-[#16a34a]" : ""}`}
+                            >
+                              {cell.text}
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="flex h-40 items-center justify-center text-sm text-[#98a2b3]">
+                      上传 Excel 模板后显示真实工作表内容
+                    </div>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-4 text-sm text-[#475467]">
                   <span className="inline-flex items-center gap-2"><span className="h-3 w-3 border border-[#1769ff] bg-[#eaf2ff]" />答题区域 ({form.answerRange || "待选择"})</span>

@@ -33,10 +33,10 @@ describe("admin questions layout", () => {
 
   it("keeps the basic information step free of template upload and editor controls", () => {
     const source = adminQuestionsSource();
-    const basicStepStart = source.indexOf("editorStep === 0");
+    const basicStepStart = source.indexOf("{editorStep === 0");
     const basicStepBlock = source.slice(
       basicStepStart,
-      source.indexOf("editorStep === 1", basicStepStart),
+      source.indexOf("{editorStep === 1", basicStepStart),
     );
 
     expect(basicStepStart).toBeGreaterThan(-1);
@@ -114,7 +114,7 @@ describe("admin questions layout", () => {
     expect(removeTemplateBlock).not.toContain("openAdminConfirm");
   });
 
-  it("keeps uploaded dynamic array spill values visible in the admin editor", () => {
+  it("lets the admin editor recalculate dynamic arrays instead of hydrating cached spill children", () => {
     const source = adminQuestionsSource();
     const uploadBlock = source.slice(
       source.indexOf("const handleTemplateUpload"),
@@ -122,7 +122,20 @@ describe("admin questions layout", () => {
     );
 
     expect(uploadBlock).toContain("loadTemplateWorkbook(uploadResult.url)");
-    expect(uploadBlock).not.toContain("clearDynamicArraySpillChildren(snapshot, [nextDynamicRule])");
+    expect(source).not.toContain("preserveDynamicArraySpillChildren");
+  });
+
+  it("uses an explicit next action before upload and blocks incomplete basic info", () => {
+    const source = adminQuestionsSource();
+    const dialogBlock = source.slice(
+      source.indexOf("<FormDialog"),
+      source.indexOf("editorStep === 1"),
+    );
+
+    expect(source).toContain("handleQuestionEditorPrimaryAction");
+    expect(source).toContain("getQuestionBasicInfoValidationErrors(form)");
+    expect(dialogBlock).toContain('editorStep < QUESTION_EDITOR_STEPS.length - 1 ? "下一步"');
+    expect(dialogBlock).toContain("submitDisabled={editorStep === 0 && basicInfoValidationErrors.length > 0}");
   });
 
   it("loads existing templates with saved answer snapshots visible in the editor", () => {
