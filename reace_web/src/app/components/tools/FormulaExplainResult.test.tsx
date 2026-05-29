@@ -63,4 +63,31 @@ describe("FormulaExplainResult", () => {
 
     expect(markup).toContain("gpt-test");
   });
+
+  it("uses segmented explanation comments in the formula structure", () => {
+    const result: FormulaExplainResponse = {
+      formula: "=LET(src,A1:A10,filtered,FILTER(src,src>0),SUM(filtered))",
+      normalizedFormula: "LET(src,A1:A10,filtered,FILTER(src,src>0),SUM(filtered))",
+      summary: "筛选正数后求和。",
+      segments: [
+        { text: "LET(src,A1:A10", title: "定义数据源", explanation: "把 A1:A10 命名为 src，后续重复引用。" },
+        { text: "filtered,FILTER(src,src>0)", title: "筛选正数", explanation: "只保留 src 中大于 0 的记录。" },
+        { text: "SUM(filtered)", title: "汇总结果", explanation: "对筛选后的 filtered 求和。" },
+      ],
+      functions: [
+        { name: "LET", purpose: "定义可复用的中间变量。" },
+        { name: "FILTER", purpose: "按条件筛选数组。" },
+        { name: "SUM", purpose: "求和。" },
+      ],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const markup = renderToStaticMarkup(<FormulaExplainResult result={result} />);
+
+    expect(markup).toContain("// 1. 定义数据源：把 A1:A10 命名为 src，后续重复引用。");
+    expect(markup).toContain("// 2. 筛选正数：只保留 src 中大于 0 的记录。");
+    expect(markup).toContain("// 3. 汇总结果：对筛选后的 filtered 求和。");
+    expect(markup).not.toContain("// LET：定义可复用的中间变量。");
+  });
 });

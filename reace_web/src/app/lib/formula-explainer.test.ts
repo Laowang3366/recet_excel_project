@@ -4,6 +4,7 @@ import {
   buildFormulaFunctionAnnotations,
   buildFormulaLayout,
   buildFormulaOptimizationSuggestions,
+  buildFormulaStructureAnnotations,
   validateFormulaInput,
   type FormulaExplainResponse,
 } from "./formula-explainer";
@@ -187,6 +188,40 @@ describe("formula explainer helpers", () => {
     expect(copyText).toContain("优化建议：");
     expect(copyText).toContain("FILTER、MAP");
     expect(copyText).toContain("Sales!A2:D100");
+  });
+
+  it("uses segment explanations as formula structure annotations when segments exist", () => {
+    const response: FormulaExplainResponse = {
+      formula: "=LET(src,A1:A10,filtered,FILTER(src,src>0),SUM(filtered))",
+      normalizedFormula: "LET(src,A1:A10,filtered,FILTER(src,src>0),SUM(filtered))",
+      summary: "筛选正数后求和。",
+      segments: [
+        { text: "LET(src,A1:A10", title: "定义数据源", explanation: "把 A1:A10 命名为 src，后续重复引用。" },
+        { text: "filtered,FILTER(src,src>0)", title: "筛选正数", explanation: "只保留 src 中大于 0 的记录。" },
+        { text: "SUM(filtered)", title: "汇总结果", explanation: "对筛选后的 filtered 求和。" },
+      ],
+      functions: [
+        { name: "LET", purpose: "定义可复用的中间变量。" },
+        { name: "FILTER", purpose: "按条件筛选数组。" },
+        { name: "SUM", purpose: "求和。" },
+      ],
+      warnings: [],
+      suggestions: [],
+    };
+
+    const layout = buildFormulaLayout(response.formula);
+    const annotations = buildFormulaStructureAnnotations(layout, response);
+    const copyText = formatFormulaExplanationForCopy(response);
+
+    expect(annotations).toEqual(expect.arrayContaining([
+      { lineIndex: 0, name: "1. 定义数据源", comment: "把 A1:A10 命名为 src，后续重复引用。" },
+      { lineIndex: 3, name: "2. 筛选正数", comment: "只保留 src 中大于 0 的记录。" },
+      { lineIndex: 8, name: "3. 汇总结果", comment: "对筛选后的 filtered 求和。" },
+    ]));
+    expect(copyText).toContain("LET( // 1. 定义数据源：把 A1:A10 命名为 src，后续重复引用。");
+    expect(copyText).toContain("filtered, // 2. 筛选正数：只保留 src 中大于 0 的记录。");
+    expect(copyText).toContain("SUM( // 3. 汇总结果：对筛选后的 filtered 求和。");
+    expect(copyText).not.toContain("LET( // LET：定义可复用的中间变量。");
   });
 
   it("points to exact full-column references instead of using broad performance advice", () => {

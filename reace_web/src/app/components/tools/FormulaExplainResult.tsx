@@ -3,9 +3,9 @@ import { AlertTriangle, Code2, Copy, Cpu, FunctionSquare, Lightbulb, ListTree, W
 import { toast } from "sonner";
 import { LitePanel } from "../LiteSurface";
 import {
-  buildFormulaFunctionAnnotations,
   buildFormulaLayout,
   buildFormulaOptimizationSuggestions,
+  buildFormulaStructureAnnotations,
   formatFormulaAnalysis,
   formatFormulaExplanationForCopy,
   getVisibleFormulaModel,
@@ -21,8 +21,8 @@ type FormulaExplainResultProps = {
 export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
   const analysisText = formatFormulaAnalysis(result.analysis);
   const formulaLayout = buildFormulaLayout(result.formula || result.normalizedFormula);
-  const functionAnnotations = buildFormulaFunctionAnnotations(formulaLayout, result.functions);
-  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights, functionAnnotations);
+  const structureAnnotations = buildFormulaStructureAnnotations(formulaLayout, result);
+  const annotatedLines = buildAnnotatedFormulaLines(formulaLayout.formattedLines, formulaLayout.parameterHighlights, structureAnnotations);
   const parameterSummary = buildParameterSummary(formulaLayout.parameterHighlights);
   const optimizationSuggestions = buildFormulaOptimizationSuggestions(result, formulaLayout);
   const visibleModel = getVisibleFormulaModel(result.model);
@@ -117,7 +117,7 @@ export function FormulaExplainResult({ result }: FormulaExplainResultProps) {
                   {line.functionAnnotations.map((annotation) => (
                     <span
                       key={`function-${annotation.name}-${annotation.comment}`}
-                      className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black leading-5 text-slate-600"
+                      className="max-w-[24rem] whitespace-normal rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-left text-[11px] font-black leading-5 text-slate-600"
                     >
                       {`// ${annotation.name}：${annotation.comment}`}
                     </span>

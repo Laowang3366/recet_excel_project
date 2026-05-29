@@ -151,7 +151,7 @@ export function buildFormulaLayout(formula: string): FormulaLayout {
 export function formatFormulaExplanationForCopy(response: FormulaExplainResponse) {
   const analysisText = formatFormulaAnalysis(response.analysis);
   const layout = buildFormulaLayout(response.formula || response.normalizedFormula);
-  const functionAnnotations = buildFormulaFunctionAnnotations(layout, response.functions);
+  const structureAnnotations = buildFormulaStructureAnnotations(layout, response);
   const parameterAnnotationLines = layout.parameterHighlights.map((item) => (
     `- ${item.role === "definition" ? "定义" : "引用"} ${item.sourceFunction} 参数 ${item.name}`
   ));
@@ -160,7 +160,7 @@ export function formatFormulaExplanationForCopy(response: FormulaExplainResponse
     `公式：${response.formula}`,
     "",
     "公式结构：",
-    ...formatFormulaLayoutLinesForCopy(layout.formattedLines, functionAnnotations),
+    ...formatFormulaLayoutLinesForCopy(layout.formattedLines, structureAnnotations),
     ...(parameterAnnotationLines.length > 0 ? ["", "自定义参数：", ...parameterAnnotationLines] : []),
     ...(layout.signals.length > 0 ? ["", `审计标记：${layout.signals.join(" / ")}`] : []),
     "",
@@ -222,6 +222,114 @@ export function buildFormulaFunctionAnnotations(
   });
 
   return dedupeFormulaFunctionAnnotations(annotations);
+}
+
+export function buildFormulaStructureAnnotations(
+  layout: FormulaLayout,
+  response: Pick<FormulaExplainResponse, "segments" | "functions">,
+): FormulaFunctionAnnotation[] {
+  const segmentAnnotations = buildFormulaSegmentAnnotations(layout, response.segments);
+  if (segmentAnnotations.length > 0) return segmentAnnotations;
+  return buildFormulaFunctionAnnotations(layout, response.functions);
+}
+
+function buildFormulaSegmentAnnotations(
+  layout: FormulaLayout,
+  segments: FormulaExplainSegment[] = [],
+): FormulaFunctionAnnotation[] {
+  const lines = layout.formattedLines.split("\n");
+  const usedLineIndexes = new Set<number>();
+  const fallbackLineIndexes = collectMeaningfulFormulaLineIndexes(lines);
+  let fallbackCursor = 0;
+
+  const annotations = segments.flatMap((segment, index) => {
+    const title = segment.title.trim();
+    const comment = segment.explanation.trim();
+    if (!title && !comment) return [];
+
+    const matchedLineIndex = findFormulaSegmentLineIndex(lines, segment, usedLineIndexes);
+    const lineIndex = matchedLineIndex >= 0
+      ? matchedLineIndex
+      : findNextFallbackFormulaLineIndex(fallbackLineIndexes, usedLineIndexes, fallbackCursor);
+    if (lineIndex < 0) return [];
+
+    fallbackCursor = Math.max(fallbackCursor, fallbackLineIndexes.indexOf(lineIndex) + 1);
+    usedLineIndexes.add(lineIndex);
+    return [{
+      lineIndex,
+      name: `${index + 1}. ${title || "分段说明"}`,
+      comment,
+    }];
+  });
+
+  return dedupeFormulaFunctionAnnotations(annotations);
+}
+
+function findFormulaSegmentLineIndex(
+  lines: string[],
+  segment: FormulaExplainSegment,
+  usedLineIndexes: Set<number>,
+) {
+  const candidates = collectFormulaSegmentCandidates(segment.text);
+  for (const candidate of candidates) {
+    const lineIndex = lines.findIndex((line, index) => (
+      !usedLineIndexes.has(index) && formulaLineMatchesSegmentCandidate(line, candidate)
+    ));
+    if (lineIndex >= 0) return lineIndex;
+  }
+  return -1;
+}
+
+function collectFormulaSegmentCandidates(text: string) {
+  const raw = text.trim().replace(/^=/, "");
+  const candidates = [raw];
+  const normalizedRaw = normalizeFormulaSegmentMatchText(raw);
+  const leadingFunction = normalizedRaw.match(/^([A-Z_][A-Z0-9_.]*\()/)?.[1] || "";
+  const leadingIdentifier = normalizedRaw.match(/^([A-Z_][A-Z0-9_.]*)/)?.[1] || "";
+  const firstFunction = normalizedRaw.match(/([A-Z_][A-Z0-9_.]*\()/)?.[1] || "";
+
+  [leadingFunction, leadingIdentifier, firstFunction].forEach((candidate) => {
+    if (candidate) candidates.push(candidate);
+  });
+  return dedupeFormulaEvidence(candidates);
+}
+
+function formulaLineMatchesSegmentCandidate(line: string, candidate: string) {
+  const lineToken = normalizeFormulaSegmentLineToken(line);
+  const candidateToken = normalizeFormulaSegmentMatchText(candidate);
+  if (lineToken.length < 2 || candidateToken.length < 2) return false;
+  return (
+    lineToken === candidateToken ||
+    candidateToken.startsWith(lineToken) ||
+    lineToken.includes(candidateToken)
+  );
+}
+
+function normalizeFormulaSegmentLineToken(line: string) {
+  return normalizeFormulaSegmentMatchText(normalizeFormulaLineToken(line));
+}
+
+function normalizeFormulaSegmentMatchText(value: string) {
+  return value.trim().replace(/^=/, "").replace(/\s+/g, "").toUpperCase();
+}
+
+function collectMeaningfulFormulaLineIndexes(lines: string[]) {
+  return lines
+    .map((line, index) => ({ line: normalizeFormulaLineToken(line), index }))
+    .filter((item) => item.line && item.line !== ")" && item.line !== "),")
+    .map((item) => item.index);
+}
+
+function findNextFallbackFormulaLineIndex(
+  fallbackLineIndexes: number[],
+  usedLineIndexes: Set<number>,
+  startCursor: number,
+) {
+  for (let index = startCursor; index < fallbackLineIndexes.length; index += 1) {
+    const lineIndex = fallbackLineIndexes[index];
+    if (!usedLineIndexes.has(lineIndex)) return lineIndex;
+  }
+  return fallbackLineIndexes.find((lineIndex) => !usedLineIndexes.has(lineIndex)) ?? -1;
 }
 
 export function buildFormulaOptimizationSuggestions(
