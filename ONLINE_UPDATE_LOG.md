@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-06-08 19:22 Asia/Shanghai
+
+- Scope: 深度健壮性风险闭环上线，包括通知跳转链接收敛、私有上传路径规范化、批量操作上限、富文本与 CSV 导出安全处理、依赖漏洞更新和 CI 日期夹具稳定化。
+- Verification: local scripts/quality/check.ps1 passed; GitHub CI run 27131955865 succeeded for commit 64eaaca; https://www.excelcc.cn/ -> 200; https://www.excelcc.cn/api/public/home-overview -> 200; https://www.excelcc.cn/practice -> 200; https://www.excelcc.cn/api/practice/campaign/chapters -> 200; remote service active with local API 200; frontend runtime matched 100 built files with 0 missing and 0 mismatches; backend runtime JAR matched the built JAR.
+- Deploy: pushed origin/main, then ran bash scripts/deploy/production-deploy.sh in /www/wwwroot/excelcc/kick-deploy/repo on the server.
+- Server backup: /www/wwwroot/excelcc/kick-deploy/backups/20260608-112012
+- Notes: remote standard deploy completed for runtime commit 64eaaca; /www/wwwroot/quick-translate was not changed.
+
 ## 2026-05-29 22:19 Asia/Shanghai
 
 - Scope: 公式解释结构注释按分段说明展示
