@@ -13,6 +13,14 @@
 - 备注：
 ```
 
+## 2026-06-08 20:48 Asia/Shanghai
+
+- Scope: 数据库分页与后台热点查询索引优化上线，新增 Flyway V101 复合索引覆盖积分流水、练习记录、经验日志、通知、回收站、模板下载、站点通知和用户列表查询路径。
+- Verification: local scripts/quality/check.ps1 passed; frontend audit/typecheck/tests/build passed; backend mvn test passed with 248 tests; https://www.excelcc.cn/ -> 200; https://www.excelcc.cn/api/public/home-overview -> 200; https://www.excelcc.cn/practice -> 200; https://www.excelcc.cn/api/practice/campaign/chapters -> 200; remote service active with local API 200; Flyway V101 recorded success=1; 16 target indexes were present in information_schema; sampled EXPLAIN plans used the new indexes for points, user_exp_log, notification list, file_recycle_item, template_download_record and user ranking paths.
+- Deploy: pushed origin/main, then ran bash scripts/deploy/production-deploy.sh in /www/wwwroot/excelcc/kick-deploy/repo on the server.
+- Server backup: /www/wwwroot/excelcc/kick-deploy/backups/20260608-124515
+- Notes: remote standard deploy completed for runtime commit 8c5eb5a; backend health check passed on attempt 3 after restart; practice_record and site_notification sample EXPLAIN plans still chose full scans on current small row counts, so keep monitoring with slow query data as traffic grows; /www/wwwroot/quick-translate was not changed.
+
 ## 2026-06-08 19:22 Asia/Shanghai
 
 - Scope: 深度健壮性风险闭环上线，包括通知跳转链接收敛、私有上传路径规范化、批量操作上限、富文本与 CSV 导出安全处理、依赖漏洞更新和 CI 日期夹具稳定化。
