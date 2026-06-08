@@ -20,8 +20,8 @@ const records: FileRecycleItemView[] = [
     originalFileUrl: "/uploads/private/practice_filter.xlsx",
     fileCount: 2,
     deletedBy: 1,
-    deletedAt: "2026-05-27T09:30:00",
-    expiresAt: "2026-06-08T09:30:00",
+    deletedAt: "2026-05-27T09:30:00+08:00",
+    expiresAt: "2026-06-08T09:30:00+08:00",
     expired: false,
   },
   {
@@ -32,8 +32,8 @@ const records: FileRecycleItemView[] = [
     originalFileUrl: "/uploads/private/templates/old_template.xlsx",
     fileCount: 1,
     deletedBy: 3,
-    deletedAt: "2026-05-25T10:20:00",
-    expiresAt: "2026-05-28T10:20:00",
+    deletedAt: "2026-05-25T10:20:00+08:00",
+    expiresAt: "2026-05-28T10:20:00+08:00",
     expired: false,
   },
   {
@@ -44,8 +44,8 @@ const records: FileRecycleItemView[] = [
     originalFileUrl: "/uploads/private/qa/answer.png",
     fileCount: 1,
     deletedBy: 8,
-    deletedAt: "2026-05-20T10:20:00",
-    expiresAt: "2026-05-26T10:20:00",
+    deletedAt: "2026-05-20T10:20:00+08:00",
+    expiresAt: "2026-05-26T10:20:00+08:00",
     expired: true,
   },
 ];
