@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -19,6 +21,24 @@ class PrivateUploadAccessFilterTest {
     void blocksPrivateUploadDirectAccess() throws Exception {
         PrivateUploadAccessFilter filter = new PrivateUploadAccessFilter();
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/uploads/private/conversions/a.xlsx");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(request, response, trackingChain(chainCalled));
+
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(chainCalled).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/uploads/private%2Fconversions/a.xlsx",
+            "/uploads/private%5Cconversions/a.xlsx",
+            "/uploads/%2Etrash/old.xlsx"
+    })
+    void blocksEncodedPrivateUploadDirectAccess(String requestUri) throws Exception {
+        PrivateUploadAccessFilter filter = new PrivateUploadAccessFilter();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", requestUri);
         MockHttpServletResponse response = new MockHttpServletResponse();
         AtomicBoolean chainCalled = new AtomicBoolean(false);
 

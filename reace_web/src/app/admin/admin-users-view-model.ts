@@ -1,3 +1,5 @@
+import { buildCsv, escapeCsvCell } from "../lib/csv";
+
 export type AdminUserViewRecord = {
   id: number;
   username?: string | null;
@@ -157,9 +159,7 @@ export function maskAdminPhone(value: unknown) {
 }
 
 export function sanitizeCsvCell(value: unknown) {
-  const text = String(value ?? "");
-  const safeText = /^[=+\-@]/.test(text.trim()) ? `'${text}` : text;
-  return `"${safeText.replace(/"/g, '""')}"`;
+  return escapeCsvCell(value, { quoteAll: true });
 }
 
 export function buildUsersCsv(records: AdminUserViewRecord[]) {
@@ -174,5 +174,5 @@ export function buildUsersCsv(records: AdminUserViewRecord[]) {
     item.points ?? "",
     item.createTime || "",
   ]);
-  return [header, ...rows].map((row) => row.map(sanitizeCsvCell).join(",")).join("\n");
+  return buildCsv([header, ...rows], { quoteAll: true });
 }

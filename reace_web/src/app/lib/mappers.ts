@@ -66,11 +66,19 @@ export function normalizeAvatarUrl(value?: string | null, seed?: string | null) 
 
 export function normalizeResourceUrl(value?: string | null) {
   if (!value) return "";
-  if (value.startsWith("http://") || value.startsWith("https://")) return value;
-  if (value.startsWith("/")) {
-    return `${API_BASE}${value}`;
+  const trimmed = value.trim();
+  const compact = trimmed.replace(/[\u0000-\u001f\u007f\s]+/g, "").toLowerCase();
+  if (/^(javascript|vbscript|data):/.test(compact) || trimmed.startsWith("//")) {
+    return "";
   }
-  return value;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(compact)) {
+    return "";
+  }
+  if (trimmed.startsWith("/")) {
+    return `${API_BASE}${trimmed}`;
+  }
+  return trimmed;
 }
 
 function buildDefaultAvatarDataUrl(seed?: string | null) {

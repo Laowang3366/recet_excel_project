@@ -39,6 +39,7 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class FileRecycleServiceImpl implements FileRecycleService {
+    private static final int MAX_BATCH_IDS = 100;
     private static final int RETENTION_DAYS = 90;
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_RESTORED = "restored";
@@ -262,11 +263,12 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     @Override
     @Transactional
     public int restoreBatch(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
+        List<Long> normalizedIds = normalizeBatchIds(ids);
+        if (normalizedIds.isEmpty()) {
             return 0;
         }
         int count = 0;
-        for (Long id : ids.stream().filter(Objects::nonNull).distinct().toList()) {
+        for (Long id : normalizedIds) {
             restore(id);
             count++;
         }
@@ -291,11 +293,12 @@ public class FileRecycleServiceImpl implements FileRecycleService {
     @Override
     @Transactional
     public int purgeBatch(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
+        List<Long> normalizedIds = normalizeBatchIds(ids);
+        if (normalizedIds.isEmpty()) {
             return 0;
         }
         int count = 0;
-        for (Long id : ids.stream().filter(Objects::nonNull).distinct().toList()) {
+        for (Long id : normalizedIds) {
             purge(id);
             count++;
         }
@@ -503,6 +506,20 @@ public class FileRecycleServiceImpl implements FileRecycleService {
             throw new IllegalArgumentException("回收站记录不存在");
         }
         return item;
+    }
+
+    private List<Long> normalizeBatchIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> normalizedIds = ids.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (normalizedIds.size() > MAX_BATCH_IDS) {
+            throw new IllegalArgumentException("批量操作最多支持 100 条");
+        }
+        return normalizedIds;
     }
 
     private boolean matchesKeyword(FileRecycleItem item, String keyword) {

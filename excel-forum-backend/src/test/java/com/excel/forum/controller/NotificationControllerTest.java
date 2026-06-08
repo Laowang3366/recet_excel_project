@@ -1,6 +1,8 @@
 package com.excel.forum.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.excel.forum.config.GlobalExceptionHandler;
+import com.excel.forum.entity.SiteNotification;
 import com.excel.forum.service.NotificationService;
 import com.excel.forum.service.SiteNotificationService;
 import com.excel.forum.service.UserService;
@@ -15,10 +17,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -110,5 +115,50 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.message").value("删除成功"));
 
         verify(notificationService, never()).deleteBatch(anyLong(), anyList());
+    }
+
+    @Test
+    void deleteBatchRejectsTooManyIds() throws Exception {
+        String ids = java.util.stream.LongStream.rangeClosed(1, 101)
+                .mapToObj(Long::toString)
+                .collect(java.util.stream.Collectors.joining(","));
+
+        mockMvc.perform(delete("/api/notifications/batch")
+                        .requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\":[" + ids + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("批量删除最多支持 100 条"));
+
+        verify(notificationService, never()).deleteBatch(anyLong(), anyList());
+    }
+
+    @Test
+    void getNotificationsClampsInvalidPagination() throws Exception {
+        mockMvc.perform(get("/api/notifications")
+                        .requestAttr("userId", 7L)
+                        .param("page", "-5")
+                        .param("limit", "10000"))
+                .andExpect(status().isOk());
+
+        verify(notificationService).getUserNotifications(7L, null, 1, 50);
+    }
+
+    @Test
+    void getAnnouncementsClampsPublicPagination() throws Exception {
+        when(siteNotificationService.page(
+                org.mockito.ArgumentMatchers.<Page<SiteNotification>>any(),
+                org.mockito.ArgumentMatchers.any()
+        )).thenAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(get("/api/notifications/announcements")
+                        .param("page", "-3")
+                        .param("size", "10000"))
+                .andExpect(status().isOk());
+
+        verify(siteNotificationService).page(
+                argThat(page -> page.getCurrent() == 1L && page.getSize() == 50L),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 }

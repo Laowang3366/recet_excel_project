@@ -27,10 +27,10 @@ function renderMarkdownContent(markdown: string) {
   html = html.replace(/^> (.+)$/gm, '<blockquote class="my-4 border-l-4 border-teal-300 bg-teal-50/70 px-4 py-3 italic text-slate-600">$1</blockquote>');
   html = html.replace(/^---$/gm, '<hr class="my-6 border-slate-200" />');
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => (
-    `<figure class="my-5"><img src="${escapeHtml(normalizeResourceUrl(src))}" alt="${alt}" class="max-h-96 rounded-2xl border border-slate-200 object-contain" /><figcaption class="mt-2 text-sm text-slate-400">${alt}</figcaption></figure>`
+    renderMarkdownImage(alt, src)
   ));
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, href) => (
-    `<a href="${escapeHtml(normalizeResourceUrl(href))}" target="_blank" rel="noreferrer" class="font-medium text-teal-600 underline underline-offset-4">${text}</a>`
+    renderMarkdownLink(text, href)
   ));
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/~~([^~]+)~~/g, '<del class="text-slate-500">$1</del>');
@@ -81,12 +81,13 @@ function renderHtmlContent(html: string) {
         element.removeAttribute(attribute.name);
         return;
       }
-      if ((name === "src" || name === "href") && /^\s*javascript:/i.test(value)) {
-        element.removeAttribute(attribute.name);
-        return;
-      }
       if (name === "src" || name === "href") {
-        element.setAttribute(attribute.name, normalizeResourceUrl(value));
+        const safeUrl = normalizeRichContentUrl(value);
+        if (!safeUrl) {
+          element.removeAttribute(attribute.name);
+          return;
+        }
+        element.setAttribute(attribute.name, safeUrl);
       }
     });
 
@@ -190,12 +191,13 @@ export function sanitizeRichHtml(html: string) {
         element.removeAttribute(attribute.name);
         return;
       }
-      if ((name === "src" || name === "href") && /^\s*javascript:/i.test(value)) {
-        element.removeAttribute(attribute.name);
-        return;
-      }
       if (name === "src" || name === "href") {
-        element.setAttribute(attribute.name, normalizeResourceUrl(value));
+        const safeUrl = normalizeRichContentUrl(value);
+        if (!safeUrl) {
+          element.removeAttribute(attribute.name);
+          return;
+        }
+        element.setAttribute(attribute.name, safeUrl);
       }
     });
   });
@@ -207,9 +209,8 @@ function sanitizeRichHtmlFallback(html: string) {
   return html
     .replace(/<\s*(script|style|iframe|object|embed)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
     .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/\s(src|href)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi, "")
     .replace(/\s(src|href)\s*=\s*(["'])([^"']+)\2/gi, (_match, attr, quote, value) => (
-      ` ${attr}=${quote}${escapeHtml(normalizeResourceUrl(value))}${quote}`
+      normalizeRichContentUrl(value) ? ` ${attr}=${quote}${escapeHtml(normalizeRichContentUrl(value))}${quote}` : ""
     ));
 }
 
@@ -269,6 +270,34 @@ function renderTableBlock(tableBlock: string) {
     .join("");
 
   return `<div class="my-5 overflow-x-auto"><table class="min-w-full border-collapse rounded-xl overflow-hidden"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+}
+
+function renderMarkdownImage(alt: string, src: string) {
+  const safeSrc = normalizeRichContentUrl(src);
+  if (!safeSrc) {
+    return alt;
+  }
+  return `<figure class="my-5"><img src="${escapeHtml(safeSrc)}" alt="${alt}" class="max-h-96 rounded-2xl border border-slate-200 object-contain" /><figcaption class="mt-2 text-sm text-slate-400">${alt}</figcaption></figure>`;
+}
+
+function renderMarkdownLink(text: string, href: string) {
+  const safeHref = normalizeRichContentUrl(href);
+  if (!safeHref) {
+    return text;
+  }
+  return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noreferrer" class="font-medium text-teal-600 underline underline-offset-4">${text}</a>`;
+}
+
+function normalizeRichContentUrl(value: string) {
+  const normalized = normalizeResourceUrl(value).trim();
+  if (!normalized) {
+    return "";
+  }
+  const compact = normalized.replace(/[\u0000-\u001f\u007f\s]+/g, "").toLowerCase();
+  if (/^(javascript|vbscript|data):/.test(compact)) {
+    return "";
+  }
+  return normalized;
 }
 
 function escapeHtml(value: string) {

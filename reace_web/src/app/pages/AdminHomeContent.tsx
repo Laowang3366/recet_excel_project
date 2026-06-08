@@ -53,6 +53,7 @@ import { hasAdminConsoleAccess } from "../admin/config";
 import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
 import { adminKeys } from "../lib/query-keys";
+import { sanitizeRichHtml } from "../lib/rich-content";
 import { useSession } from "../lib/session";
 
 type FormDialogProps = {
@@ -1096,7 +1097,7 @@ function TutorialHtmlPreview({ value, compact = false }: { value: string; compac
   return (
     <div
       className={`overflow-auto rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-inner ${tutorialHtmlContentClass} ${compact ? "h-[320px]" : "h-[520px]"}`}
-      dangerouslySetInnerHTML={{ __html: value }}
+      dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(value) }}
     />
   );
 }

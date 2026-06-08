@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeRichHtml } from "./rich-content";
+import { renderRichContent, sanitizeRichHtml } from "./rich-content";
 
 describe("sanitizeRichHtml", () => {
   it("removes script tags, inline handlers, and javascript urls", () => {
@@ -16,5 +16,18 @@ describe("sanitizeRichHtml", () => {
     expect(html).not.toContain("onerror");
     expect(html).not.toContain("javascript:");
     expect(html).toContain("src=\"/uploads/pic.png\"");
+  });
+
+  it("removes dangerous markdown link and image targets", () => {
+    const html = renderRichContent(`
+      [unsafe link](javascript:alert(1))
+      ![unsafe image](data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9YWxlcnQoMik+)
+    `);
+
+    expect(html).toContain("unsafe link");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("data:image");
+    expect(html).not.toContain("href=");
+    expect(html).not.toContain("src=");
   });
 });

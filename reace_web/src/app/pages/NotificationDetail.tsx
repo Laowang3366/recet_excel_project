@@ -8,6 +8,7 @@ import { ApiError, api } from "../lib/api";
 import { parseNotificationMeta } from "../admin/notification-form";
 import { formatDateTime } from "../lib/format";
 import { normalizeAvatarUrl, normalizeImageUrl, parseJsonText } from "../lib/mappers";
+import { resolveSafeNotificationAction } from "../lib/notification-link";
 import { notificationKeys } from "../lib/query-keys";
 import { resolveNotificationReturnTarget } from "../lib/notification-return";
 import { renderRichContent } from "../lib/rich-content";
@@ -110,9 +111,8 @@ export function NotificationDetail() {
   }, [notification?.id, notification?.isAnnouncement]);
 
   const handleShare = async () => {
-    const url = notification?.targetLink
-      ? `${window.location.origin}${notification.targetLink}`
-      : `${window.location.origin}/notification/${id}`;
+    const action = resolveSafeNotificationAction(notification?.targetLink);
+    const url = `${window.location.origin}${action?.path || `/notification/${id}`}`;
     await navigator.clipboard.writeText(url);
     toast.success("链接已复制到剪贴板");
   };
@@ -159,6 +159,7 @@ export function NotificationDetail() {
   const attachments = Array.isArray(attachmentPayload) ? (attachmentPayload as NotificationAttachment[]) : [];
   const notificationMeta = parseNotificationMeta(notification?.attachments);
   const targetLink = notification?.targetLink || null;
+  const targetAction = resolveSafeNotificationAction(targetLink);
   const isAnnouncement = Boolean(notification?.isAnnouncement);
 
   const handleDownload = (file: NotificationAttachment) => {
@@ -255,11 +256,11 @@ export function NotificationDetail() {
               )}
             </div>
 
-            {targetLink && (
+            {targetAction && (
               <div className="mb-8 flex justify-start">
                 <button
                   type="button"
-                  onClick={() => openNotificationLink(targetLink, navigate)}
+                  onClick={() => navigate(targetAction.path)}
                   className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-bold text-teal-700 transition hover:bg-teal-100"
                 >
                   <LinkIcon size={16} />
@@ -360,12 +361,4 @@ export function NotificationDetail() {
       </div>
     </div>
   );
-}
-
-function openNotificationLink(targetLink: string, navigate: (to: string) => void) {
-  if (targetLink.startsWith("http://") || targetLink.startsWith("https://")) {
-    window.location.href = targetLink;
-    return;
-  }
-  navigate(targetLink);
 }

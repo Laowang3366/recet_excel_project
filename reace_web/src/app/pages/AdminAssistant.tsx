@@ -34,6 +34,7 @@ import { AdminBulkCheckbox, AdminEmptyState, AdminPageShell, AdminPermissionNoti
 import { hasAdminConsoleAccess } from "../admin/config";
 import { api, ApiError } from "../lib/api";
 import { buildCurrentAuthRedirectPath } from "../lib/auth-redirect";
+import { buildCsv } from "../lib/csv";
 import { adminKeys } from "../lib/query-keys";
 import { useSession } from "../lib/session";
 import { openAdminConfirm, runAdminBulkDelete } from "./AdminConsoleShared";
@@ -1582,7 +1583,7 @@ function exportUserRecords(username: string | null | undefined, records: NonNull
     record.success ? "成功" : "失败",
     record.success ? "" : getFailureReasonLabel(record.errorReason || record.errorMessage),
   ]);
-  const csv = [header, ...lines].map((row) => row.map(escapeCsvCell).join(",")).join("\n");
+  const csv = buildCsv([header, ...lines]);
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -1592,14 +1593,6 @@ function exportUserRecords(username: string | null | undefined, records: NonNull
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-}
-
-function escapeCsvCell(value: unknown) {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
 }
 
 function handleAdminError(error: unknown, navigate: ReturnType<typeof useNavigate>) {

@@ -8,7 +8,9 @@ import com.excel.forum.entity.QaCaseHelpAnswer;
 import com.excel.forum.entity.QaCaseHelpFeedback;
 import com.excel.forum.entity.QaSolutionShare;
 import com.excel.forum.entity.User;
+import com.excel.forum.entity.dto.AdminQaBatchAssignRequest;
 import com.excel.forum.entity.dto.AdminQaAssignRequest;
+import com.excel.forum.entity.dto.AdminQaBatchReviewRequest;
 import com.excel.forum.entity.dto.AdminQaFeaturedShareRequest;
 import com.excel.forum.entity.dto.AdminQaFeedbackHandleRequest;
 import com.excel.forum.entity.dto.AdminQaReviewRequest;
@@ -373,6 +375,19 @@ class QaServiceImplTest {
         assertThat(captor.getValue().getAssignedBy()).isEqualTo(9L);
         assertThat(captor.getValue().getAssignmentNote()).isEqualTo("交给讲师处理");
         assertThat(captor.getValue().getAssignedAt()).isNotNull();
+    }
+
+    @Test
+    void adminBatchAssignRejectsTooManyIdsBeforeLoadingCases() {
+        AdminQaBatchAssignRequest request = new AdminQaBatchAssignRequest();
+        request.setIds(java.util.stream.LongStream.rangeClosed(1, 101).boxed().toList());
+        request.setAssigneeUserId(88L);
+
+        assertThatThrownBy(() -> service.adminBatchAssignCases(5L, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("批量操作最多支持 100 条");
+
+        verify(caseHelpMapper, never()).selectById(any());
     }
 
     @Test

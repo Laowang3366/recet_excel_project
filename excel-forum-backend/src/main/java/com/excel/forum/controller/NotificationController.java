@@ -25,6 +25,8 @@ import java.util.Map;
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
+    private static final int MAX_BATCH_IDS = 100;
+    private static final int MAX_PAGE_SIZE = 50;
     private static final List<String> CURRENT_NOTIFICATION_TYPES = List.of("system", "site_notification", "feedback_result", "qa_case_answered", "qa_answer_accepted");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -37,7 +39,7 @@ public class NotificationController {
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer size) {
-        Page<SiteNotification> pageParam = new Page<>(page, size);
+        Page<SiteNotification> pageParam = new Page<>(safePage(page), safePageSize(size));
         QueryWrapper<SiteNotification> wrapper = new QueryWrapper<>();
         wrapper.eq("status", "sent");
         if (type != null && !type.isEmpty()) {
@@ -94,7 +96,7 @@ public class NotificationController {
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer limit) {
 
-        Map<String, Object> notifications = notificationService.getUserNotifications(userId, type, page, limit);
+        Map<String, Object> notifications = notificationService.getUserNotifications(userId, type, safePage(page), safePageSize(limit));
         return ResponseEntity.ok(notifications);
     }
 
@@ -212,6 +214,9 @@ public class NotificationController {
         if (ids == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "通知ID格式不正确"));
         }
+        if (ids.size() > MAX_BATCH_IDS) {
+            return ResponseEntity.badRequest().body(Map.of("message", "批量删除最多支持 100 条"));
+        }
         if (!ids.isEmpty()) {
             notificationService.deleteBatch(userId, ids);
         }
@@ -251,6 +256,17 @@ public class NotificationController {
             return null;
         }
         return ids;
+    }
+
+    private int safePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int safePageSize(Integer size) {
+        if (size == null || size < 1) {
+            return 10;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     private String buildNotificationTitle(Notification notification) {

@@ -12,9 +12,20 @@ export function sanitizeWorkbookFileName(title?: string | null) {
   return `${normalized || "excelcc-practice-question"}.xlsx`;
 }
 
-export function resolveAbsoluteDownloadUrl(path: string) {
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
+export function resolveAbsoluteDownloadUrl(path: string, origin = getCurrentOrigin()) {
+  const normalizedPath = String(path || "").trim();
+  if (!normalizedPath || !origin) {
+    throw new Error("无效的题目下载地址");
   }
-  return new URL(path.startsWith("/") ? path : `/${path}`, window.location.origin).toString();
+
+  const baseUrl = new URL(origin);
+  const candidateUrl = new URL(normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`, baseUrl);
+  if (candidateUrl.origin !== baseUrl.origin || !candidateUrl.pathname.startsWith("/api/practice/questions/")) {
+    throw new Error("无效的题目下载地址");
+  }
+  return candidateUrl.toString();
+}
+
+function getCurrentOrigin() {
+  return typeof window !== "undefined" ? window.location.origin : "";
 }

@@ -84,6 +84,7 @@ public class QaServiceImpl implements QaService {
     private static final List<String> THOUGHT_SOURCES = List.of("manual", "ai", "empty");
     private static final Set<String> FEEDBACK_REASONS = Set.of("unclear_requirement", "missing_expected_answer", "bad_source_data", "too_hard", "other");
     private static final int MAX_ACTIVE_ANSWERS_PER_CASE = 50;
+    private static final int MAX_BATCH_IDS = 100;
 
     private final QaSolutionShareMapper solutionShareMapper;
     private final QaCaseHelpMapper caseHelpMapper;
@@ -876,6 +877,9 @@ public class QaServiceImpl implements QaService {
                 .toList();
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException(message);
+        }
+        if (normalized.size() > MAX_BATCH_IDS) {
+            throw new IllegalArgumentException("批量操作最多支持 100 条");
         }
         return normalized;
     }

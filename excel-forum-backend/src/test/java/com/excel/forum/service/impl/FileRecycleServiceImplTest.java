@@ -23,8 +23,10 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -213,6 +215,19 @@ class FileRecycleServiceImplTest {
         assertThat(count).isEqualTo(2);
         verify(fileRecycleItemMapper).updateById(first);
         verify(fileRecycleItemMapper).updateById(second);
+    }
+
+    @Test
+    void batchOperationsRejectTooManyIdsBeforeMutatingRecords() {
+        List<Long> ids = LongStream.rangeClosed(1, 101).boxed().toList();
+
+        assertThatThrownBy(() -> service.restoreBatch(ids))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("批量操作最多支持 100 条");
+
+        assertThatThrownBy(() -> service.purgeBatch(ids))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("批量操作最多支持 100 条");
     }
 
     private FileRecycleItem activeRecycleItem(Long id, String resourceType, Long resourceId) {

@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Notification> implements NotificationService {
+    private static final int MAX_PAGE_SIZE = 50;
     private static final Set<String> CURRENT_NOTIFICATION_TYPES = Set.of("system", "site_notification", "feedback_result", "qa_case_answered", "qa_answer_accepted");
 
     private final SiteNotificationMapper siteNotificationMapper;
@@ -50,7 +51,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         
         queryWrapper.orderByDesc("create_time");
         
-        Page<Notification> pageRequest = new Page<>(page, limit);
+        Page<Notification> pageRequest = new Page<>(safePage(page), safePageSize(limit));
         Page<Notification> result = page(pageRequest, queryWrapper);
         
         Map<Long, SiteNotification> siteNotificationMap = loadSiteNotificationMap(result.getRecords());
@@ -64,6 +65,17 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         response.put("total", result.getTotal());
         
         return response;
+    }
+
+    private int safePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int safePageSize(Integer size) {
+        if (size == null || size < 1) {
+            return 10;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     @Override

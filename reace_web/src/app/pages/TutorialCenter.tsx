@@ -23,7 +23,7 @@ import { LitePageFrame } from "../components/LiteSurface";
 import { useIsMobile } from "../components/ui/use-mobile";
 import { api } from "../lib/api";
 import { tutorialKeys } from "../lib/query-keys";
-import { renderRichContent, stripRichContent } from "../lib/rich-content";
+import { renderRichContent, sanitizeRichHtml, stripRichContent } from "../lib/rich-content";
 import {
   getLiteMobileContentPaddingClassName,
   getTutorialReaderScrollTargetSelector,
@@ -876,7 +876,7 @@ function TutorialAside({
   );
 }
 
-function buildTutorialSections(content: string, articleTitle: string): TutorialSection[] {
+export function buildTutorialSections(content: string, articleTitle: string): TutorialSection[] {
   const html = normalizeTutorialContent(content);
   if (!html) return [];
 
@@ -942,22 +942,12 @@ function buildTutorialSections(content: string, articleTitle: string): TutorialS
 function normalizeTutorialContent(content: string) {
   const trimmed = (content || "").trim();
   if (!trimmed) return "";
-  if (looksLikeHtml(trimmed)) return trimmed;
+  if (looksLikeHtml(trimmed)) return sanitizeRichHtml(trimmed);
   return renderRichContent(trimmed);
 }
 
 function sanitizeTutorialRoot(root: Element) {
-  root.querySelectorAll("script, style, iframe, object, embed").forEach((node) => node.remove());
-  root.querySelectorAll("*").forEach((node) => {
-    const element = node as HTMLElement;
-    Array.from(element.attributes).forEach((attribute) => {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value;
-      if (name.startsWith("on") || ((name === "src" || name === "href") && /^\s*javascript:/i.test(value))) {
-        element.removeAttribute(attribute.name);
-      }
-    });
-  });
+  root.innerHTML = sanitizeRichHtml(root.innerHTML);
 }
 
 function isSectionHeading(node: ChildNode): node is HTMLElement {

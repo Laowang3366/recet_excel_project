@@ -23,13 +23,14 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class SiteNotificationServiceImpl extends ServiceImpl<SiteNotificationMapper, SiteNotification> implements SiteNotificationService {
+    private static final int MAX_PAGE_SIZE = 50;
     
     private final UserService userService;
     private final NotificationService notificationService;
 
     @Override
     public Map<String, Object> getNotificationsPage(int page, int size) {
-        Page<SiteNotification> pageParam = new Page<>(page, size);
+        Page<SiteNotification> pageParam = new Page<>(safePage(page), safePageSize(size));
         QueryWrapper<SiteNotification> queryWrapper = new QueryWrapper<>();
         queryWrapper.orderByDesc("pinned").orderByDesc("create_time");
         
@@ -39,6 +40,14 @@ public class SiteNotificationServiceImpl extends ServiceImpl<SiteNotificationMap
         response.put("records", result.getRecords());
         response.put("total", result.getTotal());
         return response;
+    }
+
+    private int safePage(int page) {
+        return page < 1 ? 1 : page;
+    }
+
+    private int safePageSize(int size) {
+        return size < 1 ? 10 : Math.min(size, MAX_PAGE_SIZE);
     }
 
     @Override

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 
 import { parseNotificationMeta } from "../../admin/notification-form";
 import { api } from "../../lib/api";
+import { resolveSafeNotificationAction } from "../../lib/notification-link";
 import { notificationKeys } from "../../lib/query-keys";
 import { renderRichContent } from "../../lib/rich-content";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
@@ -79,16 +80,14 @@ export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotifi
     const current = popupNotification;
     const meta = parseNotificationMeta(current?.attachments);
     await handleClosePopupNotification();
-    const actionUrl = current?.targetLink || meta.actionUrl;
-    if (!actionUrl) return;
-    if (actionUrl.startsWith("http://") || actionUrl.startsWith("https://")) {
-      window.location.href = actionUrl;
-      return;
+    const action = resolveSafeNotificationAction(current?.targetLink || meta.actionUrl);
+    if (action) {
+      navigate(action.path);
     }
-    navigate(actionUrl);
   };
 
   const popupMeta = parseNotificationMeta(popupNotification?.attachments);
+  const popupAction = resolveSafeNotificationAction(popupNotification?.targetLink || popupMeta.actionUrl);
 
   return (
     <Dialog
@@ -123,7 +122,7 @@ export function SitePopupNotificationDialog({ isAuthenticated }: SitePopupNotifi
               onClick={() => void handlePrimaryAction()}
               className="inline-flex h-10 items-center justify-center rounded-xl bg-teal-500 px-5 text-sm font-semibold text-white transition hover:bg-teal-600"
             >
-              {popupMeta.actionUrl ? popupMeta.actionText || "立即查看" : "关闭通知"}
+              {popupAction ? popupMeta.actionText || "立即查看" : "关闭通知"}
             </button>
           </div>
         </div>
